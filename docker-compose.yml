@@ -8,7 +8,7 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - redis-data:/data
+      - /Users/chinazhouwy/doc/docker/data/redis:/data
     command: redis-server --appendonly yes
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -56,7 +56,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - /Users/chinazhouwy/doc/docker/data/postgres:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U harness -d harness_db"]
       interval: 10s
@@ -70,7 +70,7 @@ services:
     ports:
       - "27017:27017"
     volumes:
-      - mongodb-data:/data/db
+      - /Users/chinazhouwy/doc/docker/data/mongodb:/data/db
     environment:
       MONGO_INITDB_ROOT_USERNAME: harness
       MONGO_INITDB_ROOT_PASSWORD: harness123
@@ -88,7 +88,8 @@ services:
       - "8123:8123"
       - "9000:9000"
     volumes:
-      - clickhouse-data:/var/lib/clickhouse
+      - /Users/chinazhouwy/doc/docker/data/clickhouse:/var/lib/clickhouse
+      - /Users/chinazhouwy/doc/docker/config/clickhouse/users.xml:/etc/clickhouse-server/users.d/allow-remote.xml
     ulimits:
       nofile:
         soft: 262144
@@ -106,7 +107,7 @@ services:
     ports:
       - "8086:8086"
     volumes:
-      - influxdb-data:/var/lib/influxdb2
+      - /Users/chinazhouwy/doc/docker/data/influxdb:/var/lib/influxdb2
     environment:
       DOCKER_INFLUXDB_INIT_MODE: setup
       DOCKER_INFLUXDB_INIT_USERNAME: harness
@@ -127,7 +128,7 @@ services:
       - "9001:9001"
       - "9002:9002"
     volumes:
-      - minio-data:/data
+      - /Users/chinazhouwy/doc/docker/data/minio:/data
     environment:
       MINIO_ROOT_USER: harness
       MINIO_ROOT_PASSWORD: harness12345
@@ -145,7 +146,7 @@ services:
     ports:
       - "9876:9876"
     volumes:
-      - rmqnamesrv-logs:/home/rocketmq/logs
+      - /Users/chinazhouwy/doc/docker/data/rocketmq/namesrv/logs:/home/rocketmq/logs
     command: sh mqnamesrv
 
   rmqbroker:
@@ -156,9 +157,9 @@ services:
       - "10911:10911"
       - "10912:10912"
     volumes:
-      - rmqbroker-logs:/home/rocketmq/logs
-      - rmqbroker-store:/home/rocketmq/store
-      - ./config/rocketmq/broker.conf:/home/rocketmq/rocketmq-5.1.4/conf/broker.conf
+      - /Users/chinazhouwy/doc/docker/data/rocketmq/broker/logs:/home/rocketmq/logs
+      - /Users/chinazhouwy/doc/docker/data/rocketmq/broker/store:/home/rocketmq/store
+      - /Users/chinazhouwy/doc/docker/config/rocketmq/broker.conf:/home/rocketmq/rocketmq-5.1.4/conf/broker.conf
     command: sh mqbroker -n rmqnamesrv:9876 -c /home/rocketmq/rocketmq-5.1.4/conf/broker.conf
     depends_on:
       - rmqnamesrv
@@ -171,7 +172,7 @@ services:
       - "7474:7474"
       - "7687:7687"
     volumes:
-      - neo4j-data:/data
+      - /Users/chinazhouwy/doc/docker/data/neo4j:/data
     environment:
       NEO4J_AUTH: neo4j/harness123
       NEO4J_PLUGINS: '["apoc", "gds"]'
@@ -214,8 +215,8 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus-data:/prometheus
+      - /Users/chinazhouwy/doc/docker/config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - /Users/chinazhouwy/doc/docker/data/prometheus:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -232,8 +233,8 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - grafana-data:/var/lib/grafana
-      - ./config/grafana/provisioning:/etc/grafana/provisioning
+      - /Users/chinazhouwy/doc/docker/data/grafana:/var/lib/grafana
+      - /Users/chinazhouwy/doc/docker/config/grafana/provisioning:/etc/grafana/provisioning
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin123
@@ -244,17 +245,3 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-volumes:
-  redis-data:
-  postgres-data:
-  mongodb-data:
-  clickhouse-data:
-  influxdb-data:
-  minio-data:
-  rmqnamesrv-logs:
-  rmqbroker-logs:
-  rmqbroker-store:
-  neo4j-data:
-  prometheus-data:
-  grafana-data:

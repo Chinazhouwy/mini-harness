@@ -125,6 +125,10 @@ cd agentic-harness
 docker-compose up -d   # 启动 Redis, Kafka, PostgreSQL, ClickHouse, MinIO, Neo4j（二期）
 ```
 
+> **💡 Docker 数据存储位置**：所有 Docker 容器的配置和数据统一存储在 `/Users/chinazhouwy/doc/docker/`
+> - **配置文件**：`/Users/chinazhouwy/doc/docker/config/`（RocketMQ、Prometheus、Grafana 等）
+> - **持久化数据**：`/Users/chinazhouwy/doc/docker/data/`（Redis、PostgreSQL、MongoDB 等）
+
 ### 2. 初始化历史数据
 ```bash
 python scripts/load_historical_data.py --symbol 000001 --start 2024-01-01
