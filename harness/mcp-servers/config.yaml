@@ -1,0 +1,16 @@
+# MCP Server 配置
+name: quote-mcp-server
+version: 1.0.0
+
+# 服务配置
+server:
+  host: 0.0.0.0
+  port: 8000
+
+# 后端服务地址
+services:
+  quote: http://localhost:8081
+  strategy: http://localhost:8082
+  order: http://localhost:8083
+  account: http://localhost:8084
+  risk: http://localhost:8085

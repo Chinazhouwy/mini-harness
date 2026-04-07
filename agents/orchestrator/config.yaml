@@ -1,0 +1,33 @@
+# 主控 Agent 配置
+
+name: "orchestrator"
+
+# AgentScope 配置
+agentscope:
+  model:
+    model_type: openai
+    model_name: qwen-max
+    api_key: ${DASHSCOPE_API_KEY}
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+
+# Kafka 配置
+kafka:
+  bootstrap_servers: localhost:9092
+  group_id: orchestrator-group
+  topics:
+    - agent-technical-signal
+    - agent-sentiment-signal
+    - agent-fundamental-signal
+    - agent-risk-signal
+    - trade-decision
+
+# Redis 配置
+redis:
+  host: localhost
+  port: 6379
+  db: 0
+
+# 决策阈值
+threshold:
+  confidence: 0.7
+  human_approval: true
