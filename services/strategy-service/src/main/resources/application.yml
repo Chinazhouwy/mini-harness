@@ -1,0 +1,29 @@
+# 服务配置
+server:
+  port: 8888
+  servlet:
+    context-path: /api
+
+spring:
+  # ClickHouse 数据源配置
+  datasource:
+    url: jdbc:ch:http://localhost:8123/default
+    username: default
+    password: harness123
+    driver-class-name: com.clickhouse.jdbc.ClickHouseDriver
+    # HikariCP连接池优化（ClickHouse适合长连接）
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 300000
+      max-lifetime: 1200000
+      connection-timeout: 20000
+      connection-test-query: SELECT 1
+
+# 日志配置
+logging:
+  level:
+    org.springframework.jdbc.core: DEBUG  # 打印SQL语句，方便调试
+    com.quant.strategy: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

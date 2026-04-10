@@ -37,20 +37,55 @@ buildNumber.properties
 # https://github.com/takari/maven-wrapper#usage-without-binary-jar
 .mvn/wrapper/maven-wrapper.jar
 
-# Eclipse m2e generated files
+# Eclipse m2e generated files  
 # Eclipse Core
 .project
-# JDT-specific (Eclipse Java Development Tools)
 .classpath
+.factorypath
+.settings/
 
-### Vue template
-# gitignore template for Vue.js projects
-#
-# Recommended template: Node.gitignore
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+out/
 
-# TODO: where does this rule come from?
-docs/_book
+# Spring Boot
+!**/src/main/**/target/
+!**/src/test/**/target/
 
-# TODO: where does this rule come from?
-test/
+### IDE
+# VS Code
+.vscode/
+*.swp
+*.swo
+*~
 
+### OS
+.DS_Store
+Thumbs.db
+
+### Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+### Database
+*.db
+*.db-journal
+
+### Logs
+logs
+*.log
+
+### Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+### Sensitive
+config/
+credentials.json
