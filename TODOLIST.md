@@ -1,81 +1,101 @@
+# TODOLIST - AgenticHarness（一期单人执行版）
 
-## 🗓️ 2026年4月7日任务计划（第1周 - 第1天）
+> 版本日期：2026-04-13  
+> 目标：8 周内完成可运行、可验证、可演示的一期 MVP。
 
-### 上午任务（9:00-12:00）
+详细执行手册：`docs/IMPLEMENTATION_PLAYBOOK.md`
 
-#### 1. 启动基础设施 ✅ (30分钟)
-```bash
-cd /Users/chinazhouwy/doc/quantHarness
-docker-compose up -d clickhouse redis
-docker-compose ps  # 验证服务状态
-```
+## 使用规则
 
-#### 2. 验证 ClickHouse 连接 ✅ (30分钟)
-```bash
-# 测试 ClickHouse 连接
-docker exec -it harness-clickhouse clickhouse-client
-# 执行：SELECT version();
-```
+1. 只维护“一期必须做”的任务，二期内容放到末尾 Backlog。
+2. 每周结束必须更新：完成项、阻塞项、下周计划。
+3. 任务以“可验收”表述，避免空泛描述。
 
-#### 3. 创建历史数据表 ✅ (60分钟)
-- 在 `scripts/` 目录下创建 `create_tables.sql`
-- 创建 `kline_day` 表结构：
-  ```sql
-  CREATE DATABASE IF NOT EXISTS agentic;
-  USE agentic;
-  CREATE TABLE kline_day (
-      symbol String,
-      date Date,
-      open Float64,
-      high Float64, 
-      low Float64,
-      close Float64,
-      volume UInt64
-  ) ENGINE = MergeTree()
-  ORDER BY (symbol, date);
-  ```
+## 里程碑总览
 
-### 下午任务（14:00-18:00）
+- [ ] M0 基础设施可启动
+- [ ] M1 数据导入与双均线回测可运行
+- [ ] M2 `strategy-service` API 可用
+- [ ] M3 风控与模拟下单可用
+- [ ] M4 Agent 最小协同可用
+- [ ] M5 前端展示与质检闭环可用
 
-#### 4. 编写数据获取脚本 ✅ (120分钟)
-- 在 `agents/` 目录下创建 `data_fetcher.py`
-- 实现功能：
-  - 使用 akshare 获取股票 `000001` 最近2年日线数据
-  - 连接 ClickHouse 并插入数据
-  - 包含错误处理和重试机制
+## Week 1-2：数据与回测闭环
 
-#### 5. 测试数据获取 ✅ (60分钟)
-```bash
-cd agents
-python data_fetcher.py --symbol 000001 --days 730
-```
+- [ ] 启动最小基础设施（Redis、ClickHouse、PostgreSQL）
+- [ ] 固化建表脚本与初始化脚本（可重复执行）
+- [ ] 完成历史数据导入脚本（失败可重试）
+- [ ] 完成双均线回测脚本
+- [ ] 输出统一指标（年化收益、最大回撤、夏普）
 
-#### 6. 验证数据完整性 ✅ (30分钟)
-```sql
--- 在 ClickHouse 中执行
-USE agentic;
-SELECT count(*) FROM kline_day WHERE symbol = '000001';
-SELECT * FROM kline_day WHERE symbol = '000001' ORDER BY date DESC LIMIT 5;
-```
+验收标准：
+- [ ] 回测命令连续运行 3 次均成功
+- [ ] 指标输出格式固定，支持后续服务读取
 
-### 晚间任务（可选）
+## Week 3-4：策略服务化
 
-#### 7. 提交代码和文档 ✅ (30分钟)
-- 提交今日代码到 Git
-- 更新 README.md 记录今日进展
-- 记录遇到的问题和解决方案
+- [ ] 实现回测触发 API
+- [ ] 实现回测结果查询 API
+- [ ] 实现策略信号生成 API
+- [ ] 打通 ClickHouse 读取历史行情
+- [ ] 打通 PostgreSQL 落库回测结果
+- [ ] 统一错误码与参数校验
 
----
+验收标准：
+- [ ] 三类 API 可通过 HTTP 调用
+- [ ] 返回结构化 JSON，错误信息可读
 
-### 🎯 今日成功标准
-- [ ] ClickHouse 和 Redis 正常运行
-- [ ] `kline_day` 表创建成功  
-- [ ] 股票 `000001` 的历史数据成功存入 ClickHouse
-- [ ] 数据记录数 > 500 条（2年交易日）
-- [ ] 代码已提交并有相应文档
+## Week 5-6：风控、下单、Agent 联调
 
-### ⚠️ 注意事项
-1. **网络问题**：akshare 可能需要科学上网，如遇问题可先用本地 CSV 文件测试
-2. **依赖安装**：确保 Python 环境有 akshare、pandas、clickhouse-driver
-3. **数据验证**：务必验证数据的完整性和准确性
-4. **错误处理**：脚本要有完善的异常处理，避免中断
+- [ ] 实现基础风控规则：
+- [ ] 仓位上限
+- [ ] 止损阈值
+- [ ] 单日最大亏损阈值
+- [ ] 实现模拟下单流程并落库
+- [ ] `orchestrator` 调用 `technical` 并汇总建议
+- [ ] 完成策略 -> 风控 -> 下单联调
+
+验收标准：
+- [ ] 违规订单能被风控拦截
+- [ ] 正常订单可完整落库并查询
+
+## Week 7：Harness 质检闭环
+
+- [ ] 实现 `harness/validators/quality_check.py` 最小可用能力
+- [ ] 增加指标阈值校验（如 Sharpe < 1.0）
+- [ ] 输出结构化反馈（JSON 或 Markdown）
+- [ ] 记录失败案例与建议动作
+
+验收标准：
+- [ ] 一条命令运行质检并输出报告
+- [ ] 报告可定位到策略或参数问题
+
+## Week 8：前端展示、稳定性、演示
+
+- [ ] 前端展示最近信号、回测指标、模拟订单
+- [ ] 补齐关键测试（策略、风控、接口）
+- [ ] 固化一键启动脚本与演示脚本
+- [ ] 更新 README/AGENTS 与当前实现一致
+
+验收标准：
+- [ ] 新环境 30 分钟内可跑通最小闭环
+- [ ] 可完成一次端到端演示
+
+## 当前阻塞与风险
+
+- [ ] 需求范围膨胀（一期混入二期能力）
+- [ ] 外部数据源不稳定导致开发中断
+- [ ] 组件过多导致排障复杂
+
+对应策略：
+- [ ] 新需求先标注“一期/二期”，默认进二期
+- [ ] 保留本地样例数据用于离线开发
+- [ ] 优先同步调用，后续再异步化
+
+## 二期 Backlog（不阻塞一期）
+
+- [ ] 全量微服务拆分（quote/order/account/risk/backtest）
+- [ ] Kafka + RocketMQ 双通道生产级幂等
+- [ ] Redis Vector Sets 记忆检索
+- [ ] Neo4j 情景推演引擎
+- [ ] K8s 生产化部署与弹性策略

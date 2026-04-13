@@ -1,306 +1,195 @@
-# 📈 AgenticHarness – AI 驱动的量化交易系统
+# AgenticHarness
 
-> 基于 **Harness Engineering** 方法论构建的下一代量化交易平台。  
-> 目标：通过多智能体协作 + 分层存储 + 高性能 Java 后端 + 情景推演引擎，实现从行情接入到策略执行、再到宏观沙盘推演的完整闭环。
+AI 驱动量化系统的单人工程化实践项目。  
+当前目标不是“一次做完全部架构”，而是先完成可运行、可验证、可演示的一期 MVP。
 
----
+## 当前状态（2026-04-13）
 
-## 🎯 项目亮点（面试速览）
+项目处于“脚手架已搭建 + 核心链路未打通”阶段：
 
-- **全栈架构**：Java 21 + Spring Cloud Alibaba + Netty + Disruptor + Kafka + RocketMQ + ClickHouse + Redis 8.0
-- **AI 原生**：AgentScope 多智能体编排、MCP 协议工具化、RAG 记忆检索、Human-in-the-loop
-- **Harness Engineering**：`AGENTS.md` 规格书 + 自动化质检流水线 + 结构化反馈闭环
-- **可观测性**：Prometheus + Grafana + SkyWalking 10（全链路追踪 + eBPF）
-- **高性能**：Netty 微秒级行情处理、Disruptor 无锁队列、Java 21 虚拟线程
-- **分层存储**：热（Redis）→ 温（PG+Mongo）→ 时序（InfluxDB+ClickHouse）→ 冷（MinIO）→ 向量（Redis Vector Sets）
-- **二期规划**：基于 MiroFish 思想的群体智能推演引擎 + GraphRAG 因果推理
+- 已有：
+  - 基础设施编排：`docker-compose.yml`
+  - Java Maven 多模块骨架：`services/`
+  - Python Agent 骨架：`agents/`
+  - Harness 骨架：`harness/`
+  - 前端骨架：`web-ui/`
+- 未完成：
+  - 核心业务逻辑多数仍为 TODO/pass
+  - 端到端交易闭环尚未打通
+  - 自动化质检尚未形成稳定流程
 
----
+## 为什么要收敛范围
 
-## 🏗 系统架构图（一期 + 二期规划）
+原一期规划包含：微服务拆分、双消息系统、多 Agent、分层多存储、可观测、K8s。  
+对于单人项目，这会造成启动成本高、反馈周期长、任务切换频繁，难以持续推进。
+
+因此当前采用策略：
+
+1. 先打通最小闭环，再扩架构
+2. 每周必须有可运行产物
+3. 一期只做必要组件，其余明确延期到二期
+
+## 一期 MVP（单人可执行版）
+
+目标：在本地机器上打通一条完整链路。
+
+1. 从 ClickHouse 读取历史 K 线
+2. 运行双均线策略，输出买卖信号
+3. 执行基础风控校验
+4. 生成模拟订单并写入 PostgreSQL
+5. 前端展示信号与订单结果
+6. 质检脚本可检查指标并生成反馈
+
+## 一期架构（收敛版）
 
 ```mermaid
-graph TB
-    subgraph Client [“前端”]
-        A[Vue 3 + ECharts]
-    end
-    subgraph Gateway [“网关层”]
-        B[Nginx + Spring Cloud Gateway]
-    end
-    subgraph Harness [“Harness Engineering 层”]
-        C[AGENTS.md / MCP Servers / 自动化质检 / 反馈闭环]
-    end
-    subgraph Services [“业务服务层 (Java 21)”]
-        D[行情服务] --> E[策略服务] --> F[订单服务]
-        G[账户服务] --> H[风控服务] --> I[回测服务]
-    end
-    subgraph AI [“AI Agent 层”]
-        J[主控Agent] --> K[技术分析师]
-        J --> L[情绪分析师]
-        J --> M[基本面分析师]
-        J --> N[风控Agent]
-    end
-    subgraph Simulation [“二期：情景推演引擎”]
-        S1[事件输入] --> S2[推演引擎<br>MiroFish风格]
-        S2 --> S3[推演图谱库<br>Neo4j]
-        S3 --> S4[情景报告生成]
-    end
-    subgraph Data [“数据存储层”]
-        O[(Redis 8.0)] --> P[(PostgreSQL)]
-        O --> Q[(ClickHouse)]
-        O --> R[(MinIO)]
-        O --> S[(MongoDB)]
-    end
-    subgraph Message [“消息层”]
-        T[Kafka] --> U[RocketMQ]
-    end
-    subgraph Ops [“运维层”]
-        V[K8s] --> W[Prometheus+Grafana]
-        V --> X[SkyWalking 10]
-    end
-    Client --> Gateway --> Services
-    Services --> Message --> Data
-    AI --> Services
-    Harness --> AI
-    Harness --> Services
-    Ops --> Services
-    Simulation -->|宏观因子| AI
+graph LR
+    A["ClickHouse 行情"] --> B["strategy-service 策略计算"]
+    B --> C["risk rule 基础风控"]
+    C --> D["模拟下单"]
+    D --> E["PostgreSQL 订单结果"]
+    B --> F["orchestrator + technical agent"]
+    F --> B
+    E --> G["web-ui 可视化"]
+    B --> H["harness quality_check"]
 ```
 
----
+说明：
+- `strategy-service` 作为一期业务核心，不强求立即拆成全微服务
+- Agent 一期只做最小协同（orchestrator + technical）
+- Kafka/RocketMQ、Neo4j、Vector Sets、K8s 暂不作为一期硬门槛
 
-## 📂 项目目录结构（推荐）
+## 8 周详细路线图
 
-```
-agentic-harness/
-├── .cursorrules                # AI 编码规范
-├── AGENTS.md                   # Harness 核心：AI 行动规格书
-├── README.md                   # 本文件
-├── docker-compose.yml          # 本地开发环境一键拉起
-├── docs/
-│   ├── architecture.md         # 详细架构设计
-│   ├── api/                    # OpenAPI 文档
-│   ├── interviews/             # 面试追问清单
-│   └── roadmap.md              # 一期/二期规划
-├── harness/                    # Harness Engineering 工具
-│   ├── mcp-servers/            # MCP 服务实现
-│   ├── validators/             # 自动化质检脚本
-│   └── feedback/               # 结构化反馈处理器
-├── services/                   # 后端微服务（Java）
-│   ├── quote-service/          # 行情服务（Netty + Disruptor）
-│   ├── strategy-service/       # 策略服务（gRPC 调 Python）
-│   ├── order-service/          # 订单服务（RocketMQ）
-│   ├── account-service/        # 账户服务
-│   ├── risk-service/           # 风控服务
-│   └── backtest-service/       # 回测服务
-├── agents/                     # AI Agent（Python + AgentScope）
-│   ├── orchestrator/           # 主控 Agent
-│   ├── technical/              # 技术分析 Agent
-│   ├── sentiment/              # 情绪分析 Agent
-│   ├── fundamental/            # 基本面 Agent
-│   └── risk_manager/           # 风控 Agent
-├── simulation/                 # 二期：情景推演引擎
-│   ├── engine/                 # 推演核心（Python）
-│   ├── graph/                  # Neo4j 图谱管理
-│   └── reports/                # 情景报告生成
-├── web-ui/                     # 前端（Vue 3）
-├── scripts/                    # 运维脚本
-└── data/                       # 数据样例
-```
+### Week 1-2：数据与回测闭环
 
----
+- 完成最小基础设施启动：Redis、ClickHouse、PostgreSQL
+- 固化数据导入脚本（可重复执行）
+- 完成双均线回测脚本并输出核心指标：
+  - 年化收益
+  - 最大回撤
+  - 夏普比率
 
-## 🚀 快速开始（一期核心流程）
+验收标准：
+- `python` 回测命令可稳定运行 3 次以上
+- 输出指标格式统一，可被后续服务解析
 
-### 前置要求
+### Week 3-4：策略服务化
+
+- `strategy-service` 提供接口：
+  - 触发回测
+  - 查询回测结果
+  - 生成策略信号
+- 打通 ClickHouse 读取与 PostgreSQL 写入
+- 加入基础风控规则（仓位、止损、单日亏损阈值）
+
+验收标准：
+- API 可通过 HTTP 调用，返回结构化 JSON
+- 单策略单标的全流程成功率 > 90%
+
+### Week 5-6：Agent 最小协同 + 前端联调
+
+- `orchestrator` 能调用 `technical` 并汇总结果
+- 策略信号经过风控后生成模拟订单
+- 前端展示：
+  - 最近信号
+  - 回测指标
+  - 模拟订单列表
+
+验收标准：
+- 页面可完整查看最近一次回测与下单结果
+- Agent 失败时有可读错误日志
+
+### Week 7：Harness 质检闭环
+
+- 实现 `harness/validators/quality_check.py` 基础能力
+- 指标阈值校验（例如 Sharpe < 1.0）
+- 生成结构化反馈（JSON/Markdown）
+
+验收标准：
+- 一条命令触发质检并输出结果
+- 失败项可追溯到具体策略/参数
+
+### Week 8：稳态、文档、演示
+
+- 补齐关键测试（策略计算、风控规则、关键接口）
+- 固化一键启动与演示脚本
+- 完成已知问题清单与下一阶段路线
+
+验收标准：
+- 新机器按文档 30 分钟内可拉起
+- 完成一次端到端演示录屏或步骤文档
+
+## 二期（明确延期，不阻塞一期）
+
+- 完整微服务拆分（quote/order/account/risk/backtest）
+- Kafka + RocketMQ 生产级异步与幂等治理
+- Redis Vector Sets 记忆系统
+- Neo4j 情景推演引擎（simulation）
+- K8s 部署与弹性扩缩容
+
+## 快速开始（当前骨架）
+
+### 环境要求
+
 - JDK 21
-- Docker & Docker Compose
 - Python 3.11+
 - Node.js 18+
+- Docker & Docker Compose
 
-### 1. 克隆并启动基础设施
+### 启动基础设施
+
 ```bash
-git clone https://github.com/yourname/agentic-harness.git
-cd agentic-harness
-docker-compose up -d   # 启动 Redis, Kafka, PostgreSQL, ClickHouse, MinIO, Neo4j（二期）
+docker-compose up -d
+docker-compose ps
 ```
 
-> **💡 Docker 数据存储位置**：所有 Docker 容器的配置和数据统一存储在 `/Users/chinazhouwy/doc/docker/`
-> - **配置文件**：`/Users/chinazhouwy/doc/docker/config/`（RocketMQ、Prometheus、Grafana 等）
-> - **持久化数据**：`/Users/chinazhouwy/doc/docker/data/`（Redis、PostgreSQL、MongoDB 等）
+### 启动 Java（示例）
 
-### 2. 初始化历史数据
 ```bash
-python scripts/load_historical_data.py --symbol 000001 --start 2024-01-01
+cd services/strategy-service
+mvn spring-boot:run
 ```
 
-### 3. 启动后端微服务（Java）
-```bash
-cd services/quote-service && mvn spring-boot:run
-# 同样方式启动 strategy, order, account 等
-```
+### 启动 Agent（示例）
 
-### 4. 启动 AI Agent
 ```bash
 cd agents/orchestrator
 python main.py --config config.yaml
 ```
 
-### 5. 启动前端
+### 启动前端（示例）
+
 ```bash
 cd web-ui
-npm install && npm run dev
+npm install
+npm run dev
 ```
 
-访问 `http://localhost:5173` 即可看到 K 线图、Agent 对话面板。
+## 里程碑看板（建议）
 
----
+- M0：基础设施可启动
+- M1：数据导入 + 双均线回测
+- M2：策略服务 API 可用
+- M3：风控 + 模拟下单可用
+- M4：Agent 最小协同可用
+- M5：前端展示与质检闭环可用
 
-## 🔧 核心模块技术细节
+## 风险与应对
 
-### 1. 行情服务 – Netty + Disruptor
-- `NettyWebSocketClient`：连接免费行情源，单机支持 5000+ 并发连接。
-- `Disruptor` 环形队列：行情事件在 Netty 的 EventLoop 和业务线程池之间传递，**P99 延迟 < 50µs**。
-- 使用 `Protobuf` 序列化，减少 GC 压力。
+- 风险：范围膨胀导致长期无交付  
+  应对：任何新需求必须标注“一期/二期”，默认放二期
 
-### 2. AI Agent – AgentScope + MCP
-- 每个 Agent 是一个独立的 Python 进程，通过 Kafka 进行 A2A 通信。
-- **情绪分析 Agent**：调用通义千问 API，对新闻标题打分（-1~1），结果存入 Redis。
-- **技术分析 Agent**：从 ClickHouse 读取 K 线，计算 RSI、MACD、布林带。
-- **主控 Agent**：汇总各 Agent 结果，若置信度 > 0.7 则自动下单，否则请求人工确认。
-- **MCP 协议**：将后端能力封装为 MCP Server（如 `quote-mcp-server`），供 Agent 标准化调用。
+- 风险：过度依赖外部组件，调试复杂  
+  应对：优先同步调用打通链路，再逐步异步化
 
-### 3. 分层存储实战
-| 数据 | 存储 | 操作示例 |
-|------|------|----------|
-| 最新价 | Redis Hash | `HSET quote:000001 price 10.23` |
-| 订单 | PostgreSQL | `INSERT INTO orders ...` |
-| 新闻 | MongoDB | `db.news.insertOne({title, sentiment})` |
-| 历史 K 线 | ClickHouse | `SELECT * FROM kline_1min WHERE symbol='000001'` |
-| Tick 行情 | InfluxDB 3.0 | 写入 Parquet 格式，支持高基数查询 |
-| Agent 记忆 | Redis Vector Sets | `FT.CREATE idx ... SCHEMA ... VECTOR` |
+- 风险：文档与代码状态再次偏离  
+  应对：每周更新本 README 的“当前状态”与“里程碑看板”
 
-### 4. Harness Engineering 落地
-- **AGENTS.md**：定义了模块边界、禁止 AI 修改核心交易逻辑、强制使用虚拟线程等。
-- **MCP Server**：`quote-mcp-server` 暴露 `get_realtime_quote` 工具，供 Agent 调用。
-- **自动化质检**：每次 PR 自动运行 Checkstyle、pytest、快速回测验证。
-- **反馈闭环**：如果回测夏普比率 < 1.0，自动生成结构化错误反馈，发回 Agent 尝试修复。
+## 贡献原则（对自己也适用）
 
-### 5. 可观测性：SkyWalking 10 + Prometheus
-- **SkyWalking 10**：新增 eBPF 网络监控和 BanyanDB 存储，支持服务层次结构可视化。
-- **集成方式**：Java 服务通过 `-javaagent` 启动探针，无需修改代码。
-- **面试点**：可清晰展示一个下单请求在各微服务间的调用链耗时。
+1. 小步提交，每步可运行
+2. 先保证正确性，再优化性能
+3. 所有关键脚本必须可重复执行
+4. 每周至少一次端到端回归验证
 
----
-
-## 🧠 二期规划：群体智能推演引擎（MiroFish 思想）
-
-### 目标
-让系统具备 **前瞻性情景推演** 能力：给定一个宏观事件（如“美联储加息 50 个基点”），系统自动生成数百个智能体，在虚拟环境中交互演化，输出该事件对各类资产影响概率分布。
-
-### 架构设计
-```mermaid
-graph LR
-    Event[宏观事件输入] --> SimEngine[推演引擎]
-    SimEngine --> Agents[生成智能体群体]
-    Agents --> Interaction[虚拟交互与传播]
-    Interaction --> Graph[(Neo4j 因果图谱)]
-    Graph --> Report[情景报告 + 宏观因子]
-    Report --> Strategy[主控 Agent 决策]
-```
-
-### 实施步骤（渐进式，每步 1-2 周）
-
-| 阶段 | 产出 | 技术要点 |
-|------|------|----------|
-| Step 1 | 离线事件回测原型 | 选取 3 次历史事件，用 10 个智能体验证可行性 |
-| Step 2 | Neo4j 因果图谱构建 | 从研报、新闻中抽取实体关系（如“加息→美元走强”） |
-| Step 3 | 推演引擎服务化 | 封装为独立 Python 微服务，通过 gRPC 与 Java 主系统通信 |
-| Step 4 | 宏观因子注入策略 | 将推演结果（概率分布）转换为 -1~1 的因子，动态调整仓位 |
-| Step 5 | 反馈闭环（Harness 风格） | 实盘结果反馈给推演引擎，调整图谱权重和智能体规则 |
-
-### 技术选型
-- **推演核心**：参考 MiroFish 的五阶段流水线，轻量封装（不重复造轮子）
-- **因果存储**：Neo4j 图数据库，支持 GraphRAG 检索
-- **智能体框架**：可直接复用 AgentScope，增加“社会交互”行为规则
-- **前端展示**：在管理后台增加“情景推演”面板，展示推演图谱和概率报告
-
-### 面试时如何讲述
-> “二期我计划引入群体智能推演引擎。当出现重大宏观事件时，系统会自动生成数百个具有不同记忆和偏好的智能体，在虚拟环境中交互演化，模拟事件传播路径。最终输出一份结构化情景报告，作为宏观因子注入策略引擎。这能让系统从被动反应升级为主动预演，是当前量化领域非常前沿的探索。”
-
----
-
-## 📊 性能指标（一期实测）
-
-| 指标 | 数值 | 测试环境 |
-|------|------|----------|
-| 行情处理 P99 延迟 | 48 µs | 8C16G，5000 只股票同时推送 |
-| 订单接口 TPS | 3500 | JMeter 5 线程组，P99 延迟 12ms |
-| Agent 决策延迟 | 220 ms | 包含 3 个 Agent 并行调用 + LLM API |
-| 回测速度 | 1.2 秒 / 年（日线） | 5000 只股票，双均线策略 |
-| Redis 向量检索 P99 | 15 ms | 100 万条 768 维向量，HNSW 索引 |
-
----
-
-## 🗺 实施路线图（4个月，一期）
-
-| 阶段 | 时间 | 核心产出 | 面试对应亮点 |
-|------|------|----------|----------------|
-| Phase 1 | 第1月 | 数据管道 + Netty+Disruptor + 双均线回测 | 高性能网络、无锁设计 |
-| Phase 2 | 第2月 | Spring Cloud 微服务 + Kafka + RocketMQ + 虚拟线程 | 微服务拆分、消息幂等 |
-| Phase 3 | 第3月 | AgentScope 多智能体 + Redis 向量记忆 + SkyWalking | MCP、RAG、全链路追踪 |
-| Phase 4 | 第4月 | Harness 流水线 + K8s 部署 + 压测文档 | Harness Engineering、云原生 |
-
-> 二期推演引擎可在完成一期后额外用 1-2 个月实现原型。
-
----
-
-## 🎓 面试官可能追问的问题（附参考答案）
-
-1. **Netty 的 EventLoop 和线程模型是怎样的？**
-   - 主从 Reactor，bossGroup 负责 accept，workerGroup 负责 IO 读写，业务逻辑扔到业务线程池避免阻塞。
-
-2. **Disruptor 为什么比 BlockingQueue 快？**
-   - 无锁设计（CAS）、缓存行填充（消除伪共享）、预分配内存、使用环形数组。
-
-3. **如何保证 RocketMQ 消息不丢失且幂等？**
-   - 同步刷盘 + 主从同步，消费端用 Redis 记录已处理消息 ID，结合数据库唯一键约束。
-
-4. **Redis 8.0 向量搜索底层算法是什么？**
-   - HNSW（分层可导航小世界图），检索复杂度 O(log N)，召回率可达 95%+。
-
-5. **Harness Engineering 与普通 prompt 工程的区别？**
-   - 普通 prompt 是一次性指令；Harness 是一套持久化的规则+工具+反馈系统，让 AI 在约束下自主工作，可迭代、可度量。
-
-6. **SkyWalking 10 有哪些新特性？**
-   - eBPF 网络监控、BanyanDB 存储、AI 智能运维、服务层次结构可视化。
-
-7. **二期推演引擎如何保证推演结果的可靠性？**
-   - 目前主要是探索性，我们会用历史事件回测验证相关性，并设置人工复核环节。长期通过反馈闭环优化图谱权重。
-
----
-
-## 📚 参考资源
-
-- [Harness Engineering – OpenAI 官方博客](https://openai.com/index/harness-engineering/)
-- [AgentScope – 阿里多智能体框架](https://github.com/modelscope/agentscope)
-- [MCP 协议 – Anthropic](https://modelcontextprotocol.io)
-- [Redis 8.0 Vector Sets](https://redis.io/docs/latest/develop/ai/vector-sets/)
-- [SkyWalking 10 发布说明](https://skywalking.apache.org/blog/2024-12-25-skywalking-10-release/)
-- [MiroFish – 群体智能预测引擎](https://github.com/miromannino/mirofish)（二期灵感来源）
-
----
-
-## 📝 TODO（一期，可根据进度打勾）
-
-- [ ] 搭建基础环境（Docker Compose）
-- [ ] 实现 Netty + Disruptor 行情管道
-- [ ] 实现双均线回测引擎（Python）
-- [ ] 拆分 Spring Cloud 微服务
-- [ ] 集成 Kafka / RocketMQ
-- [ ] 实现情绪分析 Agent（LLM API）
-- [ ] 实现 Redis Vector Sets 存储 Agent 记忆
-- [ ] 集成 SkyWalking 10 和 Prometheus
-- [ ] 编写 AGENTS.md 和自动化质检流水线
-- [ ] 部署到 K8s（minikube）
-- [ ] 整理面试题库和压测报告

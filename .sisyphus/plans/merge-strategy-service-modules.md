@@ -1,128 +1,112 @@
-# strategy-service 模块合并重构计划
+# strategy-service 一期实施计划（替代旧“模块合并计划”）
 
-## 问题分析
+## 背景
 
-当前 `strategy-service` 已经是 `services/` 目录下的一个服务模块，又细分成 4 个子模块导致层次过深：
+旧计划假设 `strategy-service` 仍存在 `strategy-api/strategy-core/strategy-persistence/strategy-application` 子模块。  
+当前仓库实际已是单模块结构，因此“模块合并”不再是主任务。
 
-```
-services/
-└── strategy-service/           # 已经是服务级别
-    ├── strategy-api/           # 子模块 - 过度细分
-    ├── strategy-core/          # 子模块 - 过度细分
-    ├── strategy-persistence/   # 子模块 - 过度细分
-    └── strategy-application/   # 子模块 - 过度细分
-```
+本计划更新为：在现有单模块基础上，完成一期 MVP 所需的可运行能力。
 
-这违反了 **KISS 原则** 和微服务设计的合理粒度。
+## 当前状态（2026-04-13）
 
-## 目标架构
+- 已有：
+  - `StrategyServiceApplication` 可作为启动入口
+  - 基础配置文件与依赖框架已存在
+  - 部分基础配置类存在（如虚拟线程配置）
+- 缺口：
+  - 缺少可用的 Controller/Service/Repository 业务实现
+  - 策略计算、风控、订单落库链路未打通
+  - 测试与验收脚本缺失
 
-合并为**单模块**，但通过**包结构**保持分层清晰：
+## 一期目标（strategy-service 维度）
 
-```
-services/
-└── strategy-service/           # 单模块 Spring Boot 应用
-    ├── pom.xml
-    └── src/main/java/com/quant/strategy/
-        ├── api/                # 对外暴露的 DTO 和接口
-        │   ├── dto/
-        │   │   ├── StrategyConfigDto.java
-        │   │   ├── SignalDto.java
-        │   │   ├── BacktestRequestDto.java
-        │   │   └── BacktestResultDto.java
-        │   └── feign/
-        │       └── StrategyServiceClient.java
-        ├── core/               # 核心业务逻辑
-        │   ├── factory/
-        │   │   └── StrategyFactory.java
-        │   ├── generator/
-        │   │   └── SignalGenerator.java
-        │   ├── executor/
-        │   │   └── BacktestExecutor.java
-        │   └── indicator/      # 预留自定义指标
-        ├── domain/             # 领域实体
-        │   ├── entity/
-        │   │   └── StrategyConfig.java
-        │   ├── repository/
-        │   │   └── StrategyConfigRepository.java
-        │   └── enums/
-        │       └── Signal.java
-        ├── infrastructure/     # 基础设施
-        │   ├── config/
-        │   │   ├── Ta4jConfig.java
-        │   │   ├── ThreadPoolConfig.java
-        │   │   └── ClickHouseConfig.java
-        │   └── client/
-        │       └── QuoteClient.java
-        └── web/                # 对外接口层
-            ├── controller/
-            │   └── StrategyController.java
-            └── service/
-                ├── StrategyApplicationService.java
-                └── BacktestApplicationService.java
-```
+在 `strategy-service` 内实现最小业务闭环：
 
-## 执行步骤
+1. 从 ClickHouse 读取历史行情
+2. 执行双均线策略并生成信号
+3. 执行基础风控规则
+4. 将模拟订单与回测结果写入 PostgreSQL
+5. 暴露可调用 API 给前端和 Agent
 
-### Wave 1: 准备阶段
-- [ ] 1. 备份当前 strategy-service 目录
-- [ ] 2. 创建新的单模块目录结构
+## 执行波次（Waves）
 
-### Wave 2: 合并 API 层
-- [ ] 3. 将 strategy-api 中的 DTO 移动到 `api/dto/` 包
-- [ ] 4. 将 FeignClient 移动到 `api/feign/` 包
+### Wave 0：基线与目录校准（0.5 周）
 
-### Wave 3: 合并 Core 层
-- [ ] 5. 将 strategy-core 中的类移动到 `core/` 包下对应子包
-- [ ] 6. 修复所有 import 路径
+- [ ] 确认包结构边界：
+  - `domain`：实体与规则模型
+  - `core`：策略与风控逻辑
+  - `web`：Controller 与应用服务
+  - `infrastructure`：数据访问与配置
+- [ ] 清理失效注释与遗留计划说明
+- [ ] 约定统一 DTO 命名（`*Request`/`*Response`）
 
-### Wave 4: 合并 Persistence 层
-- [ ] 7. 将 strategy-persistence 中的 Entity/Repository 移动到 `domain/` 包
-- [ ] 8. 更新 JPA 配置
+验收：
+- 目录结构文档与代码一致
 
-### Wave 5: 合并 Application 层
-- [ ] 9. 将 strategy-application 中的类移动到 `web/` 和 `infrastructure/` 包
-- [ ] 10. 将 application.yml 移到正确位置
+### Wave 1：数据访问打通（1 周）
 
-### Wave 6: 配置整合
-- [ ] 11. 更新 pom.xml 为单模块配置（添加所有依赖）
-- [ ] 12. 删除子模块目录
-- [ ] 13. 验证 Maven 构建
+- [ ] 实现 ClickHouse 行情读取组件
+- [ ] 实现 PostgreSQL 持久化表与 Repository
+- [ ] 完成最小可用的数据模型：
+  - KLine
+  - BacktestResult
+  - SimulatedOrder
 
-### Wave 7: 验证
-- [ ] 14. 运行 Maven compile 验证无错误
-- [ ] 15. 检查 LSP 诊断干净
-- [ ] 16. 确认启动类位置正确
+验收：
+- 本地可读取指定标的历史数据
+- 可写入并查询一条模拟订单记录
 
-## 关键变更
+### Wave 2：策略与风控核心（1-1.5 周）
 
-### pom.xml 变化
-- 移除 `<packaging>pom</packaging>` 和 `<modules>`
-- 添加所有依赖（ta4j, clickhouse-jdbc, spring-boot-starter-data-jpa 等）
-- 保留 spring-boot-maven-plugin
+- [ ] 实现双均线策略核心逻辑
+- [ ] 实现基础风控规则：
+  - 仓位上限
+  - 止损阈值
+  - 单日最大亏损阈值
+- [ ] 输出结构化信号（BUY/SELL/HOLD）
 
-### 类引用变化
-```java
-// 旧路径（子模块）
-import com.quant.strategy.api.model.StrategyConfig;
+验收：
+- 给定固定历史数据，策略结果稳定可复现
+- 风控可拦截违规订单
 
-// 新路径（单模块包结构）
-import com.quant.strategy.api.dto.StrategyConfigDto;
-// 或
-import com.quant.strategy.domain.entity.StrategyConfig;
-```
+### Wave 3：API 与应用服务（1 周）
 
-## 完成标准
-- [ ] 单模块 Maven 项目结构
-- [ ] `mvn clean compile` 成功
-- [ ] 无 LSP 错误
-- [ ] 启动类可以正常运行
-- [ ] 包结构清晰分层
+- [ ] 实现回测触发接口
+- [ ] 实现信号查询接口
+- [ ] 实现模拟下单接口
+- [ ] 补齐统一错误处理与参数校验
 
-## 注意事项
-1. DTO 和 Entity 可能同名，需要加后缀区分（如 StrategyConfigDto vs StrategyConfigEntity）
-2. 确保所有 Spring 注解路径正确
-3. 保留原有的 ClickHouse 和 Ta4j 配置
+验收：
+- 三类接口可通过 HTTP 调用并返回统一 JSON
 
-## 下一步
-运行 `/start-work` 让 Sisyphus 执行这个重构计划。
+### Wave 4：联调与质量（1 周）
+
+- [ ] 与 `agents/orchestrator` 完成最小联调
+- [ ] 与 `web-ui` 完成结果展示联调
+- [ ] 增加单元测试与集成测试（关键路径）
+- [ ] 增加最小运行说明与回归脚本
+
+验收：
+- 从策略计算到结果展示可跑通完整链路
+- `mvn test` 可通过关键测试
+
+## DoD（Definition of Done）
+
+- [ ] `strategy-service` 可独立启动并提供稳定 API
+- [ ] 完成“行情 -> 策略 -> 风控 -> 模拟下单 -> 查询结果”闭环
+- [ ] 关键接口有测试覆盖与失败场景说明
+- [ ] README 中的阶段目标可被真实演示
+
+## 非目标（本计划不覆盖）
+
+- 全量微服务拆分治理
+- Kafka 与 RocketMQ 双通道生产级幂等
+- 高级 Agent 记忆与向量检索
+- K8s 生产化部署
+
+## 下一步建议
+
+1. 先执行 Wave 0 与 Wave 1，确保数据链路真实可用  
+2. 再进入 Wave 2 做策略与风控，避免“先写接口后补逻辑”  
+3. 每完成一波次，回写 README 里程碑，保持文档与代码一致
+
