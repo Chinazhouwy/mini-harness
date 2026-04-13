@@ -87,5 +87,5 @@ yarn-debug.log*
 yarn-error.log*
 
 ### Sensitive
-config/
 credentials.json
+/.idea/
