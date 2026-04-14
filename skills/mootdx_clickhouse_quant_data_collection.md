@@ -97,7 +97,7 @@ def update_daily_data(stock_code):
         kline_data['stock_code'] = stock_code
         kline_data['trade_date'] = kline_data.index.date
         # 先删除当日已有数据避免重复
-        ch_client.command(f"DELETE FROM daily_kline WHERE stock_code = '{stock_code}' AND trade_date = today()")
+        ch_client.command(f"DELETE FROM daily_kline WHERE stock_code = '{stock_code}' AND trade_date = toDate(now())")
         ch_client.insert_df('daily_kline', kline_data)
 ```
 
@@ -114,10 +114,11 @@ def validate_daily_data():
 ```
 
 ### 5. 异常处理能力
-- **IP封禁**：配置代理池、降低请求频率、更换服务器IP
-- **数据重复**：写入前按`股票代码+交易日期`去重
+- **IP封禁**：配置代理池、降低请求频率（≤1次/秒）、更换服务器IP
+- **数据重复**：写入前按`股票代码+交易日期`去重；批量写入前执行DELETE避免重复
 - **请求失败**：重试3次，仍失败则加入重试队列，次日补采
 - **服务器宕机**：断点续传机制，重启后自动从上次进度继续
+- **并发写入**：多进程写入时使用任务分片，确保每个股票-日期仅由一个进程处理
 
 ---
 ## ⚡ 最佳实践
@@ -140,7 +141,7 @@ ch_client = clickhouse_connect.get_client(
     host='127.0.0.1',
     port=8123,
     username='default',
-    password='你的密码',
+    password='harness123',
     database='quant_data' # 提前创建的数据库，默认可以用default
 )
 
@@ -151,7 +152,7 @@ ch_client = clickhouse_connect.get_client(
     host='你的云主机公网IP',
     port=8123,
     username='default',
-    password='你的密码',
+    password='harness123',
     database='quant_data',
     secure=False # 非SSL连接用这个，HTTPS的话设为True
 )
@@ -160,7 +161,7 @@ ch_client = clickhouse_connect.get_client(
 # 连接校验
 # --------------------------
 print(ch_client.query("SELECT version()").result_rows[0][0]) # 输出版本号则连接成功
-```
+``` 
 
 ---
 ### 2. 标准表结构设计（和mootdx返回字段完美适配）
@@ -194,7 +195,32 @@ CREATE TABLE IF NOT EXISTS daily_kline
     low Decimal64(4) COMMENT '最低价',
     close Decimal64(4) COMMENT '收盘价',
     volume UInt64 COMMENT '成交量 股',
-    amount Decimal64(4) COMMENT '成交金额 万元',
+    amount Decimal64(8) COMMENT '成交金额 万元',
+    turnover_rate Nullable(Decimal64(4)) COMMENT '换手率 %',
+    change Decimal64(4) COMMENT '涨跌额 元',
+    change_pct Decimal64(4) COMMENT '涨跌幅 %',
+    amplitude Decimal64(4) COMMENT '振幅 %',
+    fetch_time DateTime DEFAULT now() COMMENT '采集时间'
+)
+ENGINE = MergeTree()
+ORDER BY (stock_code, trade_date)
+PARTITION BY toYYYYMM(trade_date) -- 按月份分区，查询速度提升100倍
+TTL trade_date + INTERVAL 10 YEAR; -- 保留10年数据，可调整
+```
+
+#### （2）日K线表 `daily_kline`（最常用）
+```sql
+CREATE TABLE IF NOT EXISTS daily_kline
+(
+    trade_date Date COMMENT '交易日期',
+    stock_code String COMMENT '股票代码',
+    pre_close Decimal64(4) COMMENT '前收盘价 元',
+    open Decimal64(4) COMMENT '开盘价',
+    high Decimal64(4) COMMENT '最高价',
+    low Decimal64(4) COMMENT '最低价',
+    close Decimal64(4) COMMENT '收盘价',
+    volume UInt64 COMMENT '成交量 股',
+    amount Decimal64(8) COMMENT '成交金额 万元',
     turnover_rate Nullable(Decimal64(4)) COMMENT '换手率 %',
     change Decimal64(4) COMMENT '涨跌额 元',
     change_pct Decimal64(4) COMMENT '涨跌幅 %',
