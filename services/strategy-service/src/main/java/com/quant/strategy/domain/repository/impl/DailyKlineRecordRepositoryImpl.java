@@ -3,7 +3,6 @@ package com.quant.strategy.domain.repository.impl;
 import com.quant.strategy.domain.record.DailyKlineRecord;
 import com.quant.strategy.domain.repository.DailyKlineRecordRepository;
 import org.springframework.jdbc.core.RowMapper;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -16,6 +15,7 @@ import java.util.*;
 
 /**
  * 日K线行情Record Repository实现
+ * 只包含查询操作，不包含新增、更新、删除操作
  * 由于DailyKlineRecord没有单字段主键，这里使用自定义实现而不是继承RecordJdbcRepository
  */
 @Repository
@@ -50,57 +50,9 @@ public class DailyKlineRecordRepositoryImpl implements DailyKlineRecordRepositor
         }
     };
     
-    private MapSqlParameterSource toParamMap(DailyKlineRecord record) {
-        MapSqlParameterSource params = new MapSqlParameterSource();
-        params.addValue("trade_date", record.tradeDate());
-        params.addValue("stock_code", record.stockCode());
-        params.addValue("pre_close", record.preClose());
-        params.addValue("open", record.open());
-        params.addValue("high", record.high());
-        params.addValue("low", record.low());
-        params.addValue("close", record.close());
-        params.addValue("volume", record.volume());
-        params.addValue("amount", record.amount());
-        params.addValue("turnover_rate", record.turnoverRate());
-        params.addValue("change", record.change());
-        params.addValue("change_pct", record.changePct());
-        params.addValue("amplitude", record.amplitude());
-        params.addValue("update_time", record.updateTime());
-        return params;
-    }
+
     
-    @Override
-    public DailyKlineRecord save(DailyKlineRecord dailyKline) {
-        if (existsByTradeDateAndStockCode(dailyKline.tradeDate(), dailyKline.stockCode())) {
-            update(dailyKline);
-        } else {
-            insert(dailyKline);
-        }
-        return dailyKline;
-    }
-    
-    private void insert(DailyKlineRecord record) {
-        String sql = "INSERT INTO " + TABLE_NAME + " (trade_date, stock_code, pre_close, open, high, low, close, volume, amount, turnover_rate, change, change_pct, amplitude, update_time) " +
-                    "VALUES (:trade_date, :stock_code, :pre_close, :open, :high, :low, :close, :volume, :amount, :turnover_rate, :change, :change_pct, :amplitude, :update_time)";
-        jdbcTemplate.update(sql, toParamMap(record));
-    }
-    
-    private void update(DailyKlineRecord record) {
-        String sql = "UPDATE " + TABLE_NAME + " SET pre_close = :pre_close, open = :open, high = :high, low = :low, close = :close, " +
-                    "volume = :volume, amount = :amount, turnover_rate = :turnover_rate, change = :change, change_pct = :change_pct, " +
-                    "amplitude = :amplitude, update_time = :update_time " +
-                    "WHERE trade_date = :trade_date AND stock_code = :stock_code";
-        jdbcTemplate.update(sql, toParamMap(record));
-    }
-    
-    @Override
-    public List<DailyKlineRecord> saveAll(List<DailyKlineRecord> dailyKlines) {
-        List<DailyKlineRecord> saved = new ArrayList<>();
-        for (DailyKlineRecord record : dailyKlines) {
-            saved.add(save(record));
-        }
-        return saved;
-    }
+
     
     @Override
     public Optional<DailyKlineRecord> findByTradeDateAndStockCode(LocalDate tradeDate, String stockCode) {
@@ -138,17 +90,7 @@ public class DailyKlineRecordRepositoryImpl implements DailyKlineRecordRepositor
         return results.isEmpty() ? Optional.empty() : Optional.of(results.get(0));
     }
     
-    @Override
-    public void deleteByTradeDateAndStockCode(LocalDate tradeDate, String stockCode) {
-        String sql = "DELETE FROM " + TABLE_NAME + " WHERE trade_date = :trade_date AND stock_code = :stock_code";
-        jdbcTemplate.update(sql, Map.of("trade_date", tradeDate, "stock_code", stockCode));
-    }
-    
-    @Override
-    public void deleteAllByStockCode(String stockCode) {
-        String sql = "DELETE FROM " + TABLE_NAME + " WHERE stock_code = :stock_code";
-        jdbcTemplate.update(sql, Map.of("stock_code", stockCode));
-    }
+
     
     @Override
     public boolean existsByTradeDateAndStockCode(LocalDate tradeDate, String stockCode) {

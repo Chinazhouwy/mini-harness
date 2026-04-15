@@ -9,18 +9,9 @@ import java.util.Optional;
 
 /**
  * 日K线行情Record Repository接口
+ * 只包含查询操作，不包含新增、更新、删除操作
  */
 public interface DailyKlineRecordRepository {
-    
-    /**
-     * 保存日K线数据
-     */
-    DailyKlineRecord save(DailyKlineRecord dailyKline);
-    
-    /**
-     * 批量保存日K线数据
-     */
-    List<DailyKlineRecord> saveAll(List<DailyKlineRecord> dailyKlines);
     
     /**
      * 根据日期和股票代码查找
@@ -46,16 +37,6 @@ public interface DailyKlineRecordRepository {
      * 根据股票代码查找最新数据
      */
     Optional<DailyKlineRecord> findLatestByStockCode(String stockCode);
-    
-    /**
-     * 删除指定日期的股票数据
-     */
-    void deleteByTradeDateAndStockCode(LocalDate tradeDate, String stockCode);
-    
-    /**
-     * 删除股票的所有数据
-     */
-    void deleteAllByStockCode(String stockCode);
     
     /**
      * 判断数据是否存在

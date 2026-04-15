@@ -38,12 +38,6 @@
             <artifactId>spring-cloud-starter-openfeign</artifactId>
         </dependency>
 
-        <!-- Spring Cloud Eureka -->
-        <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
-        </dependency>
-
         <!-- Spring JDBC for NamedParameterJdbcTemplate -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

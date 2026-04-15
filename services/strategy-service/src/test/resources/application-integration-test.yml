@@ -1,0 +1,46 @@
+spring:
+  datasource:
+    # 使用本地ClickHouse进行集成测试
+    url: ${CLICKHOUSE_URL:jdbc:clickhouse://localhost:8123/default}
+    username: ${CLICKHOUSE_USERNAME:default}
+    password: ${CLICKHOUSE_PASSWORD:harness123}
+    driver-class-name: com.clickhouse.jdbc.ClickHouseDriver
+    hikari:
+      maximum-pool-size: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 30000
+
+  jpa:
+    hibernate:
+      ddl-auto: none # 使用SQL脚本初始化
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 50
+        order_updates: true
+
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema-test.sql
+      data-locations: classpath:data-test.sql
+
+  testcontainers:
+    clickhouse:
+      image: clickhouse/clickhouse-server:23.11-alpine
+      environment:
+        CLICKHOUSE_USER: default
+        CLICKHOUSE_PASSWORD: harness123
+        CLICKHOUSE_DB: default
+      ports:
+        - "8123:8123"
+
+logging:
+  level:
+    com.clickhouse: INFO
+    org.springframework.jdbc.core: DEBUG
+    org.springframework.jdbc.core.JdbcTemplate: DEBUG
+    org.testcontainers: INFO
+    com.quant.strategy: DEBUG

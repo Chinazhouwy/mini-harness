@@ -8,18 +8,9 @@ import java.util.Optional;
 
 /**
  * 股票基本信息Record Repository接口
+ * 只包含查询操作，不包含增删改操作
  */
 public interface StockInfoRecordRepository {
-    
-    /**
-     * 保存股票信息
-     */
-    StockInfoRecord save(StockInfoRecord stockInfo);
-    
-    /**
-     * 批量保存股票信息
-     */
-    List<StockInfoRecord> saveAll(List<StockInfoRecord> stockInfos);
     
     /**
      * 根据股票代码查找
@@ -42,11 +33,6 @@ public interface StockInfoRecordRepository {
     List<StockInfoRecord> findByIndustry(String industry);
     
     /**
-     * 根据股票代码删除
-     */
-    void deleteByStockCode(String stockCode);
-    
-    /**
      * 判断股票是否存在
      */
     boolean existsByStockCode(String stockCode);
@@ -65,11 +51,6 @@ public interface StockInfoRecordRepository {
      * 根据多个股票代码批量查找
      */
     List<StockInfoRecord> findByStockCodes(List<String> stockCodes);
-    
-    /**
-     * 更新股票市值
-     */
-    void updateMarketCap(String stockCode, BigDecimal marketCap);
     
     /**
      * 查找指定交易所的活跃股票
