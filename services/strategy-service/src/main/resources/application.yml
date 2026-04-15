@@ -1,12 +1,28 @@
 server:
   port: 8082
 
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka
+  instance:
+    prefer-ip-address: true
+
 spring:
   datasource:
-    url: jdbc:clickhouse://localhost:8123/default
+    url: jdbc:clickhouse://localhost:8123/quant
     username: default
-    password: harness123
+    password: ''
     driver-class-name: com.clickhouse.jdbc.ClickHouseDriver
+  
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    properties:
+      hibernate:
+        dialect: com.clickhouse.hibernate.dialect.ClickHouseDialect
 
 management:
   endpoints:
