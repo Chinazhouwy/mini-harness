@@ -1,7 +1,7 @@
 spring:
   datasource:
-    # 使用本地ClickHouse进行集成测试
-    url: ${CLICKHOUSE_URL:jdbc:clickhouse://localhost:8123/default}
+    # 默认值仅作为兜底；测试运行时由 Testcontainers 动态注入
+    url: ${CLICKHOUSE_URL:jdbc:clickhouse://localhost:8123/harness_db}
     username: ${CLICKHOUSE_USERNAME:default}
     password: ${CLICKHOUSE_PASSWORD:harness123}
     driver-class-name: com.clickhouse.jdbc.ClickHouseDriver
@@ -23,19 +23,7 @@ spring:
 
   sql:
     init:
-      mode: always
-      schema-locations: classpath:schema-test.sql
-      data-locations: classpath:data-test.sql
-
-  testcontainers:
-    clickhouse:
-      image: clickhouse/clickhouse-server:23.11-alpine
-      environment:
-        CLICKHOUSE_USER: default
-        CLICKHOUSE_PASSWORD: harness123
-        CLICKHOUSE_DB: default
-      ports:
-        - "8123:8123"
+      mode: never
 
 logging:
   level:

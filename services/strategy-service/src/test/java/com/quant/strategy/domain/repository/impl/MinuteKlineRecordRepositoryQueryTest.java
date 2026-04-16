@@ -1,6 +1,7 @@
 package com.quant.strategy.domain.repository.impl;
 
 import com.quant.strategy.domain.record.MinuteKlineRecord;
+import com.quant.strategy.support.AbstractClickHouseIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.*;
     "/schema-test.sql",
     "/data-stock-info-test.sql"
 }, config = @SqlConfig(transactionMode = SqlConfig.TransactionMode.ISOLATED))
-class MinuteKlineRecordRepositoryQueryTest {
+class MinuteKlineRecordRepositoryQueryTest extends AbstractClickHouseIntegrationTest {
     
     @Autowired
     private MinuteKlineRecordRepositoryImpl repository;
@@ -55,12 +56,12 @@ class MinuteKlineRecordRepositoryQueryTest {
         MinuteKlineRecord record = result.get();
         assertEquals(tradeTime, record.tradeTime());
         assertEquals(stockCode, record.stockCode());
-        assertEquals(new BigDecimal("12.50"), record.open());
-        assertEquals(new BigDecimal("12.52"), record.high());
-        assertEquals(new BigDecimal("12.48"), record.low());
-        assertEquals(new BigDecimal("12.51"), record.close());
+        assertEquals(0, record.open().compareTo(new BigDecimal("12.50")));
+        assertEquals(0, record.high().compareTo(new BigDecimal("12.52")));
+        assertEquals(0, record.low().compareTo(new BigDecimal("12.48")));
+        assertEquals(0, record.close().compareTo(new BigDecimal("12.51")));
         assertEquals(1500000L, record.volume());
-        assertEquals(new BigDecimal("18750000.0000"), record.amount());
+        assertEquals(0, record.amount().compareTo(new BigDecimal("18750000.0000")));
     }
     
     @Test

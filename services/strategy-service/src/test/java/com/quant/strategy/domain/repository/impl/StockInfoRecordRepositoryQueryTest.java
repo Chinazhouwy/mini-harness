@@ -1,6 +1,7 @@
 package com.quant.strategy.domain.repository.impl;
 
 import com.quant.strategy.domain.record.StockInfoRecord;
+import com.quant.strategy.support.AbstractClickHouseIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.*;
     "/schema-test.sql",
     "/data-stock-info-test.sql"
 }, config = @SqlConfig(transactionMode = SqlConfig.TransactionMode.ISOLATED))
-class StockInfoRecordRepositoryQueryTest {
+class StockInfoRecordRepositoryQueryTest extends AbstractClickHouseIntegrationTest {
     
     @Autowired
     private StockInfoRecordRepositoryImpl repository;

@@ -1,3 +1,7 @@
+DROP TABLE IF EXISTS harness_db.minute_kline;
+DROP TABLE IF EXISTS harness_db.daily_kline;
+DROP TABLE IF EXISTS harness_db.stock_info;
+
 -- 创建stock_info表结构
 CREATE TABLE IF NOT EXISTS harness_db.stock_info
 (
@@ -34,7 +38,7 @@ CREATE TABLE IF NOT EXISTS harness_db.daily_kline
     update_time     DATETIME DEFAULT now(),
     PRIMARY KEY (trade_date, stock_code)
 ) ENGINE = MergeTree()
-ORDER BY (stock_code, trade_date)
+ORDER BY (trade_date, stock_code)
 PARTITION BY toYYYYMM(trade_date);
 
 -- 创建minute_kline表结构
@@ -51,5 +55,5 @@ CREATE TABLE IF NOT EXISTS harness_db.minute_kline
     created_at      DATETIME DEFAULT now(),
     PRIMARY KEY (timestamp, stock_code)
 ) ENGINE = MergeTree()
-ORDER BY (stock_code, timestamp)
+ORDER BY (timestamp, stock_code)
 PARTITION BY toYYYYMM(timestamp);
