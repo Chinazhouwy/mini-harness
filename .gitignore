@@ -89,3 +89,5 @@ yarn-error.log*
 ### Sensitive
 credentials.json
 /.idea/
+/TradingAgents/
+/valuecell/
