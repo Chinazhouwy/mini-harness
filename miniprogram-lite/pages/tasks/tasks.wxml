@@ -1,0 +1,35 @@
+<view class="page">
+  <view class="hero compact-hero">
+    <text class="eyebrow">Task Log</text>
+    <text class="title">历史回测任务</text>
+    <text class="subtitle">这里是移动端的回放入口：参数、结果、信号、订单和质检都从任务 ID 串起来。</text>
+  </view>
+
+  <view wx:if="{{error}}" class="card error-card">{{error}}</view>
+
+  <view class="section list">
+    <view
+      wx:for="{{tasks}}"
+      wx:key="taskId"
+      class="card task-card"
+      data-task-id="{{item.taskId}}"
+      bindtap="openTask"
+    >
+      <view class="row">
+        <view>
+          <text class="task-code">{{item.stockCode}}</text>
+          <text class="muted task-id">{{item.shortId}}</text>
+        </view>
+        <text class="pill">{{item.statusLabel}}</text>
+      </view>
+      <view class="task-range">{{item.startDate}} 至 {{item.endDate}}</view>
+      <view class="task-footer">
+        <text>收益 {{item.totalReturnLabel}}</text>
+        <text>回撤 {{item.maxDrawdownLabel}}</text>
+        <text>交易 {{item.tradeCount}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{!loading && tasks.length === 0}}" class="card empty">暂无历史任务。</view>
+</view>

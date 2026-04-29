@@ -13,19 +13,14 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/Market.vue')
   },
   {
-    path: '/trading',
-    name: 'Trading',
-    component: () => import('@/views/Trading.vue')
+    path: '/tasks',
+    name: 'Tasks',
+    component: () => import('@/views/Tasks.vue')
   },
   {
-    path: '/agents',
-    name: 'Agents',
-    component: () => import('@/views/Agents.vue')
-  },
-  {
-    path: '/analytics',
-    name: 'Analytics',
-    component: () => import('@/views/Analytics.vue')
+    path: '/tasks/:taskId',
+    name: 'TaskDetail',
+    component: () => import('@/views/TaskDetail.vue')
   }
 ]
 

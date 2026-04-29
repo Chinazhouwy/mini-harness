@@ -1,0 +1,161 @@
+page {
+  min-height: 100%;
+  background:
+    radial-gradient(circle at 10% 10%, rgba(51, 138, 93, 0.18), transparent 26%),
+    linear-gradient(145deg, #f4f0e8 0%, #ebefe2 48%, #f8f3e7 100%);
+  color: #17251e;
+  font-family: "PingFang SC", "Hiragino Sans GB", sans-serif;
+}
+
+.page {
+  min-height: 100vh;
+  padding: 28rpx;
+  box-sizing: border-box;
+}
+
+.hero {
+  padding: 34rpx;
+  border-radius: 34rpx;
+  background: linear-gradient(135deg, #11231c 0%, #24583c 68%, #d4a657 100%);
+  color: #fffaf0;
+  box-shadow: 0 20rpx 50rpx rgba(17, 35, 28, 0.18);
+}
+
+.eyebrow {
+  font-size: 24rpx;
+  letter-spacing: 3rpx;
+  opacity: 0.78;
+  text-transform: uppercase;
+}
+
+.title {
+  display: block;
+  margin-top: 16rpx;
+  font-size: 48rpx;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.subtitle {
+  display: block;
+  margin-top: 18rpx;
+  color: rgba(255, 250, 240, 0.82);
+  font-size: 27rpx;
+  line-height: 1.55;
+}
+
+.section {
+  margin-top: 28rpx;
+}
+
+.section-title {
+  display: block;
+  margin-bottom: 16rpx;
+  color: #203a2d;
+  font-size: 32rpx;
+  font-weight: 750;
+}
+
+.card {
+  padding: 28rpx;
+  border: 1rpx solid rgba(32, 58, 45, 0.1);
+  border-radius: 28rpx;
+  background: rgba(255, 250, 240, 0.86);
+  box-shadow: 0 12rpx 35rpx rgba(32, 58, 45, 0.08);
+}
+
+.muted {
+  color: #6f756f;
+}
+
+.danger {
+  color: #a74435;
+}
+
+.success {
+  color: #1f6f4a;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42rpx;
+  padding: 0 18rpx;
+  border-radius: 999rpx;
+  background: #e5efe5;
+  color: #1f6f4a;
+  font-size: 23rpx;
+  font-weight: 700;
+}
+
+.button-row {
+  display: flex;
+  gap: 18rpx;
+  margin-top: 24rpx;
+}
+
+.primary-button,
+.ghost-button {
+  flex: 1;
+  height: 82rpx;
+  border-radius: 999rpx;
+  font-size: 28rpx;
+  font-weight: 750;
+  line-height: 82rpx;
+}
+
+.primary-button {
+  background: #1f6f4a;
+  color: #fffaf0;
+}
+
+.ghost-button {
+  border: 1rpx solid rgba(31, 111, 74, 0.28);
+  background: #fffaf0;
+  color: #1f6f4a;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18rpx;
+}
+
+.metric-card {
+  padding: 22rpx;
+  border-radius: 24rpx;
+  background: #fffaf0;
+}
+
+.metric-label {
+  display: block;
+  color: #6f756f;
+  font-size: 23rpx;
+}
+
+.metric-value {
+  display: block;
+  margin-top: 10rpx;
+  color: #17251e;
+  font-size: 34rpx;
+  font-weight: 800;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+}
+
+.empty {
+  padding: 50rpx 24rpx;
+  color: #8a8f86;
+  text-align: center;
+}

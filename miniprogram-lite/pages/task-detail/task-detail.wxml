@@ -1,0 +1,83 @@
+<view class="page">
+  <view wx:if="{{taskView}}" class="hero detail-hero">
+    <text class="eyebrow">Backtest Detail</text>
+    <text class="title">{{taskView.stockCode}}</text>
+    <text class="subtitle">{{taskView.dateRange}} · {{taskView.shortId}}</text>
+    <view class="hero-status">
+      <text class="pill">{{taskView.statusLabel}}</text>
+      <text wx:if="{{quality}}" class="pill {{quality.passed ? 'quality-pass' : 'quality-fail'}}">
+        {{quality.passed ? '质检通过' : '质检需关注'}}
+      </text>
+    </view>
+  </view>
+
+  <view wx:if="{{error}}" class="card error-card">{{error}}</view>
+
+  <view wx:if="{{taskView}}" class="section">
+    <text class="section-title">核心指标</text>
+    <view class="metric-grid">
+      <view class="metric-card">
+        <text class="metric-label">总收益</text>
+        <text class="metric-value">{{taskView.totalReturnLabel}}</text>
+      </view>
+      <view class="metric-card">
+        <text class="metric-label">最大回撤</text>
+        <text class="metric-value">{{taskView.maxDrawdownLabel}}</text>
+      </view>
+      <view class="metric-card">
+        <text class="metric-label">最终权益</text>
+        <text class="metric-value">{{taskView.finalEquityLabel}}</text>
+      </view>
+      <view class="metric-card">
+        <text class="metric-label">交易次数</text>
+        <text class="metric-value">{{taskView.tradeCount}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{quality}}" class="section">
+    <text class="section-title">质检建议</text>
+    <view class="card">
+      <text class="quality-summary">{{quality.summary}}</text>
+      <view class="check-list">
+        <view wx:for="{{quality.checks}}" wx:key="name" class="check-row">
+          <text class="{{item.passed ? 'success' : 'danger'}}">{{item.passed ? '通过' : '关注'}}</text>
+          <text>{{item.name}}</text>
+        </view>
+      </view>
+      <view wx:if="{{quality.suggestions.length}}" class="suggestions">
+        <text wx:for="{{quality.suggestions}}" wx:key="*this" class="suggestion">· {{item}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="section">
+    <text class="section-title">最近信号</text>
+    <view class="list">
+      <view wx:for="{{signalViews}}" wx:key="key" class="card mini-card">
+        <view class="row">
+          <text class="strong">{{item.signalLabel}}</text>
+          <text class="muted">{{item.tradeDate}}</text>
+        </view>
+        <view class="mini-line">{{item.line}}</view>
+        <text class="muted reason">{{item.reason}}</text>
+      </view>
+    </view>
+    <view wx:if="{{!loading && signalViews.length === 0}}" class="card empty">暂无信号。</view>
+  </view>
+
+  <view class="section">
+    <text class="section-title">模拟订单</text>
+    <view class="list">
+      <view wx:for="{{orderViews}}" wx:key="orderId" class="card mini-card">
+        <view class="row">
+          <text class="strong">{{item.side}}</text>
+          <text class="muted">{{item.tradeDate}}</text>
+        </view>
+        <view class="mini-line">{{item.line}}</view>
+        <text class="muted reason">{{item.riskReason}}</text>
+      </view>
+    </view>
+    <view wx:if="{{!loading && orderViews.length === 0}}" class="card empty">暂无订单。</view>
+  </view>
+</view>

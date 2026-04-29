@@ -1,0 +1,17 @@
+{
+  "description": "QuantHarness MiniProgram Lite",
+  "compileType": "miniprogram",
+  "libVersion": "3.4.10",
+  "appid": "touristappid",
+  "projectname": "quantHarness-miniprogram-lite",
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true,
+    "compileHotReLoad": true
+  },
+  "condition": {},
+  "srcMiniprogramRoot": "./"
+}

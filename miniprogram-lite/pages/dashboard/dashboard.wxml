@@ -1,0 +1,55 @@
+<view class="page">
+  <view class="hero">
+    <text class="eyebrow">Reference MVP</text>
+    <text class="title">移动端量化驾驶舱</text>
+    <text class="subtitle">先看结果，再回到 Java 主线把链路一点点做硬。小程序 Lite 只负责轻量查看和快速触发。</text>
+  </view>
+
+  <view class="section">
+    <text class="section-title">服务状态</text>
+    <view class="card">
+      <view class="row">
+        <text class="muted">Reference API</text>
+        <text class="pill">{{health ? health.status : '检测中'}}</text>
+      </view>
+      <view class="row meta-row">
+        <text class="muted">Store</text>
+        <text>{{health && health.storeType ? health.storeType : '--'}}</text>
+      </view>
+      <view wx:if="{{error}}" class="error-box">{{error}}</view>
+      <view class="button-row">
+        <button class="ghost-button" bindtap="refresh" loading="{{loading}}">刷新</button>
+        <button class="primary-button" bindtap="runQuickBacktest" loading="{{running}}">快速回测</button>
+      </view>
+    </view>
+  </view>
+
+  <view class="section">
+    <text class="section-title">最新任务</text>
+    <view wx:if="{{latestTaskView}}" class="card latest-card" bindtap="openLatestTask">
+      <view class="row">
+        <view>
+          <text class="task-code">{{latestTaskView.stockCode}}</text>
+          <text class="task-id muted">{{latestTaskView.shortId}}</text>
+        </view>
+        <text class="pill">{{latestTaskView.statusLabel}}</text>
+      </view>
+
+      <view class="metric-grid task-metrics">
+        <view class="metric-card">
+          <text class="metric-label">总收益</text>
+          <text class="metric-value">{{latestTaskView.totalReturnLabel}}</text>
+        </view>
+        <view class="metric-card">
+          <text class="metric-label">最大回撤</text>
+          <text class="metric-value">{{latestTaskView.maxDrawdownLabel}}</text>
+        </view>
+      </view>
+    </view>
+    <view wx:else class="card empty">暂无任务，先跑一次快速回测。</view>
+  </view>
+
+  <view class="section">
+    <button class="ghost-button full-button" bindtap="openTasks">查看历史任务</button>
+  </view>
+</view>

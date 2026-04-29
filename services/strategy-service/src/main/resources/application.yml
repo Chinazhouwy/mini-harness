@@ -29,3 +29,12 @@ management:
     web:
       exposure:
         include: health,info,metrics
+
+reference:
+  store:
+    # memory: 默认演示模式；jdbc: 启用 PostgreSQL 持久化
+    type: ${REFERENCE_STORE_TYPE:memory}
+  postgres:
+    url: ${REFERENCE_POSTGRES_URL:jdbc:postgresql://localhost:5432/harness_db}
+    username: ${REFERENCE_POSTGRES_USERNAME:harness}
+    password: ${REFERENCE_POSTGRES_PASSWORD:harness123}

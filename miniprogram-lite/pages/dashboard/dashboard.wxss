@@ -1,0 +1,42 @@
+.meta-row {
+  margin-top: 16rpx;
+}
+
+.error-box {
+  margin-top: 18rpx;
+  padding: 18rpx;
+  border-radius: 18rpx;
+  background: #fde9df;
+  color: #a74435;
+  font-size: 24rpx;
+  line-height: 1.45;
+}
+
+.latest-card {
+  transition: transform 0.18s ease;
+}
+
+.latest-card:active {
+  transform: scale(0.985);
+}
+
+.task-code {
+  display: block;
+  color: #17251e;
+  font-size: 38rpx;
+  font-weight: 850;
+}
+
+.task-id {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 23rpx;
+}
+
+.task-metrics {
+  margin-top: 22rpx;
+}
+
+.full-button {
+  width: 100%;
+}

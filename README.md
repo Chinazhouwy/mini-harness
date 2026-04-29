@@ -3,20 +3,25 @@
 AI 驱动量化系统的单人工程化实践项目。  
 当前目标不是“一次做完全部架构”，而是先完成可运行、可验证、可演示的一期 MVP。
 
-## 当前状态（2026-04-13）
+## 当前状态（2026-04-29）
 
-项目处于“脚手架已搭建 + 核心链路未打通”阶段：
+项目处于“Reference MVP 已打通 + 正式持久化待补”阶段：
 
 - 已有：
-  - 基础设施编排：`docker-compose.yml`
+  - 基础设施编排：`docker-compose-mac.yml`、`docker-compose-win.yml`
   - Java Maven 多模块骨架：`services/`
   - Python Agent 骨架：`agents/`
   - Harness 骨架：`harness/`
-  - 前端骨架：`web-ui/`
+  - 前端控制台：`web-ui/`
+  - 小程序 Lite：`miniprogram-lite/`
+  - Reference MVP：`services/strategy-service/src/main/java/com/quant/strategy/reference`
+  - Harness 质检入口：`harness/validators/quality_check.py`
+  - Agent 最小协同：`agents/technical/main.py`、`agents/orchestrator/main.py`
 - 未完成：
-  - 核心业务逻辑多数仍为 TODO/pass
-  - 端到端交易闭环尚未打通
-  - 自动化质检尚未形成稳定流程
+  - Reference MVP 默认使用内存任务仓储；已提供 PostgreSQL store，可通过配置启用
+  - Agent 当前是 Reference API 调用版，尚未接入真实 LLM 推理
+  - Harness 当前调用 Reference API，尚未接入 CI
+  - 小程序 Lite 当前是本地开发样板，正式发布前仍需 HTTPS 域名与鉴权
 
 ## 为什么要收敛范围
 
@@ -36,7 +41,7 @@ AI 驱动量化系统的单人工程化实践项目。
 1. 从 ClickHouse 读取历史 K 线
 2. 运行双均线策略，输出买卖信号
 3. 执行基础风控校验
-4. 生成模拟订单并写入 PostgreSQL
+4. 生成模拟订单（Reference 版先写入内存任务仓储，下一步替换 PostgreSQL）
 5. 前端展示信号与订单结果
 6. 质检脚本可检查指标并生成反馈
 
@@ -47,10 +52,11 @@ graph LR
     A["ClickHouse 行情"] --> B["strategy-service 策略计算"]
     B --> C["risk rule 基础风控"]
     C --> D["模拟下单"]
-    D --> E["PostgreSQL 订单结果"]
+    D --> E["Reference 任务仓储"]
     B --> F["orchestrator + technical agent"]
     F --> B
     E --> G["web-ui 可视化"]
+    E --> I["miniprogram-lite 移动查看"]
     B --> H["harness quality_check"]
 ```
 
@@ -122,11 +128,17 @@ graph LR
 
 ## 二期（明确延期，不阻塞一期）
 
-- 完整微服务拆分（quote/order/account/risk/backtest）
-- Kafka + RocketMQ 生产级异步与幂等治理
-- Redis Vector Sets 记忆系统
-- Neo4j 情景推演引擎（simulation）
-- K8s 部署与弹性扩缩容
+详细路线见 `docs/ROADMAP_PHASE2_PLUS.md`。
+
+阶段摘要：
+
+- Phase 2：持久化与服务内模块化，先把内存任务仓储替换为 PostgreSQL。
+- Phase 2.5：Mobile Lite，H5 移动适配已完成，小程序 Lite 原生样板已创建。
+- Phase 3：正式策略与风控引擎，抽象 `StrategyEngine`、`RiskRule`，接入 JMA 与参数扫描。
+- Phase 4：Agent 工程化，引入 LLM 结构化解释、Agent 审计和反馈闭环。
+- Phase 5：事件驱动与服务拆分，逐步拆出 quote/backtest/risk/order/strategy。
+- Phase 6：记忆、知识图谱与仿真，引入向量记忆、Neo4j 和压力情景。
+- Phase 7：生产化与可观测，补 CI、监控、trace、部署和演示稳定性。
 
 ## 快速开始（当前骨架）
 
@@ -140,8 +152,8 @@ graph LR
 ### 启动基础设施
 
 ```bash
-docker-compose up -d
-docker-compose ps
+docker compose -f docker-compose-mac.yml up -d
+docker compose -f docker-compose-mac.yml ps
 ```
 
 ### 启动 Java（示例）
@@ -151,11 +163,52 @@ cd services/strategy-service
 mvn spring-boot:run
 ```
 
+Reference API：
+
+```bash
+curl -X POST http://localhost:8082/api/reference/backtest \
+  -H "Content-Type: application/json" \
+  -d '{
+    "stockCode": "000001",
+    "startDate": "2024-01-01",
+    "endDate": "2024-12-31",
+    "fastWindow": 5,
+    "slowWindow": 20,
+    "initialCash": 100000,
+    "maxPositionRatio": 0.8,
+    "stopLossRatio": 0.08
+  }'
+```
+
+更多说明见 `docs/REFERENCE_MVP_SLICE.md`。
+
+启用 Reference PostgreSQL 持久化：
+
+```bash
+psql "$REFERENCE_POSTGRES_URL" -f scripts/create_reference_postgres_tables.sql
+
+REFERENCE_STORE_TYPE=jdbc \
+REFERENCE_POSTGRES_URL=jdbc:postgresql://localhost:5432/harness_db \
+REFERENCE_POSTGRES_USERNAME=harness \
+REFERENCE_POSTGRES_PASSWORD=harness123 \
+mvn -pl strategy-service spring-boot:run
+```
+
 ### 启动 Agent（示例）
 
 ```bash
-cd agents/orchestrator
-python main.py --config config.yaml
+python agents/technical/main.py --base-url http://localhost:8082 --stock-code 000001
+python agents/orchestrator/main.py --base-url http://localhost:8082 --stock-code 000001
+```
+
+### 运行 Harness 质检
+
+```bash
+python harness/validators/quality_check.py \
+  --base-url http://localhost:8082 \
+  --stock-code 000001 \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31
 ```
 
 ### 启动前端（示例）
@@ -166,14 +219,59 @@ npm install
 npm run dev
 ```
 
+### 打开小程序 Lite（示例）
+
+`miniprogram-lite/` 是 Phase 2.5 的微信原生小程序样板，用于手机端查看任务、触发快速回测和查看质检建议。
+
+使用微信开发者工具导入：
+
+```text
+miniprogram-lite
+```
+
+本地开发默认访问：
+
+```text
+http://127.0.0.1:8082
+```
+
+如果真机调试无法访问本机地址，修改 `miniprogram-lite/utils/config.ts`，把 `API_BASE_URL` 改成电脑局域网 IP。更多说明见 `miniprogram-lite/README.md`。
+
+### 演示脚本
+
+```bash
+scripts/demo/start-reference-mvp.sh
+scripts/demo/run-reference-backtest.sh
+scripts/demo/run-quality-check.sh
+scripts/demo/stop-reference-mvp.sh
+```
+
 ## 里程碑看板（建议）
 
 - M0：基础设施可启动
-- M1：数据导入 + 双均线回测
-- M2：策略服务 API 可用
-- M3：风控 + 模拟下单可用
-- M4：Agent 最小协同可用
-- M5：前端展示与质检闭环可用
+- M1：数据导入 + 双均线回测（Reference Java 版已完成）
+- M2：策略服务 API 可用（Reference API 已完成）
+- M3：风控 + 模拟下单可用（内存版已完成，PostgreSQL store 已提供）
+- M4：Agent 最小协同可用（Reference API 调用版已完成）
+- M5：前端展示与质检闭环可用（Reference 控制台已完成）
+- M6：Mobile Lite 可参考（H5 适配 + 小程序 Lite 样板已完成）
+
+## 当前交接清单
+
+如果你要看当前逻辑，建议按这个顺序读：
+
+1. `docs/REFERENCE_MVP_SLICE.md`：先看整体链路和 API。
+2. `services/strategy-service/src/main/java/com/quant/strategy/reference/`：看 Java Reference MVP 主逻辑。
+3. `web-ui/src/views/Dashboard.vue`、`web-ui/src/views/Tasks.vue`、`web-ui/src/views/TaskDetail.vue`：看 Web 控制台如何调用接口。
+4. `harness/validators/quality_check.py`：看质检闭环。
+5. `agents/orchestrator/main.py`、`agents/technical/main.py`：看 Agent 当前如何基于 Reference API 工作。
+6. `miniprogram-lite/README.md`：看小程序 Lite 本地开发方式。
+
+当前仍建议你本机验收：
+
+- 使用 `REFERENCE_STORE_TYPE=jdbc` 跑一轮真实 PostgreSQL 持久化。
+- 使用本机 ClickHouse 数据连续触发 3 次回测。
+- 用微信开发者工具打开 `miniprogram-lite/` 并确认能调用本机后端。
 
 ## 风险与应对
 
@@ -192,4 +290,3 @@ npm run dev
 2. 先保证正确性，再优化性能
 3. 所有关键脚本必须可重复执行
 4. 每周至少一次端到端回归验证
-
