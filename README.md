@@ -1,6 +1,6 @@
 # MiniHarness
 
-Spring AI 快速入门项目，演示如何用最少的代码调用大模型。
+Spring AI 2.0 快速入门项目，涵盖常用 API 示例。
 
 ## 环境要求
 
@@ -9,62 +9,46 @@ Spring AI 快速入门项目，演示如何用最少的代码调用大模型。
 
 ## 快速开始
 
-### 1. 配置环境变量
-
 ```bash
 cp .env.example .env
 # 编辑 .env，填入真实的 API Key、Base URL 和模型名称
-```
-
-加载环境变量：
-
-```bash
 export $(cat .env | xargs)
-```
-
-### 2. 启动应用
-
-```bash
 mvn spring-boot:run
 ```
 
-应用启动后会自动发送一条 Prompt 给模型并打印回复。
+## 示例清单
 
-### 3. 运行测试
+`ChatDemo.java` 包含 7 个示例，运行时按顺序执行：
 
-```bash
-mvn test
+| # | 示例 | 核心 API |
+|---|------|----------|
+| 1 | **基础调用** | `prompt().user().call().content()` |
+| 2 | **覆盖 System Prompt** | `prompt().system().user().call().content()` |
+| 3 | **参数化模板** | `user(u -> u.text("{key}").param("key", val))` |
+| 4 | **Token 用量** | `call().chatResponse().getMetadata().getUsage()` |
+| 5 | **流式输出** | `stream().content()` → `Flux<String>` |
+| 6 | **结构化输出** | `call().entity(Record.class)` → 直接映射 Java Record |
+| 7 | **多轮对话** | `MessageChatMemoryAdvisor` + `advisors()` 自动管理上下文 |
+
+## 核心概念
+
 ```
-
-## 核心代码
-
-只有两个类：
-
-- `MiniHarnessApplication` — Spring Boot 入口
-- `ChatDemo` — 注入 `ChatClient.Builder`，构建 `ChatClient`，调用 `.prompt().user(...).call().content()` 拿到模型回复
-
-```java
-@Component
-public class ChatDemo implements CommandLineRunner {
-
-    private final ChatClient chatClient;
-
-    public ChatDemo(ChatClient.Builder chatClientBuilder) {
-        this.chatClient = chatClientBuilder.build();
-    }
-
-    @Override
-    public void run(String... args) {
-        String response = chatClient.prompt()
-                .user("用一句话介绍什么是 Spring AI")
-                .call()
-                .content();
-        System.out.println(response);
-    }
-}
+ChatClient.Builder  ──注入──▶  构建 ChatClient
+                                   │
+    prompt()                       │
+    ├── .system("...")  设置系统提示
+    ├── .user("...")    设置用户消息
+    │     ├── .text() + .param()  参数化模板
+    │     └── ...
+    ├── .advisors(...)  添加 Advisor（如多轮对话记忆）
+    │
+    ├── .call()         同步调用  ──▶  .content()       String
+    │                              ──▶  .chatResponse()  ChatResponse（含 Token 用量）
+    │                              ──▶  .entity(Type)    结构化对象
+    │
+    └── .stream()       流式调用  ──▶  .content()       Flux<String>
+                                   ──▶  .chatResponse()  Flux<ChatResponse>
 ```
-
-三步即可：**注入 Builder → 构建 Client → prompt().user().call().content()**。
 
 ## 技术栈
 
