@@ -1,11 +1,11 @@
 spring:
   ai:
     openai:
-      api-key: ${AI_API_KEY:dummy-fallback-for-context-load}
-      base-url: ${AI_BASE_URL:https://api.openai.com}
+      api-key: ${DEEPSEEK_API_KEY}
+      base-url: https://api.deepseek.com
       chat:
         options:
-          model: ${AI_MODEL:gpt-4o}
+          model: deepseek-v4-flash
 
 logging:
   level:
