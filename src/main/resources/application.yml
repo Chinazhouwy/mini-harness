@@ -1,0 +1,12 @@
+spring:
+  ai:
+    openai:
+      api-key: ${AI_API_KEY:dummy-fallback-for-context-load}
+      base-url: ${AI_BASE_URL:https://api.openai.com}
+      chat:
+        options:
+          model: ${AI_MODEL:gpt-4o}
+
+logging:
+  level:
+    com.chinazhouwy.miniharness: DEBUG
