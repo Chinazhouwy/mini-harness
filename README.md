@@ -1,12 +1,6 @@
 # MiniHarness
 
-MiniHarness 是一个从单题评测实验开始，逐步探索评测、追问、能力证据和 Agent Runtime 的 Java 项目。
-
-当前阶段不预设最终架构。每次只实现一个最小实验，记录实际问题，再决定下一步。
-
-## 当前状态
-
-- ✅ 实验 001：单题回答评测（已完成）
+Spring AI 快速入门项目，演示如何用最少的代码调用大模型。
 
 ## 环境要求
 
@@ -25,111 +19,56 @@ cp .env.example .env
 加载环境变量：
 
 ```bash
-export AI_API_KEY="your-api-key"
-export AI_BASE_URL="https://your-provider-api-endpoint"
-export AI_MODEL="your-model-name"
+export $(cat .env | xargs)
 ```
 
-### 2. 构建项目
-
-```bash
-mvn compile
-```
-
-### 3. 启动应用
+### 2. 启动应用
 
 ```bash
 mvn spring-boot:run
 ```
 
-应用启动后会自动退出（当前没有 Web 端点或持续运行的任务）。
+应用启动后会自动发送一条 Prompt 给模型并打印回复。
 
-### 4. 运行测试
-
-**普通测试**（不需要模型配置）：
+### 3. 运行测试
 
 ```bash
 mvn test
 ```
 
-此命令运行 `MiniHarnessApplicationTests`，验证 Spring 上下文可以正常启动。
+## 核心代码
 
-**LLM 集成测试**（需要模型配置）：
+只有两个类：
 
-```bash
-# 先设置环境变量，或使用 dotenv 工具
-mvn test -Dgroups="llm"
+- `MiniHarnessApplication` — Spring Boot 入口
+- `ChatDemo` — 注入 `ChatClient.Builder`，构建 `ChatClient`，调用 `.prompt().user(...).call().content()` 拿到模型回复
+
+```java
+@Component
+public class ChatDemo implements CommandLineRunner {
+
+    private final ChatClient chatClient;
+
+    public ChatDemo(ChatClient.Builder chatClientBuilder) {
+        this.chatClient = chatClientBuilder.build();
+    }
+
+    @Override
+    public void run(String... args) {
+        String response = chatClient.prompt()
+                .user("用一句话介绍什么是 Spring AI")
+                .call()
+                .content();
+        System.out.println(response);
+    }
+}
 ```
 
-如果没有设置 `AI_API_KEY`，LLM 测试会自动跳过，不会导致构建失败。
-
-### 5. 实验输出
-
-单题评测的实验输出保存在：
-
-```
-target/experiments/001-single-answer-evaluation-output.md
-```
-
-不要将生成结果写回 `src` 目录。
-
-## 模型配置说明
-
-### OpenAI 官方
-
-```bash
-export AI_API_KEY="sk-..."
-export AI_BASE_URL="https://api.openai.com"
-export AI_MODEL="gpt-4o"
-```
-
-### 其他 OpenAI 兼容 Provider
-
-如果使用兼容 OpenAI API 的第三方 Provider，只需调整 `AI_BASE_URL`：
-
-```bash
-export AI_BASE_URL="https://your-provider-api-endpoint/v1"
-```
-
-注意：Spring AI 的 OpenAI starter 默认会自动拼接 `/v1/chat/completions` 路径。如果你的 Provider 的 base URL 已经包含完整路径或路径格式不同，可能需要在此基础上调整。请参考你的 Provider 文档。
-
-## 当前明确没有实现的功能
-
-- InterviewSession / 面试状态机
-- 多题面试
-- 数据库（PostgreSQL、Flyway）
-- 前端页面
-- REST API
-- Agent / ReAct Loop
-- MiniHarness Runtime
-- AgentState / AgentStateStore
-- Hook / Middleware
-- Tool Calling / MCP
-- RAG / 向量数据库
-- AgentScope
-- LangChain4j
-- 结构化 EvaluationResult / JSON Schema
-- EvalRunner
-- 多 Maven 模块
-- 用户登录
-- 多 Provider 路由
-- 重试框架
-- 生产级异常体系
-
-以上内容将在后续实验中根据实际需要逐步引入。
+三步即可：**注入 Builder → 构建 Client → prompt().user().call().content()**。
 
 ## 技术栈
 
 - Java 21
 - Spring Boot 4.1.0
 - Spring AI 2.0.0
-- JUnit 5
 - Maven
-
-## 实验记录
-
-- [实验 001：单题回答评测](docs/experiments/001-single-answer-evaluation.md)
-
-## License
-
-Private project.
