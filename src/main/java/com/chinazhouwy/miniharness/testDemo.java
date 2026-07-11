@@ -20,8 +20,11 @@ public class testDemo {
     protected static final String MODEL = "deepseek-v4-flash";
     protected static final String API_KEY = System.getenv("DEEPSEEK_API_KEY");
 
-
     public static void main(String[] args) {
+       new testDemo().test();
+    }
+
+    public void test() {
         // 这里手工构建 OpenAI-compatible 客户端。
         OpenAIClient openAiClient = OpenAIOkHttpClient.builder()
                 .apiKey(API_KEY)
@@ -44,12 +47,22 @@ public class testDemo {
                                 .build()
                 )
                 .build();
+        
+        ChatClient intentClient = ChatClient.builder(chatModel)
+                .defaultSystem("""
+                你负责识别用户在面试过程中的意图。
 
-        ChatClient deepseekClient = ChatClient.builder(chatModel)
-                .defaultSystem("你是一个简洁、准确的技术学习助手。")
+                可选意图：
+                ANSWER：回答当前面试题，这个是用户的回答，你得单独给出这个参数
+                NEXT_QUESTION：要求进入下一题或者提出一道 Java 面试题，只输出问题本身
+                EXPLAIN：要求讲解当前题目
+                HINT：表示不会或需要提示
+                EXIT：要求结束面试
+                """)
                 .build();
 
         List<Message> history = new ArrayList<>();
+        
 
         Scanner scanner = new Scanner(System.in);
         while (scanner.hasNextLine()) {
@@ -59,7 +72,7 @@ public class testDemo {
                 break;
             }
             System.out.printf("User: %s%n", line);
-            String response = deepseekClient
+            String response = intentClient
                     .prompt()
                     .user(line)
                     .messages(history)
@@ -68,7 +81,82 @@ public class testDemo {
             history.add(new UserMessage(line));
             history.add(new AssistantMessage(response));
             System.out.printf("Assistant: %s%n", response);
+
+            String intent = response.trim();
+            switch (intent) {
+                case "NEXT_QUESTION" -> {
+                    String res = generateNextQuestion(chatModel, history);
+                    System.out.printf("Assistant: %s%n", res);
+                    history.add(new AssistantMessage(res));
+                }
+                case "EXPLAIN" -> {
+                    String res = explainQuestion(chatModel, history);
+                    System.out.printf("Assistant: %s%n", res);
+                    history.add(new AssistantMessage(res));
+                }
+                case "HINT" -> {
+                    String res = giveHint(chatModel, history);
+                    System.out.printf("Assistant: %s%n", res);
+                    history.add(new AssistantMessage(res));
+                }
+                case "EXIT" -> {
+                    System.out.println("退出面试。");
+                    return;
+                }
+                case "ANSWER" -> {
+                    String res = continueInterview(chatModel, history);
+                    System.out.printf("Assistant: %s%n", res);
+                    history.add(new AssistantMessage(res));
+                }
+                default -> System.out.println("未识别的意图，请重新输入。");
+            }
+
         }
+    }
+    
+    
+    private String generateNextQuestion(ChatModel chatModel, List<Message> history) {
+        return ChatClient.builder(chatModel)
+                .defaultSystem("你是一名 Java 面试官。")
+                .build()
+                .prompt()
+                .user("请提出一道 Java 面试题，只输出问题本身。")
+                .messages(history)
+                .call()
+                .content();
+    }
+
+    private String explainQuestion(ChatModel chatModel, List<Message> history) {
+        return ChatClient.builder(chatModel)
+                .defaultSystem("你是一名 Java 面试官。")
+                .build()
+                .prompt()
+                .user("要求讲解当前题目")
+                .messages(history)
+                .call()
+                .content();
+    }
+
+    private String giveHint(ChatModel chatModel, List<Message> history) {
+        return ChatClient.builder(chatModel)
+                .defaultSystem("你是一名 Java 面试官。")
+                .build()
+                .prompt()
+                .user("表示不会或需要提示")
+                .messages(history)
+                .call()
+                .content();
+    }
+
+    private String continueInterview(ChatModel chatModel, List<Message> history) {
+        return ChatClient.builder(chatModel)
+                .defaultSystem("你是一名 Java 面试官。")
+                .build()
+                .prompt()
+                .user("回答当前面试题")
+                .messages(history)
+                .call()
+                .content();
     }
 
 }
