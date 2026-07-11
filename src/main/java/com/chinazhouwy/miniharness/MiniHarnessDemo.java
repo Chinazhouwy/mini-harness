@@ -1,5 +1,6 @@
 package com.chinazhouwy.miniharness;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
 import org.springframework.ai.chat.client.ChatClient;
@@ -14,18 +15,22 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
 
-public class testDemo {
+public class MiniHarnessDemo {
 
     protected static final String BASE_URL = "https://api.deepseek.com";
     protected static final String MODEL = "deepseek-v4-flash";
     protected static final String API_KEY = System.getenv("DEEPSEEK_API_KEY");
 
     public static void main(String[] args) {
-            new testDemo().test();
+            new MiniHarnessDemo().test();
     }
 
     public void test() {
 
+        List<QuestionAttempt> attempts = new ArrayList<>();
+
+        String currentQuestion = "";
+        
         ChatModel chatModel = createChatModel();
         ChatClient intentClient = ChatClient.builder(chatModel)
                 .defaultSystem("""
@@ -45,6 +50,22 @@ public class testDemo {
 
         Scanner scanner = new Scanner(System.in);
         while (scanner.hasNextLine()) {
+
+            if(attempts.size() > 0){
+                try {
+                    ObjectMapper mapper = new ObjectMapper();
+                    java.io.File file = new java.io.File("data/history.json");
+                    java.io.File parentDir = file.getParentFile();
+                    if (parentDir != null && !parentDir.exists()) {
+                        parentDir.mkdirs();
+                    }
+                    mapper.writer().writeValue(file, attempts);
+                } catch (Exception e) {
+                    System.err.println("保存 attempts.json 失败: " + e.getMessage());
+                }
+            }
+
+
             String line = scanner.nextLine();
             if ("exit".equalsIgnoreCase(line.trim()) || "quit".equalsIgnoreCase(line.trim())) {
                 System.out.println("退出对话。");
@@ -65,6 +86,7 @@ public class testDemo {
                     String res = generateNextQuestion(chatModel, history);
                     System.out.printf("Assistant: %s%n", res);
                     history.add(new AssistantMessage(res));
+                    currentQuestion = res;
                 }
                 case EXPLAIN -> {
 //                    history.add(new UserMessage(line));
@@ -88,6 +110,12 @@ public class testDemo {
                     AnswerEvaluation evaluation = createEvaluatorClient(chatModel, history);
                     System.out.printf("Assistant: evaluation 评分：%d，评价：%s，遗漏：%s%n", evaluation.score(),
                             evaluation.comment(), evaluation.missingPoint());
+                    QuestionAttempt attempt = new QuestionAttempt(
+                            currentQuestion,
+                            line,
+                            evaluation
+                    );
+                    attempts.add(attempt);
                     String res = continueInterview(chatModel, history,line);
                     System.out.printf("Assistant: %s%n", res);
                     history.add(new AssistantMessage(res));
