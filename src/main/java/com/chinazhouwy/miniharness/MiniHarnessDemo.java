@@ -28,7 +28,17 @@ public class MiniHarnessDemo {
 
     public void test() {
 
+
         List<QuestionAttempt> attempts = new ArrayList<>();
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            java.io.File file = new java.io.File("data/history.json");
+            if (file.exists()) {
+                attempts = mapper.readValue(file, new com.fasterxml.jackson.core.type.TypeReference<List<QuestionAttempt>>() {});
+            }
+        } catch (Exception e) {
+            System.err.println("加载 history.json 失败: " + e.getMessage());
+        }
 
         String currentQuestion = "";
 
@@ -109,7 +119,8 @@ public class MiniHarnessDemo {
                 }
                 case ANSWER -> {
                     history.add(new UserMessage(line));
-                    if (StringUtils.isEmpty(line)) {
+                    // 刚开始没有问题，就不做评估
+                    if (StringUtils.isNotEmpty(currentQuestion)) {
                         AnswerEvaluation evaluation = createEvaluatorClient(chatModel, history);
                         System.out.printf("Assistant: evaluation 评分：%d，评价：%s，遗漏：%s%n", evaluation.score(),
                                 evaluation.comment(), evaluation.missingPoint());
@@ -120,7 +131,7 @@ public class MiniHarnessDemo {
                         );
                         attempts.add(attempt);
                     }
-                    String res = continueInterview(chatModel, history, line);
+                    String res = continueInterview(chatModel, history, currentQuestion,line);
                     System.out.printf("Assistant: %s%n", res);
                     history.add(new AssistantMessage(res));
                 }
@@ -212,12 +223,16 @@ public class MiniHarnessDemo {
                 .content();
     }
 
-    private String continueInterview(ChatModel chatModel, List<Message> history, String line) {
+    private String continueInterview(ChatModel chatModel, List<Message> history, String currentQuestion,String line) {
         return ChatClient.builder(chatModel)
                 .defaultSystem("你是一名 Java 面试官。")
                 .build()
                 .prompt()
-//                .user("用户回答了当前面试题，他的回答是：" + line + "，请继续面试。")
+                .user("""
+                        你是面试官。根据用户刚才的回答进行一句简短反馈，
+                        然后只提出一个针对其遗漏点的追问。
+                        不要直接给出完整答案。
+                    """)
                 .messages(history)
                 .call()
                 .content();
