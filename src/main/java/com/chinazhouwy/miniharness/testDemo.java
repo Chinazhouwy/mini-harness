@@ -21,33 +21,12 @@ public class testDemo {
     protected static final String API_KEY = System.getenv("DEEPSEEK_API_KEY");
 
     public static void main(String[] args) {
-       new testDemo().test();
+            new testDemo().test();
     }
 
     public void test() {
-        // 这里手工构建 OpenAI-compatible 客户端。
-        OpenAIClient openAiClient = OpenAIOkHttpClient.builder()
-                .apiKey(API_KEY)
-                .baseUrl(BASE_URL)
-                .build();
-        // OpenAiChatModel 是 Spring AI 对 OpenAI 聊天模型的适配。
-        //
-        // openAiClientAsync(openAiClient.async())：
-        // 同时提供异步客户端，流式输出等能力会用到。
-        //
-        // OpenAiChatOptions：
-        // 放模型参数，例如 model、temperature、maxTokens 等。
-        ChatModel chatModel = OpenAiChatModel.builder()
-                .openAiClient(openAiClient)
-                .openAiClientAsync(openAiClient.async())
-                .options(
-                        OpenAiChatOptions
-                                .builder()
-                                .model(MODEL)
-                                .build()
-                )
-                .build();
-        
+
+        ChatModel chatModel = createChatModel();
         ChatClient intentClient = ChatClient.builder(chatModel)
                 .defaultSystem("""
                 你负责识别用户在面试过程中的意图。
@@ -62,7 +41,7 @@ public class testDemo {
                 .build();
 
         List<Message> history = new ArrayList<>();
-        
+
 
         Scanner scanner = new Scanner(System.in);
         while (scanner.hasNextLine()) {
@@ -72,39 +51,41 @@ public class testDemo {
                 break;
             }
             System.out.printf("User: %s%n", line);
-            String response = intentClient
+            IntentResult response = intentClient
                     .prompt()
                     .user(line)
                     .messages(history)
                     .call()
-                    .content();
-            history.add(new UserMessage(line));
-            history.add(new AssistantMessage(response));
+                    .entity(IntentResult.class);
             System.out.printf("Assistant: %s%n", response);
 
-            String intent = response.trim();
-            switch (intent) {
-                case "NEXT_QUESTION" -> {
+            switch (response.intent()) {
+                case NEXT_QUESTION -> {
+                    history.add(new UserMessage(line));
                     String res = generateNextQuestion(chatModel, history);
                     System.out.printf("Assistant: %s%n", res);
                     history.add(new AssistantMessage(res));
                 }
-                case "EXPLAIN" -> {
+                case EXPLAIN -> {
+                    history.add(new UserMessage(line));
                     String res = explainQuestion(chatModel, history);
                     System.out.printf("Assistant: %s%n", res);
                     history.add(new AssistantMessage(res));
                 }
-                case "HINT" -> {
+                case HINT -> {
+                    history.add(new UserMessage(line));
                     String res = giveHint(chatModel, history);
                     System.out.printf("Assistant: %s%n", res);
                     history.add(new AssistantMessage(res));
                 }
-                case "EXIT" -> {
+                case EXIT -> {
+                    history.add(new UserMessage(line));
                     System.out.println("退出面试。");
                     return;
                 }
-                case "ANSWER" -> {
-                    String res = continueInterview(chatModel, history);
+                case ANSWER -> {
+                    history.add(new UserMessage(line));
+                    String res = continueInterview(chatModel, history,line);
                     System.out.printf("Assistant: %s%n", res);
                     history.add(new AssistantMessage(res));
                 }
@@ -113,7 +94,24 @@ public class testDemo {
 
         }
     }
-    
+
+    private ChatModel createChatModel() {
+        OpenAIClient openAiClient = OpenAIOkHttpClient.builder()
+                .apiKey(API_KEY)
+                .baseUrl(BASE_URL)
+                .build();
+        return OpenAiChatModel.builder()
+                .openAiClient(openAiClient)
+                .openAiClientAsync(openAiClient.async())
+                .options(
+                        OpenAiChatOptions
+                                .builder()
+                                .model(MODEL)
+                                .build()
+                )
+                .build();
+    }
+
     
     private String generateNextQuestion(ChatModel chatModel, List<Message> history) {
         return ChatClient.builder(chatModel)
@@ -148,12 +146,12 @@ public class testDemo {
                 .content();
     }
 
-    private String continueInterview(ChatModel chatModel, List<Message> history) {
+    private String continueInterview(ChatModel chatModel, List<Message> history,String line ) {
         return ChatClient.builder(chatModel)
                 .defaultSystem("你是一名 Java 面试官。")
                 .build()
                 .prompt()
-                .user("回答当前面试题")
+                .user("用户回答了当前面试题，他的回答是：" + line + "，请继续面试。")
                 .messages(history)
                 .call()
                 .content();
