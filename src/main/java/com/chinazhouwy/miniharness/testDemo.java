@@ -3,10 +3,14 @@ package com.chinazhouwy.miniharness;
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Scanner;
 
 public class testDemo {
@@ -44,6 +48,7 @@ public class testDemo {
                 .defaultSystem("你是一个简洁、准确的技术学习助手。")
                 .build();
 
+        List<Message> history = new ArrayList<>();
 
         Scanner scanner = new Scanner(System.in);
         while (scanner.hasNextLine()) {
@@ -56,8 +61,10 @@ public class testDemo {
             String response = deepseekClient
                     .prompt()
                     .user(line)
+                    .messages(history)
                     .call()
                     .content();
+            history.add(new UserMessage(line));
             System.out.printf("Assistant: %s%n", response);
         }
     }
