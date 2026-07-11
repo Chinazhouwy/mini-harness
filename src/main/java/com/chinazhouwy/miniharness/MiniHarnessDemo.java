@@ -3,6 +3,7 @@ package com.chinazhouwy.miniharness;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
+import io.micrometer.common.util.StringUtils;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
@@ -22,7 +23,7 @@ public class MiniHarnessDemo {
     protected static final String API_KEY = System.getenv("DEEPSEEK_API_KEY");
 
     public static void main(String[] args) {
-            new MiniHarnessDemo().test();
+        new MiniHarnessDemo().test();
     }
 
     public void test() {
@@ -30,19 +31,19 @@ public class MiniHarnessDemo {
         List<QuestionAttempt> attempts = new ArrayList<>();
 
         String currentQuestion = "";
-        
+
         ChatModel chatModel = createChatModel();
         ChatClient intentClient = ChatClient.builder(chatModel)
                 .defaultSystem("""
-                你负责识别用户在面试过程中的意图。
-
-                可选意图：
-                ANSWER：用户正在回答当前题目
-                NEXT_QUESTION：用户要求切换到下一题
-                EXPLAIN：用户要求讲解当前题目  
-                HINT：用户表示不会或要求提示
-                EXIT：用户要求结束面试
-                """)
+                        你负责识别用户在面试过程中的意图。
+                        
+                        可选意图：
+                        ANSWER：用户正在回答当前题目
+                        NEXT_QUESTION：用户要求切换到下一题
+                        EXPLAIN：用户要求讲解当前题目  
+                        HINT：用户表示不会或要求提示
+                        EXIT：用户要求结束面试
+                        """)
                 .build();
 
         List<Message> history = new ArrayList<>();
@@ -51,7 +52,7 @@ public class MiniHarnessDemo {
         Scanner scanner = new Scanner(System.in);
         while (scanner.hasNextLine()) {
 
-            if(attempts.size() > 0){
+            if (attempts.size() > 0) {
                 try {
                     ObjectMapper mapper = new ObjectMapper();
                     java.io.File file = new java.io.File("data/history.json");
@@ -65,25 +66,26 @@ public class MiniHarnessDemo {
                 }
             }
 
-
+            System.out.print("\n你 > ");
             String line = scanner.nextLine();
             if ("exit".equalsIgnoreCase(line.trim()) || "quit".equalsIgnoreCase(line.trim())) {
                 System.out.println("退出对话。");
                 break;
             }
             System.out.printf("User: %s%n", line);
+
             IntentResult response = intentClient
                     .prompt()
                     .user(line)
                     .messages(history)
                     .call()
                     .entity(IntentResult.class);
-            System.out.printf("Assistant: %s%n", response);
+            System.out.printf("[DEBUG] intent: %s%n", response);
 
             switch (response.intent()) {
                 case NEXT_QUESTION -> {
 //                    history.add(new UserMessage(line));
-                    String res = generateNextQuestion(chatModel, history);
+                    String res = generateNextQuestion(chatModel, history, currentQuestion);
                     System.out.printf("Assistant: %s%n", res);
                     history.add(new AssistantMessage(res));
                     currentQuestion = res;
@@ -107,16 +109,18 @@ public class MiniHarnessDemo {
                 }
                 case ANSWER -> {
                     history.add(new UserMessage(line));
-                    AnswerEvaluation evaluation = createEvaluatorClient(chatModel, history);
-                    System.out.printf("Assistant: evaluation 评分：%d，评价：%s，遗漏：%s%n", evaluation.score(),
-                            evaluation.comment(), evaluation.missingPoint());
-                    QuestionAttempt attempt = new QuestionAttempt(
-                            currentQuestion,
-                            line,
-                            evaluation
-                    );
-                    attempts.add(attempt);
-                    String res = continueInterview(chatModel, history,line);
+                    if (StringUtils.isEmpty(line)) {
+                        AnswerEvaluation evaluation = createEvaluatorClient(chatModel, history);
+                        System.out.printf("Assistant: evaluation 评分：%d，评价：%s，遗漏：%s%n", evaluation.score(),
+                                evaluation.comment(), evaluation.missingPoint());
+                        QuestionAttempt attempt = new QuestionAttempt(
+                                currentQuestion,
+                                line,
+                                evaluation
+                        );
+                        attempts.add(attempt);
+                    }
+                    String res = continueInterview(chatModel, history, line);
                     System.out.printf("Assistant: %s%n", res);
                     history.add(new AssistantMessage(res));
                 }
@@ -146,35 +150,41 @@ public class MiniHarnessDemo {
     private AnswerEvaluation createEvaluatorClient(ChatModel chatModel, List<Message> history) {
         ChatClient evaluatorClient = ChatClient.builder(chatModel)
                 .defaultSystem("""
-                你是 Java 面试答案评审器。
-
-                请根据面试题和用户回答进行评价：
-                score：0 到 10 分, 6分为及格，10分为满分
-                correct：回答是否基本正确
-                comment：简短评价
-                missingPoint：最重要的遗漏点，没有则返回空字符串
-                """)
+                        你是 Java 面试答案评审器。
+                        
+                        请根据面试题和用户回答进行评价：
+                        score：0 到 10 分, 6分为及格，10分为满分
+                        correct：回答是否基本正确
+                        comment：简短评价
+                        missingPoint：最重要的遗漏点，没有则返回空字符串
+                        """)
                 .build();
 
         AnswerEvaluation evaluation = evaluatorClient.prompt()
                 .messages(history)
                 .user("""
-                    请评价用户刚才对当前面试题的回答。
-                    只评价答案，不要继续提问。
-                    """)
+                        请评价用户刚才对当前面试题的回答。
+                        只评价答案，不要继续提问。
+                        """)
                 .call()
                 .entity(AnswerEvaluation.class);
 
         return evaluation;
     }
 
-    
-    private String generateNextQuestion(ChatModel chatModel, List<Message> history) {
+
+    private String generateNextQuestion(ChatModel chatModel, List<Message> history, String currentQuestion) {
         return ChatClient.builder(chatModel)
                 .defaultSystem("你是一名 Java 面试官。")
                 .build()
                 .prompt()
-                .user("请提出一道 Java 面试题，只输出问题本身。")
+                .user("""
+                        上一道题是：
+                        %s
+                        
+                        请换一道不同知识点的 Java 面试题，不得重复上一题。
+                        只输出问题本身。
+                        """.formatted(currentQuestion))
                 .messages(history)
                 .call()
                 .content();
@@ -196,13 +206,13 @@ public class MiniHarnessDemo {
                 .defaultSystem("你是一名 Java 面试官。")
                 .build()
                 .prompt()
-                .user("表示不会或需要提示")
+                .user("针对当前题目只给一个渐进式提示。最多三句话，不要直接给出完整答案。")
                 .messages(history)
                 .call()
                 .content();
     }
 
-    private String continueInterview(ChatModel chatModel, List<Message> history,String line ) {
+    private String continueInterview(ChatModel chatModel, List<Message> history, String line) {
         return ChatClient.builder(chatModel)
                 .defaultSystem("你是一名 Java 面试官。")
                 .build()
