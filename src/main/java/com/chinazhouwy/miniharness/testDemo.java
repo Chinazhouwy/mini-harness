@@ -3,6 +3,7 @@ package com.chinazhouwy.miniharness;
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
@@ -65,6 +66,7 @@ public class testDemo {
                     .call()
                     .content();
             history.add(new UserMessage(line));
+            history.add(new AssistantMessage(response));
             System.out.printf("Assistant: %s%n", response);
         }
     }
