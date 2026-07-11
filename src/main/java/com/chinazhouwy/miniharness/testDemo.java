@@ -85,6 +85,9 @@ public class testDemo {
                 }
                 case ANSWER -> {
                     history.add(new UserMessage(line));
+                    AnswerEvaluation evaluation = createEvaluatorClient(chatModel, history);
+                    System.out.printf("Assistant: evaluation 评分：%d，评价：%s，遗漏：%s%n", evaluation.score(),
+                            evaluation.comment(), evaluation.missingPoint());
                     String res = continueInterview(chatModel, history,line);
                     System.out.printf("Assistant: %s%n", res);
                     history.add(new AssistantMessage(res));
@@ -110,6 +113,31 @@ public class testDemo {
                                 .build()
                 )
                 .build();
+    }
+
+    private AnswerEvaluation createEvaluatorClient(ChatModel chatModel, List<Message> history) {
+        ChatClient evaluatorClient = ChatClient.builder(chatModel)
+                .defaultSystem("""
+                你是 Java 面试答案评审器。
+
+                请根据面试题和用户回答进行评价：
+                score：0 到 10 分, 6分为及格，10分为满分
+                correct：回答是否基本正确
+                comment：简短评价
+                missingPoint：最重要的遗漏点，没有则返回空字符串
+                """)
+                .build();
+
+        AnswerEvaluation evaluation = evaluatorClient.prompt()
+                .messages(history)
+                .user("""
+                    请评价用户刚才对当前面试题的回答。
+                    只评价答案，不要继续提问。
+                    """)
+                .call()
+                .entity(AnswerEvaluation.class);
+
+        return evaluation;
     }
 
     
