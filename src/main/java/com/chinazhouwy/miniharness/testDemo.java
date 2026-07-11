@@ -32,11 +32,11 @@ public class testDemo {
                 你负责识别用户在面试过程中的意图。
 
                 可选意图：
-                ANSWER：回答当前面试题，这个是用户的回答，你得单独给出这个参数
-                NEXT_QUESTION：要求进入下一题或者提出一道 Java 面试题，只输出问题本身
-                EXPLAIN：要求讲解当前题目
-                HINT：表示不会或需要提示
-                EXIT：要求结束面试
+                ANSWER：用户正在回答当前题目
+                NEXT_QUESTION：用户要求切换到下一题
+                EXPLAIN：用户要求讲解当前题目  
+                HINT：用户表示不会或要求提示
+                EXIT：用户要求结束面试
                 """)
                 .build();
 
@@ -61,25 +61,25 @@ public class testDemo {
 
             switch (response.intent()) {
                 case NEXT_QUESTION -> {
-                    history.add(new UserMessage(line));
+//                    history.add(new UserMessage(line));
                     String res = generateNextQuestion(chatModel, history);
                     System.out.printf("Assistant: %s%n", res);
                     history.add(new AssistantMessage(res));
                 }
                 case EXPLAIN -> {
-                    history.add(new UserMessage(line));
+//                    history.add(new UserMessage(line));
                     String res = explainQuestion(chatModel, history);
                     System.out.printf("Assistant: %s%n", res);
                     history.add(new AssistantMessage(res));
                 }
                 case HINT -> {
-                    history.add(new UserMessage(line));
+//                    history.add(new UserMessage(line));
                     String res = giveHint(chatModel, history);
                     System.out.printf("Assistant: %s%n", res);
                     history.add(new AssistantMessage(res));
                 }
                 case EXIT -> {
-                    history.add(new UserMessage(line));
+//                    history.add(new UserMessage(line));
                     System.out.println("退出面试。");
                     return;
                 }
@@ -151,7 +151,7 @@ public class testDemo {
                 .defaultSystem("你是一名 Java 面试官。")
                 .build()
                 .prompt()
-                .user("用户回答了当前面试题，他的回答是：" + line + "，请继续面试。")
+//                .user("用户回答了当前面试题，他的回答是：" + line + "，请继续面试。")
                 .messages(history)
                 .call()
                 .content();
