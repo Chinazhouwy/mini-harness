@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
 import io.micrometer.common.util.StringUtils;
+import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -34,7 +35,102 @@ public class MiniHarnessDemo {
 
         List<QuestionAttempt> attempts = new ArrayList<>();
         List<Message> history = new ArrayList<>();
+        InterviewState interviewState = InterviewState.IDLE;
 
+        // 加载历史信息
+        Result result = loadHistoryInfo(attempts, history);
+
+        String currentQuestion = "";
+
+        ChatClient intentClient = createIntentClient();
+        
+        Scanner scanner = new Scanner(System.in);
+        while (scanner.hasNextLine()) {
+
+            saveInfo(result.attempts(), result.history());
+
+            System.out.print("\n你 > ");
+            String line = scanner.nextLine();
+            if ("exit".equalsIgnoreCase(line.trim()) || "quit".equalsIgnoreCase(line.trim())) {
+                System.out.println("退出对话。");
+                break;
+            }
+            System.out.printf("User: %s%n", line);
+
+            IntentResult response = intentClient
+                    .prompt()
+                    .user(line)
+                    .messages(result.history())
+                    .call()
+                    .entity(IntentResult.class);
+            System.out.printf("[DEBUG] intent: %s%n", response);
+
+            switch (response.intent()) {
+                case NEXT_QUESTION -> {
+//                    history.add(new UserMessage(line));
+                    String res = generateNextQuestion( result.history(), currentQuestion);
+                    System.out.printf("Assistant: %s%n", res);
+                    result.history().add(new AssistantMessage(res));
+                    currentQuestion = res;
+                }
+                case EXPLAIN -> {
+//                    history.add(new UserMessage(line));
+                    String res = explainQuestion( result.history());
+                    System.out.printf("Assistant: %s%n", res);
+                    result.history().add(new AssistantMessage(res));
+                }
+                case HINT -> {
+//                    history.add(new UserMessage(line));
+                    String res = giveHint(result.history());
+                    System.out.printf("Assistant: %s%n", res);
+                    result.history().add(new AssistantMessage(res));
+                }
+                case EXIT -> {
+//                    history.add(new UserMessage(line));
+                    System.out.println("退出面试。");
+                    return;
+                }
+                case ANSWER -> {
+                    result.history().add(new UserMessage(line));
+                    // 刚开始没有问题，就不做评估
+                    if (StringUtils.isNotEmpty(currentQuestion)) {
+                        AnswerEvaluation evaluation = createEvaluatorClient( result.history());
+                        System.out.printf("Assistant: evaluation 评分：%d，评价：%s，遗漏：%s%n", evaluation.score(),
+                                evaluation.comment(), evaluation.missingPoint());
+                        QuestionAttempt attempt = new QuestionAttempt(
+                                currentQuestion,
+                                line,
+                                evaluation
+                        );
+                        result.attempts().add(attempt);
+                    }
+                    String res = continueInterview(result.history(), currentQuestion,line);
+                    System.out.printf("Assistant: %s%n", res);
+                    result.history().add(new AssistantMessage(res));
+                }
+                default -> System.out.println("未识别的意图，请重新输入。");
+            }
+
+        }
+    }
+
+    private static @NonNull ChatClient createIntentClient() {
+        ChatClient intentClient = ChatClient.builder(createChatModel())
+                .defaultSystem("""
+                        你负责识别用户在面试过程中的意图。
+                        
+                        可选意图：
+                        ANSWER：用户正在回答当前题目
+                        NEXT_QUESTION：用户要求切换到下一题
+                        EXPLAIN：用户要求讲解当前题目  
+                        HINT：用户表示不会或要求提示
+                        EXIT：用户要求结束面试
+                        """)
+                .build();
+        return intentClient;
+    }
+
+    private static @NonNull Result loadHistoryInfo(List<QuestionAttempt> attempts, List<Message> history) {
         try {
             ObjectMapper mapper = new ObjectMapper();
             java.io.File fileAttempts = new java.io.File("data/attempts.json");
@@ -48,93 +144,11 @@ public class MiniHarnessDemo {
         } catch (Exception e) {
             System.err.println("加载 history.json , attempts.json 失败: " + e.getMessage());
         }
+        Result result = new Result(attempts, history);
+        return result;
+    }
 
-        String currentQuestion = "";
-
-        ChatModel chatModel = createChatModel();
-        ChatClient intentClient = ChatClient.builder(chatModel)
-                .defaultSystem("""
-                        你负责识别用户在面试过程中的意图。
-                        
-                        可选意图：
-                        ANSWER：用户正在回答当前题目
-                        NEXT_QUESTION：用户要求切换到下一题
-                        EXPLAIN：用户要求讲解当前题目  
-                        HINT：用户表示不会或要求提示
-                        EXIT：用户要求结束面试
-                        """)
-                .build();
-
-
-
-        Scanner scanner = new Scanner(System.in);
-        while (scanner.hasNextLine()) {
-
-            saveInfo(attempts, history);
-
-            System.out.print("\n你 > ");
-            String line = scanner.nextLine();
-            if ("exit".equalsIgnoreCase(line.trim()) || "quit".equalsIgnoreCase(line.trim())) {
-                System.out.println("退出对话。");
-                break;
-            }
-            System.out.printf("User: %s%n", line);
-
-            IntentResult response = intentClient
-                    .prompt()
-                    .user(line)
-                    .messages(history)
-                    .call()
-                    .entity(IntentResult.class);
-            System.out.printf("[DEBUG] intent: %s%n", response);
-
-            switch (response.intent()) {
-                case NEXT_QUESTION -> {
-//                    history.add(new UserMessage(line));
-                    String res = generateNextQuestion(chatModel, history, currentQuestion);
-                    System.out.printf("Assistant: %s%n", res);
-                    history.add(new AssistantMessage(res));
-                    currentQuestion = res;
-                }
-                case EXPLAIN -> {
-//                    history.add(new UserMessage(line));
-                    String res = explainQuestion(chatModel, history);
-                    System.out.printf("Assistant: %s%n", res);
-                    history.add(new AssistantMessage(res));
-                }
-                case HINT -> {
-//                    history.add(new UserMessage(line));
-                    String res = giveHint(chatModel, history);
-                    System.out.printf("Assistant: %s%n", res);
-                    history.add(new AssistantMessage(res));
-                }
-                case EXIT -> {
-//                    history.add(new UserMessage(line));
-                    System.out.println("退出面试。");
-                    return;
-                }
-                case ANSWER -> {
-                    history.add(new UserMessage(line));
-                    // 刚开始没有问题，就不做评估
-                    if (StringUtils.isNotEmpty(currentQuestion)) {
-                        AnswerEvaluation evaluation = createEvaluatorClient(chatModel, history);
-                        System.out.printf("Assistant: evaluation 评分：%d，评价：%s，遗漏：%s%n", evaluation.score(),
-                                evaluation.comment(), evaluation.missingPoint());
-                        QuestionAttempt attempt = new QuestionAttempt(
-                                currentQuestion,
-                                line,
-                                evaluation
-                        );
-                        attempts.add(attempt);
-                    }
-                    String res = continueInterview(chatModel, history, currentQuestion,line);
-                    System.out.printf("Assistant: %s%n", res);
-                    history.add(new AssistantMessage(res));
-                }
-                default -> System.out.println("未识别的意图，请重新输入。");
-            }
-
-        }
+    private record Result(List<QuestionAttempt> attempts, List<Message> history) {
     }
 
     private static void saveInfo(List<QuestionAttempt> attempts, List<Message> history) {
@@ -167,25 +181,33 @@ public class MiniHarnessDemo {
         }
     }
 
-    private ChatModel createChatModel() {
-        OpenAIClient openAiClient = OpenAIOkHttpClient.builder()
-                .apiKey(API_KEY)
-                .baseUrl(BASE_URL)
-                .build();
-        return OpenAiChatModel.builder()
-                .openAiClient(openAiClient)
-                .openAiClientAsync(openAiClient.async())
-                .options(
-                        OpenAiChatOptions
-                                .builder()
-                                .model(MODEL)
-                                .build()
-                )
-                .build();
+    private static class ChatModelHolder {
+        private static final ChatModel INSTANCE;
+
+        static {
+            OpenAIClient openAiClient = OpenAIOkHttpClient.builder()
+                    .apiKey(API_KEY)
+                    .baseUrl(BASE_URL)
+                    .build();
+            INSTANCE = OpenAiChatModel.builder()
+                    .openAiClient(openAiClient)
+                    .openAiClientAsync(openAiClient.async())
+                    .options(
+                            OpenAiChatOptions
+                                    .builder()
+                                    .model(MODEL)
+                                    .build()
+                    )
+                    .build();
+        }
     }
 
-    private AnswerEvaluation createEvaluatorClient(ChatModel chatModel, List<Message> history) {
-        ChatClient evaluatorClient = ChatClient.builder(chatModel)
+    private static ChatModel createChatModel() {
+        return ChatModelHolder.INSTANCE;
+    }
+
+    private AnswerEvaluation createEvaluatorClient( List<Message> history) {
+        ChatClient evaluatorClient = ChatClient.builder(createChatModel())
                 .defaultSystem("""
                         你是 Java 面试答案评审器。
                         
@@ -210,8 +232,8 @@ public class MiniHarnessDemo {
     }
 
 
-    private String generateNextQuestion(ChatModel chatModel, List<Message> history, String currentQuestion) {
-        return ChatClient.builder(chatModel)
+    private String generateNextQuestion( List<Message> history, String currentQuestion) {
+        return ChatClient.builder(createChatModel())
                 .defaultSystem("你是一名 Java 面试官。")
                 .build()
                 .prompt()
@@ -227,8 +249,8 @@ public class MiniHarnessDemo {
                 .content();
     }
 
-    private String explainQuestion(ChatModel chatModel, List<Message> history) {
-        return ChatClient.builder(chatModel)
+    private String explainQuestion( List<Message> history) {
+        return ChatClient.builder(createChatModel())
                 .defaultSystem("你是一名 Java 面试官。")
                 .build()
                 .prompt()
@@ -238,8 +260,8 @@ public class MiniHarnessDemo {
                 .content();
     }
 
-    private String giveHint(ChatModel chatModel, List<Message> history) {
-        return ChatClient.builder(chatModel)
+    private String giveHint(List<Message> history) {
+        return ChatClient.builder(createChatModel())
                 .defaultSystem("你是一名 Java 面试官。")
                 .build()
                 .prompt()
@@ -249,8 +271,8 @@ public class MiniHarnessDemo {
                 .content();
     }
 
-    private String continueInterview(ChatModel chatModel, List<Message> history, String currentQuestion,String line) {
-        return ChatClient.builder(chatModel)
+    private String continueInterview(List<Message> history, String currentQuestion,String line) {
+        return ChatClient.builder(createChatModel())
                 .defaultSystem("你是一名 Java 面试官。")
                 .build()
                 .prompt()
