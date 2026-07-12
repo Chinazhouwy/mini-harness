@@ -5,6 +5,7 @@ import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
 import io.micrometer.common.util.StringUtils;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -47,46 +48,44 @@ public class MiniHarnessDemo {
         Scanner scanner = new Scanner(System.in);
         while (scanner.hasNextLine()) {
 
-            saveInfo(result.attempts(), result.history());
+            log.info("now InterviewState {}",interviewState);
+
+            saveHistoryInfo(result.attempts(), result.history());
 
             System.out.print("\n你 > ");
             String line = scanner.nextLine();
-            if ("exit".equalsIgnoreCase(line.trim()) || "quit".equalsIgnoreCase(line.trim())) {
+
+            if (exitCommend(line)) {
                 System.out.println("退出对话。");
                 break;
             }
+
             System.out.printf("User: %s%n", line);
 
-            IntentResult response = intentClient
-                    .prompt()
-                    .user(line)
-                    .messages(result.history())
-                    .call()
-                    .entity(IntentResult.class);
-            System.out.printf("[DEBUG] intent: %s%n", response);
+            IntentResult response = getIntentResult(intentClient, line, result);
 
             switch (response.intent()) {
                 case NEXT_QUESTION -> {
-//                    history.add(new UserMessage(line));
                     String res = generateNextQuestion( result.history(), currentQuestion);
                     System.out.printf("Assistant: %s%n", res);
                     result.history().add(new AssistantMessage(res));
                     currentQuestion = res;
+                    interviewState = InterviewState.WAITING_ANSWER;
                 }
                 case EXPLAIN -> {
-//                    history.add(new UserMessage(line));
                     String res = explainQuestion( result.history());
                     System.out.printf("Assistant: %s%n", res);
                     result.history().add(new AssistantMessage(res));
+                    interviewState = InterviewState.WAITING_ANSWER;
                 }
                 case HINT -> {
-//                    history.add(new UserMessage(line));
                     String res = giveHint(result.history());
                     System.out.printf("Assistant: %s%n", res);
                     result.history().add(new AssistantMessage(res));
+                    interviewState = InterviewState.WAITING_ANSWER;
+
                 }
                 case EXIT -> {
-//                    history.add(new UserMessage(line));
                     System.out.println("退出面试。");
                     return;
                 }
@@ -97,21 +96,32 @@ public class MiniHarnessDemo {
                         AnswerEvaluation evaluation = createEvaluatorClient( result.history());
                         System.out.printf("Assistant: evaluation 评分：%d，评价：%s，遗漏：%s%n", evaluation.score(),
                                 evaluation.comment(), evaluation.missingPoint());
-                        QuestionAttempt attempt = new QuestionAttempt(
-                                currentQuestion,
-                                line,
-                                evaluation
-                        );
-                        result.attempts().add(attempt);
+                        result.attempts().add(new QuestionAttempt(currentQuestion, line,evaluation));
                     }
                     String res = continueInterview(result.history(), currentQuestion,line);
                     System.out.printf("Assistant: %s%n", res);
                     result.history().add(new AssistantMessage(res));
+                    interviewState = InterviewState.FEEDBACK;
                 }
                 default -> System.out.println("未识别的意图，请重新输入。");
             }
 
         }
+    }
+
+    private static @Nullable IntentResult getIntentResult(ChatClient intentClient, String line, Result result) {
+        IntentResult response = intentClient
+                .prompt()
+                .user(line)
+                .messages(result.history())
+                .call()
+                .entity(IntentResult.class);
+        System.out.printf("[DEBUG] intent: %s%n", response);
+        return response;
+    }
+
+    private static boolean exitCommend(String line) {
+        return "exit".equalsIgnoreCase(line.trim()) || "quit".equalsIgnoreCase(line.trim());
     }
 
     private static @NonNull ChatClient createIntentClient() {
@@ -151,7 +161,7 @@ public class MiniHarnessDemo {
     private record Result(List<QuestionAttempt> attempts, List<Message> history) {
     }
 
-    private static void saveInfo(List<QuestionAttempt> attempts, List<Message> history) {
+    private static void saveHistoryInfo(List<QuestionAttempt> attempts, List<Message> history) {
         if (attempts.size() > 0) {
             try {
                 ObjectMapper mapper = new ObjectMapper();
