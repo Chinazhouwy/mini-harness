@@ -67,12 +67,14 @@ public class MiniHarnessDemo {
 
             log.info("now InterviewState {}",interviewState);
 
-            InterviewSession.saveHistoryInfo(result.attempts(), result.history());
-
             System.out.print("\n你 > ");
             String line = scanner.nextLine();
 
             if (exitCommend(line)) {
+                // exit / quit 是本地命令，不需要发送给模型，也不必作为面试对话保存。
+                // 但退出前仍要把上一轮已经完成的出题、回答或追问强制写入磁盘，
+                // 否则用户在回答后立刻退出时，最后一轮会丢失。
+                InterviewSession.saveHistoryInfo(result.attempts(), result.history());
                 System.out.println("退出对话。");
                 break;
             }
@@ -136,11 +138,20 @@ public class MiniHarnessDemo {
                     interviewState = InterviewState.DISCUSSING;
                 }
                 case EXIT -> {
+                    // 这一条 exit 来自模型的意图识别，不是上面的本地 exit 命令。
+                    // 此时用户原话已经加入 history，因此必须先保存，再 return；
+                    // 否则这次“结束面试”的输入以及之前刚完成的状态都不会落盘。
+                    InterviewSession.saveHistoryInfo(result.attempts(), result.history());
                     System.out.println("退出面试。");
                     return;
                 }
                 default -> System.out.println("未识别的意图，请重新输入。");
             }
+
+            // 一轮交互的完整顺序是：用户消息 -> 模型处理 -> 助手消息 / 评测结果。
+            // 所有普通分支走到这里时，本轮数据已经齐全，立即保存而不是等下一次输入。
+            // 这样即使用户下一秒关闭控制台，刚才的对话也已经写入 data/ 目录。
+            InterviewSession.saveHistoryInfo(result.attempts(), result.history());
 
         }
     }
