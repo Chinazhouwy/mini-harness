@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
 import io.micrometer.common.util.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
@@ -21,23 +23,30 @@ public class MiniHarnessDemo {
     protected static final String BASE_URL = "https://api.deepseek.com";
     protected static final String MODEL = "deepseek-v4-flash";
     protected static final String API_KEY = System.getenv("DEEPSEEK_API_KEY");
+    private static final Logger log = LoggerFactory.getLogger(MiniHarnessDemo.class);
 
     public static void main(String[] args) {
         new MiniHarnessDemo().test();
     }
 
     public void test() {
-
+        log.info("Starting MiniHarnessDemo...");
 
         List<QuestionAttempt> attempts = new ArrayList<>();
+        List<Message> history = new ArrayList<>();
+
         try {
             ObjectMapper mapper = new ObjectMapper();
-            java.io.File file = new java.io.File("data/history.json");
-            if (file.exists()) {
-                attempts = mapper.readValue(file, new com.fasterxml.jackson.core.type.TypeReference<List<QuestionAttempt>>() {});
+            java.io.File fileAttempts = new java.io.File("data/attempts.json");
+            if (fileAttempts.exists()) {
+                attempts = mapper.readValue(fileAttempts, new com.fasterxml.jackson.core.type.TypeReference<List<QuestionAttempt>>() {});
+            }
+            java.io.File fileHistroy = new java.io.File("data/history.json");
+            if (fileHistroy.exists()) {
+                history = mapper.readValue(fileHistroy, new com.fasterxml.jackson.core.type.TypeReference<List<Message>>() {});
             }
         } catch (Exception e) {
-            System.err.println("加载 history.json 失败: " + e.getMessage());
+            System.err.println("加载 history.json , attempts.json 失败: " + e.getMessage());
         }
 
         String currentQuestion = "";
@@ -56,25 +65,12 @@ public class MiniHarnessDemo {
                         """)
                 .build();
 
-        List<Message> history = new ArrayList<>();
 
 
         Scanner scanner = new Scanner(System.in);
         while (scanner.hasNextLine()) {
 
-            if (attempts.size() > 0) {
-                try {
-                    ObjectMapper mapper = new ObjectMapper();
-                    java.io.File file = new java.io.File("data/history.json");
-                    java.io.File parentDir = file.getParentFile();
-                    if (parentDir != null && !parentDir.exists()) {
-                        parentDir.mkdirs();
-                    }
-                    mapper.writer().writeValue(file, attempts);
-                } catch (Exception e) {
-                    System.err.println("保存 attempts.json 失败: " + e.getMessage());
-                }
-            }
+            saveInfo(attempts, history);
 
             System.out.print("\n你 > ");
             String line = scanner.nextLine();
@@ -138,6 +134,36 @@ public class MiniHarnessDemo {
                 default -> System.out.println("未识别的意图，请重新输入。");
             }
 
+        }
+    }
+
+    private static void saveInfo(List<QuestionAttempt> attempts, List<Message> history) {
+        if (attempts.size() > 0) {
+            try {
+                ObjectMapper mapper = new ObjectMapper();
+                java.io.File file = new java.io.File("data/attempts.json");
+                java.io.File parentDir = file.getParentFile();
+                if (parentDir != null && !parentDir.exists()) {
+                    parentDir.mkdirs();
+                }
+                mapper.writer().writeValue(file, attempts);
+            } catch (Exception e) {
+                System.err.println("保存 attempts.json 失败: " + e.getMessage());
+            }
+        }
+
+        if (history.size() > 0) {
+            try {
+                ObjectMapper mapper = new ObjectMapper();
+                java.io.File file = new java.io.File("data/history.json");
+                java.io.File parentDir = file.getParentFile();
+                if (parentDir != null && !parentDir.exists()) {
+                    parentDir.mkdirs();
+                }
+                mapper.writer().writeValue(file, history);
+            } catch (Exception e) {
+                System.err.println("保存 history.json 失败: " + e.getMessage());
+            }
         }
     }
 
