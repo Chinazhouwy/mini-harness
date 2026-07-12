@@ -46,12 +46,20 @@ class SpringAiChatMemoryDemoTest extends SpringAiLlmDemoSupport {
         // 同一个 conversationId 下，第二轮才能看到第一轮历史。
         String conversationId = "spring-ai-memory-demo";
 
+        // 先把“记忆功能”和“本次请求属于哪个会话”拆开理解：
+        //
+        // memoryAdvisor = 功能：请求前读历史、请求后写历史。
+        // conversationId = 键：告诉它这次该读写哪一段历史。
+        //
+        // 因此这两行不能互相替代：只传 id 没有记忆功能；只加 Advisor 又没有稳定的会话归属。
         String firstReply = chatClient()
                 .prompt()
                 .user("我叫张三，正在准备 Java 高级开发面试。")
                 // 这一行把 conversationId 传给 MemoryAdvisor。
                 // 如果不传，同一个 Memory 里也不知道当前请求属于哪段对话。
                 .advisors(advisor -> advisor.param(ChatMemory.CONVERSATION_ID, conversationId))
+                // 将上面准备好的 MemoryAdvisor 加到本次 ChatClient 调用链中。
+                // Advisor 会读取同一个 conversationId 下此前保存的消息，并在本次结束后写回新消息。
                 .advisors(memoryAdvisor)
                 .call()
                 .content();

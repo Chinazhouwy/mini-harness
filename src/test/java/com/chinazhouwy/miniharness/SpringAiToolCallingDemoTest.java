@@ -33,6 +33,10 @@ class SpringAiToolCallingDemoTest extends SpringAiLlmDemoSupport {
         // 1. 把 QuestionTools 里带 @Tool 的方法描述给模型
         // 2. 当模型要求调用工具时，由 Spring AI 自动执行 Java 方法
         //
+        // 它“暴露工具”，但不等于“强迫模型使用工具”。模型仍可能直接回答。
+        // Prompt 写“使用工具”能提高模型调用的概率；如果业务上真的要求必须调用，
+        // 应该选择下面的手动模式，在 Java 中检查 response.hasToolCalls()，没有调用就重试或报错。
+        //
         // 这个模式最省心：
         // model 请求工具 -> Spring AI 执行工具 -> 工具结果发回模型 -> 模型生成最终回答
         //
@@ -88,6 +92,8 @@ class SpringAiToolCallingDemoTest extends SpringAiLlmDemoSupport {
 
         // 第一次调用模型。
         // 如果模型觉得需要工具，它返回的 ChatResponse 里会包含 toolCalls。
+        // 注意：即使 Prompt 写了“使用工具”，模型也可能不调；这就是为什么“是否必须调用”
+        // 不能只交给 Prompt，而要由 Java 根据 hasToolCalls() 做业务判断。
         ChatResponse response = chatModel.call(prompt);
 
         int iteration = 0;

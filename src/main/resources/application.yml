@@ -1,6 +1,9 @@
 spring:
   ai:
     openai:
+      # 这个配置供 Spring Boot 自动装配的 ChatModel 使用。
+      # 当前控制台 Demo 为了讲清手工构建过程，自己创建 OpenAIClient 和 OpenAiChatModel；
+      # 两种写法并存是学习用途，后续做正式应用时再统一其中一种。
       api-key: ${DEEPSEEK_API_KEY}
       base-url: https://api.deepseek.com
       chat:

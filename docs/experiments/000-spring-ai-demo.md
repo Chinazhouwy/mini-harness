@@ -29,13 +29,13 @@ mvn test
 src/test/java/com/chinazhouwy/miniharness/SpringAiLlmDemoSupport.java
 ```
 
-修改 Demo 手工配置区：
+当前 Demo 读取本机环境变量：
 
-```java
-protected static final String BASE_URL = "https://api.deepseek.com";
-protected static final String MODEL = "deepseek-v4-flash";
-protected static final String API_KEY = "replace-with-your-api-key";
+```bash
+export DEEPSEEK_API_KEY='你的 API Key'
 ```
+
+模型地址和名称直接写在 `SpringAiLlmDemoSupport` 中，便于学习时看到模型是怎样被手工构建出来的。Key 不直接写进代码，避免被误提交。
 
 然后运行：
 
@@ -50,8 +50,8 @@ mvn -Dtest='SpringAi*DemoTest' test
 - `ChatClient` 很适合学习和常规业务调用。
 - `ChatResponse` 比 `content()` 多保留 token usage 等元数据。
 - 结构化输出很方便，但仍需要业务侧校验。
-- Chat Memory 是“发给模型的上下文窗口”，不是完整审计历史。
-- Tool Calling 的安全边界在应用侧，模型只提出调用请求，真正执行工具的是 Java 代码。
+- Chat Memory 是“发给模型的上下文窗口”，不是完整审计历史；`memoryAdvisor` 是读写记忆的功能，`conversationId` 是找到具体对话的键，两者缺一不可。
+- Tool Calling 的安全边界在应用侧，模型只提出调用请求，真正执行工具的是 Java 代码。`.tools(...)` 会把工具交给模型选择，并不能保证模型一定调用；业务若要求必须查询，应在手动循环中用 Java 检查 `response.hasToolCalls()`。
 - MiniHarness 以后更关心手动工具循环，因为它可以加入权限、状态保存、事件流和最大循环次数。
 
 ## 官方文档

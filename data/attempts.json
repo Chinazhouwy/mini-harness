@@ -1,1 +1,0 @@
-[{"question":"请说出Java中HashMap和ConcurrentHashMap的主要区别，并说明它们在多线程环境下各自的工作原理。","answer":"一个是不适合多线程，一个是加了锁","evaluation":{"score":6,"correct":true,"comment":"回答过于简略，只点出了基本区别，缺乏对工作原理的具体说明。","missingPoint":"ConcurrentHashMap的具体线程安全实现机制（如分段锁或CAS+synchronized）以及HashMap在多线程环境下的具体问题（如死循环、数据丢失）。"}}]
