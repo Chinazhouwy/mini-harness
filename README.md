@@ -39,6 +39,7 @@ Spring AI 学习 Demo
 | 意图识别 | `IntentResult` + `InterviewIntent` | 将“用户说的话”转换为有限操作 |
 | 面试原型 | `MiniHarnessDemo` | 体验出题、回答、评测、追问如何串在一起 |
 | 文件持久化 | `data/history.json`、`data/attempts.json` | 区分对话上下文和“题目-回答-评测”快照 |
+| 调用日志 | `SimpleLoggerAdvisor` | 查看 Spring AI 组装完成的请求和模型响应 |
 
 ## 心路与思考过程
 
@@ -77,7 +78,8 @@ src/test/java/com/chinazhouwy/miniharness/
 
 data/
 ├── history.json                  控制台对话历史
-└── attempts.json                 回答评测快照
+├── attempts.json                 回答评测快照
+└── session.json                  当前题目与面试阶段，用于重启后继续回答
 
 docs/experiments/
 └── 000-spring-ai-demo.md         第一组 Spring AI 学习 Demo 说明
@@ -145,6 +147,23 @@ mvn compile
 java -cp target/classes com.chinazhouwy.miniharness.MiniHarnessDemo
 ```
 
+每次模型调用时，Spring AI 自带的 `SimpleLoggerAdvisor` 都会在 DEBUG 日志中输出：
+
+```text
+ChatClientRequest（已经组装好的 Prompt、历史消息、模型选项）
+→ ChatResponse（模型原始响应和元数据）
+```
+
+这是 Spring AI 原生的 Advisor，不是 MiniHarness 手写的日志器。它也说明了一个容易混淆的点：无论链式代码中
+`.user(...)` 和 `.messages(...)` 谁先写，Spring AI 最终都会按
+`System -> history -> 当前 user` 的顺序组装消息。`entity(AnswerEvaluation.class)` 触发的
+结构化输出格式约束也由 Spring AI 处理；`SimpleLoggerAdvisor` 展示的是组装后的
+`ChatClientRequest`，不是 HTTP 请求的逐字节转储。
+
+另外保留了两条 `[FLOW]` 输出，专门解释 Java 业务侧“何时意图识别、何时写入 history”。
+调用日志会打印用户回答和 Prompt，仅适合本地学习，不能原样用于真实用户数据的生产日志。
+更具体的阅读顺序见 [实验 001：控制台调用日志](docs/experiments/001-console-trace.md)。
+
 启动后可以尝试输入：
 
 ```text
@@ -157,7 +176,7 @@ exit
 
 当前运行前注意两件事：
 
-1. `InterviewQuestion` 引用了尚未定义的 `QuestionStatus`，因此仓库此刻会编译失败。这是正在整理的领域草图，尚未接入控制台主流程；补齐或移除这部分草图后，才可以运行上述命令。
+1. `InterviewQuestion` 等领域类仍是未接入控制台主流程的草图；当前不需要先围绕它们设计完整状态机。
 2. `data/history.json` 仍保留过往直接序列化 Spring AI `Message` 的旧格式；当前代码已改为读取 `StoredMessage(role, content)`。第一次测试新的保存/恢复逻辑前，建议备份或删除旧 `data/history.json`，让程序以新格式重新生成。
 
 ## 目前没有做什么
@@ -179,9 +198,8 @@ exit
 - 模型输出具有不确定性，分数和 `correct` 不能视为客观结论。
 - 结构化输出还没有分数范围、空字段或引用真实性校验。
 - 每个模型调用都重新发送手动维护的历史；没有上下文长度控制。
-- `FOLLOW_UP`、`CHAT` 等意图已预留，但控制台尚未实现对应分支。
+- `CHAT`、`FOLLOW_UP` 已有临时分支，但意图识别是否能稳定区分它们，仍要通过 Trace 和实际输入观察。
 - 当前每个已完成的控制台分支会立即写入本地 JSON；但文件写入仍没有事务、并发控制或崩溃恢复保障。
-- `QuestionStatus` 缺失，当前 `mvn test` 会在主代码编译阶段失败。
 
 这些限制会保留在 README 中，直到它们被真实代码和测试解决，而不是仅仅从文档里消失。
 

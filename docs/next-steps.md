@@ -18,24 +18,31 @@
 | P2 | 已有主流程稳定后，减少混乱、便于验证和回看的优化 |
 | P3 | 只有出现真实需要时才考虑的扩展，不提前实现 |
 
-## P0：先让当前原型能编译、能重新开始
+## P0：先看清当前原型实际在做什么
 
-### P0-1：处理缺失的 `QuestionStatus`
+### P0-1：使用 Spring AI 原生日志查看每一次模型调用（已完成）
 
-**现象**：`InterviewQuestion` 引用了不存在的 `QuestionStatus`，当前 `mvn test` 在编译主代码时失败。
+**观察**：控制台一次用户输入可能连续触发意图识别、出题、评测或反馈。只看最终
+`Assistant:` 文本时，无法判断问题到底出在 Prompt、历史消息还是模型返回。
 
 **涉及文件**：
 
-- `src/main/java/com/chinazhouwy/miniharness/InterviewQuestion.java`
+- `src/main/java/com/chinazhouwy/miniharness/InterviewLLMService.java`
+- `src/main/java/com/chinazhouwy/miniharness/MiniHarnessDemo.java`
+- `src/main/resources/application.yml`
 
-**需要先做的决定**：`InterviewQuestion` 是不是现在就要接入主流程？
+**已实施**：每个 `ChatClient` 都挂载 Spring AI 的 `SimpleLoggerAdvisor`。它会记录已经组装好的
+`ChatClientRequest` 和调用后的 `ChatResponse`；控制台额外保留两条 `[FLOW]`，解释 Java 侧何时
+分类、何时写入 history。
 
-- 若暂时不用它：移除或隔离这组未接入的领域草图，让 Demo 先恢复可运行。
-- 若准备接入：再定义最小的题目状态，并让它服务于真实流程，而不是只为消除编译错误。
+**下一次运行时要观察**：
 
-**完成标准**：`mvn test` 至少能完成编译阶段；没有真实 Key 时 LLM Demo 应跳过或不运行，而不是因为代码错误失败。
+- 当前用户输入是否恰好出现一次；
+- 当前题和最近回答是否真的存在于 history；
+- 评测和自然语言反馈的 Prompt 是否在表达同一件事；
+- `CHAT`、`FOLLOW_UP` 的分类是否符合实际输入。
 
-**暂不做**：不因为这个问题直接引入数据库、完整状态机或复杂领域模型。
+**暂不做**：不接入链路追踪平台、不保存 Trace，也不为了 Trace 提前设计 Agent Runtime。
 
 ### P0-2：迁移或清理旧版 `history.json`
 
@@ -44,8 +51,8 @@
 **涉及文件**：
 
 - `data/history.json`
-- `MiniHarnessDemo.loadHistoryInfo()`
-- `MiniHarnessDemo.toStoredMessages()`
+- `InterviewSession.loadHistoryInfo()`
+- `InterviewSession.saveHistoryInfo()`
 
 **建议**：学习阶段最简单的办法是先备份旧文件并删除，让程序按新格式生成；如果旧记录确实有保留价值，再单独写一次性迁移脚本。
 
@@ -63,7 +70,7 @@
 
 ## P1：让一次面试练习逻辑上完整
 
-### P1-1：保存真正的会话状态，而不只保存消息历史
+### P1-1：保存真正的会话状态，而不只保存消息历史（已完成最小版本）
 
 **现象**：重启后虽然能读回 `history`，但 `currentQuestion` 重新变为空、`InterviewState` 重新变为 `IDLE`。用户继续回答时，程序不再进入评测分支。
 
@@ -73,9 +80,11 @@
 - `InterviewSession`
 - `InterviewState`
 
-**建议**：先用一个很小的本地 `session.json` 保存：当前题、当前阶段、历史和 attempts。此时正好验证 `InterviewSession` 是否真的需要从草图变成可用对象。
+**已实施**：新增 `data/session.json`，仅保存当前题和当前阶段；`history.json` 与
+`attempts.json` 仍保持原本职责。启动时恢复三个文件，`ANSWER`、`HINT`、`EXPLAIN`、
+`FOLLOW_UP` 会先检查当前题和阶段是否存在。
 
-**完成标准**：在“已出题、等待回答”时退出并重启，下一次输入回答仍会被评测，并且追问围绕同一道题。
+**待手工验证**：在“已出题、等待回答”时退出并重启，下一次输入回答仍会被评测，并且追问围绕同一道题。
 
 **暂不做**：不引入 PostgreSQL；先证明“会话需要恢复”这个问题真实存在。
 
@@ -98,11 +107,15 @@ FINISHED         -> 不再调用模型
 
 ### P1-3：对齐意图枚举、Prompt 和分支
 
-**现象**：代码里有 `FOLLOW_UP` 和 `CHAT`，但意图识别 Prompt 没有要求模型返回它们，`switch` 也没有实现对应分支。
+**现象**：`FOLLOW_UP` 和 `CHAT` 已经写进意图识别 Prompt，也已有对应 `switch` 分支；但
+它们是否会被模型稳定、正确地区分，还没有经过足够的真实输入验证。
 
-**建议**：每增加一个意图，必须同时完成三件事：Prompt 声明、结构化结果测试、Java 分支处理。当前如果还不需要这两个能力，就先删掉预留值，或明确返回“暂未支持”。
+**建议**：先通过当前 Trace 观察几组真实输入。若发现某个意图经常被错分，再针对一组具体
+输入调整 Prompt 或 Java 规则。以后每增加一个意图，仍应同时完成 Prompt 声明、结构化结果
+观察和 Java 分支处理。
 
-**完成标准**：枚举中的每个值都有清楚的产生条件和处理结果；没有“模型能返回但程序只会 default”的悬空分支。
+**完成标准**：枚举中的每个值都有清楚的处理结果；对于容易混淆的输入，Trace 能说明模型
+为什么作出当前分类。
 
 ### P1-4：让评测输入明确且可校验
 

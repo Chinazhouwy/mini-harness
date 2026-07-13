@@ -35,6 +35,7 @@ public class InterviewSession {
      * 本项目的数据格式。</p>
      */
     public static @NonNull Result loadHistoryInfo(List<QuestionAttempt> attempts, List<Message> history) {
+        StoredSession storedSession = StoredSession.empty();
         try {
             ObjectMapper mapper = new ObjectMapper();
             java.io.File fileAttempts = new java.io.File("data/attempts.json");
@@ -46,10 +47,14 @@ public class InterviewSession {
                 List<StoredMessage> storedMessages = mapper.readValue(fileHistroy, new com.fasterxml.jackson.core.type.TypeReference<List<StoredMessage>>() {});
                 history = toAiMessages(storedMessages);
             }
+            java.io.File fileSession = new java.io.File("data/session.json");
+            if (fileSession.exists()) {
+                storedSession = mapper.readValue(fileSession, StoredSession.class);
+            }
         } catch (Exception e) {
-            System.err.println("加载 history.json , attempts.json 失败: " + e.getMessage());
+            System.err.println("加载本地会话数据失败: " + e.getMessage());
         }
-        Result result = new Result(attempts, history);
+        Result result = new Result(attempts, history, storedSession.state(), storedSession.currentQuestion());
         return result;
     }
 
@@ -61,7 +66,12 @@ public class InterviewSession {
      * 评测回放，history 面向多轮上下文。正式系统会需要原子性、版本与错误恢复；Demo
      * 先只保留最容易看懂的文件写入。</p>
      */
-    public static void saveHistoryInfo(List<QuestionAttempt> attempts, List<Message> history) {
+    public static void saveHistoryInfo(
+            List<QuestionAttempt> attempts,
+            List<Message> history,
+            InterviewState state,
+            String currentQuestion
+    ) {
         if (attempts.size() > 0) {
             try {
                 ObjectMapper mapper = new ObjectMapper();
@@ -89,6 +99,19 @@ public class InterviewSession {
             } catch (Exception e) {
                 System.err.println("保存 history.json 失败: " + e.getMessage());
             }
+        }
+
+        // 不管 history 是否为空都保存 session：它记录的是“当前流程处于哪里”，而不是对话内容。
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            java.io.File file = new java.io.File("data/session.json");
+            java.io.File parentDir = file.getParentFile();
+            if (parentDir != null && !parentDir.exists()) {
+                parentDir.mkdirs();
+            }
+            mapper.writer().writeValue(file, new StoredSession(state, currentQuestion));
+        } catch (Exception e) {
+            System.err.println("保存 session.json 失败: " + e.getMessage());
         }
     }
 

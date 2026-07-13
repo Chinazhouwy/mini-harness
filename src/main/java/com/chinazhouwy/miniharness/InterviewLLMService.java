@@ -5,6 +5,7 @@ import com.openai.client.okhttp.OpenAIOkHttpClient;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
@@ -69,7 +70,6 @@ public class InterviewLLMService {
                 .messages(result.history())
                 .call()
                 .entity(IntentResult.class);
-        System.out.printf("[DEBUG] intent: %s%n", response);
         return response;
     }
 
@@ -82,7 +82,7 @@ public class InterviewLLMService {
      * 所以这两个枚举虽然已为后续预留，暂时不会稳定地产生。</p>
      */
     public static @NonNull ChatClient createIntentClient() {
-        ChatClient intentClient = ChatClient.builder(createChatModel())
+        ChatClient intentClient = chatClientBuilder()
                 .defaultSystem("""
                         你负责识别用户在面试过程中的意图。
                         
@@ -107,7 +107,7 @@ public class InterviewLLMService {
      * 也应该不同。当前结构化输出没有 Java 侧校验，所以它是学习样例，不可直接当作可靠评分。</p>
      */
     public static AnswerEvaluation createEvaluatorClient(List<Message> history) {
-        ChatClient evaluatorClient = ChatClient.builder(createChatModel())
+        ChatClient evaluatorClient = chatClientBuilder()
                 .defaultSystem("""
                         你是 Java 面试答案评审器。
                         
@@ -134,7 +134,7 @@ public class InterviewLLMService {
 
     /** 让模型围绕当前上下文讲解题目。 */
     public static String chat(List<Message> history) {
-        return ChatClient.builder(createChatModel())
+        return chatClientBuilder()
                 .defaultSystem("你是一名 Java 面试官。")
                 .build()
                 .prompt()
@@ -148,7 +148,7 @@ public class InterviewLLMService {
 
     /** 根据已有对话和上一题生成新题；当前只靠 Prompt 约束，不保证绝对不重复。 */
     public static String generateQuestion(List<Message> history) {
-        return ChatClient.builder(createChatModel())
+        return chatClientBuilder()
                 .defaultSystem("你是一名 Java 面试官。")
                 .build()
                 .prompt()
@@ -162,7 +162,7 @@ public class InterviewLLMService {
     }
 
     public static String giveHint(List<Message> history) {
-        return ChatClient.builder(createChatModel())
+        return chatClientBuilder()
                 .defaultSystem("你是一名 Java 面试官。")
                 .build()
                 .prompt()
@@ -174,7 +174,7 @@ public class InterviewLLMService {
 
     /** 让模型围绕当前上下文讲解题目。 */
     public static String explainQuestion(List<Message> history) {
-        return ChatClient.builder(createChatModel())
+        return chatClientBuilder()
                 .defaultSystem("你是一名 Java 面试官。")
                 .build()
                 .prompt()
@@ -185,7 +185,7 @@ public class InterviewLLMService {
     }
 
     public static String followUpQuestion(List<Message> history) {
-        return ChatClient.builder(createChatModel())
+        return chatClientBuilder()
                 .defaultSystem("你是一名 Java 面试官。")
                 .build()
                 .prompt()
@@ -204,7 +204,7 @@ public class InterviewLLMService {
      * 未使用参数，或者改为只传一个明确的 QuestionRound。</p>
      */
     public static String continueInterview(List<Message> history, String currentQuestion, String line) {
-        return ChatClient.builder(createChatModel())
+        return chatClientBuilder()
                 .defaultSystem("你是一名 Java 面试官。")
                 .build()
                 .prompt()
@@ -219,6 +219,21 @@ public class InterviewLLMService {
                 .messages(history)
                 .call()
                 .content();
+    }
+
+    /**
+     * 给当前 Demo 创建带 Spring AI 原生日志 Advisor 的 ChatClient Builder。
+     *
+     * <p>{@link SimpleLoggerAdvisor} 在模型调用前输出 {@code ChatClientRequest}，调用后输出
+     * {@code ChatResponse}。它看到的是 Spring AI 已经组装好的请求，所以比手工打印每个
+     * {@code .user(...)} / {@code .messages(...)} 更接近真实调用。</p>
+     *
+     * <p>要在控制台看到内容，还需要在 {@code application.yml} 中将这个类的日志级别设为
+     * {@code DEBUG}。它会输出用户回答和 Prompt，只适合本地学习。</p>
+     */
+    private static ChatClient.Builder chatClientBuilder() {
+        return ChatClient.builder(createChatModel())
+                .defaultAdvisors(new SimpleLoggerAdvisor());
     }
 
 
