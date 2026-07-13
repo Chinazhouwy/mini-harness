@@ -91,7 +91,11 @@ public class MiniHarnessDemo {
                     String res = InterviewLLMService.chat(result.history());
                     System.out.printf("Assistant: %s%n", res);
                     result.history().add(new AssistantMessage(res));
-                    interviewState = InterviewState.IDLE;
+                    //  当前正在等用户回答 Java 题
+                    //→ 用户说：“我先问个别的问题”
+                    //→ 识别为 CHAT
+                    //→ 状态被重置为 IDLE
+                    //  interviewState = InterviewState.IDLE;
                 }
                 case QUESTION -> {
                     // currentQuestion 只保存当前题的文本。后续真正抽取领域模型后，

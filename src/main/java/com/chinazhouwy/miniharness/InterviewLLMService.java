@@ -209,9 +209,12 @@ public class InterviewLLMService {
                 .build()
                 .prompt()
                 .user("""
-                        你是面试官。根据用户刚才的回答进行一句简短反馈，
-                        然后只提出一个针对其遗漏点的追问。
-                        不要直接给出完整答案。
+                         请根据面试题和用户回答进行评价：
+                        score：0 到 10 分, 6分为及格，10分为满分
+                        correct：回答是否基本正确
+                        comment：简短评价
+                        missingPoint：最重要的遗漏点，没有则返回空字符串
+                        feedback: 根据用户刚才的回答进行反馈，给出完整答案，对于用户的遗漏点和错误点进行讲解。
                     """)
                 .messages(history)
                 .call()
