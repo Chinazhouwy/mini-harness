@@ -1,4 +1,4 @@
-package com.chinazhouwy.miniharness;
+package com.chinazhouwy.miniharness.session;
 
 /**
  * 控制台原型记录的面试阶段。

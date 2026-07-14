@@ -1,5 +1,6 @@
 package com.chinazhouwy.miniharness;
 
+import com.chinazhouwy.miniharness.session.InterviewState;
 import org.springframework.ai.chat.messages.Message;
 
 import java.util.List;

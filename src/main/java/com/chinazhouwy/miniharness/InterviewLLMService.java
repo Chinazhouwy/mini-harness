@@ -1,5 +1,6 @@
 package com.chinazhouwy.miniharness;
 
+import com.chinazhouwy.miniharness.intent.InterviewIntent;
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
 import org.jspecify.annotations.NonNull;
@@ -58,23 +59,6 @@ public class InterviewLLMService {
 
 
     /**
-     * 将自由文本转成有限的 {@link InterviewIntent}。
-     *
-     * <p>messages(result.history()) 会把已保存的上下文一同提供给模型。这样“继续说一下”
-     * 这类依赖上下文的话，模型才有机会理解。它不是 ChatMemory：历史由当前代码显式传入。</p>
-     */
-    public static @Nullable IntentResult getIntentResult(ChatClient intentClient, String line, Result result) {
-        IntentResult response = intentClient
-                .prompt()
-                .user(line)
-                .messages(result.history())
-                .call()
-                .entity(IntentResult.class);
-        return response;
-    }
-
-
-    /**
      * 创建“只做意图分类”的 ChatClient。
      *
      * <p>系统提示词列出允许返回的意图，是为了缩小模型的自由度；{@code entity(IntentResult.class)}
@@ -84,7 +68,11 @@ public class InterviewLLMService {
     public static @NonNull ChatClient createIntentClient() {
         ChatClient intentClient = chatClientBuilder()
                 .defaultSystem("""
-                        你负责识别用户在面试过程中的意图。
+                        你负责识别用户在AI模拟面试过程中的意图。
+                        
+                        当前ai出题是 %s，空代表没有
+                        当前用户回答是 %s，空代表没有
+                        当前记录的面试阶段是 %s，空代表没有
                         
                         可选意图：
                             ANSWER,  //用户回答
@@ -94,12 +82,12 @@ public class InterviewLLMService {
                             FOLLOW_UP,  // 用户针对评分、答案或讲解继续提问
                             CHAT,  //用户聊天
                             EXIT //用户退出
-                        """)
+                        """.formatted())
                 .build();
         return intentClient;
     }
 
-    
+
     /**
      * 调用专门的评测 Prompt，并把模型输出转换为 {@link AnswerEvaluation}。
      *

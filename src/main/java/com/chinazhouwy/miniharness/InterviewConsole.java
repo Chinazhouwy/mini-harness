@@ -1,9 +1,12 @@
 package com.chinazhouwy.miniharness;
 
+import com.chinazhouwy.miniharness.intent.IntentService;
+import com.chinazhouwy.miniharness.intent.InterviewIntent;
+import com.chinazhouwy.miniharness.session.InterviewSession;
+import com.chinazhouwy.miniharness.session.InterviewState;
 import io.micrometer.common.util.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -25,16 +28,16 @@ import java.util.Scanner;
  *     <li>根据当前回答生成一句反馈和一个追问。</li>
  * </ol>
  *
- * <p>阅读本类时，优先看 {@link #test()}：它展示了“用户输入 -> 意图识别 -> Java switch
+ * <p>阅读本类时，优先看 {@link #run()}：它展示了“用户输入 -> 意图识别 -> Java switch
  * 控制流程 -> 模型调用 -> 保存历史”的完整路径。</p>
  */
-public class MiniHarnessDemo {
+public class InterviewConsole {
 
     
-    private static final Logger log = LoggerFactory.getLogger(MiniHarnessDemo.class);
+    private static final Logger log = LoggerFactory.getLogger(InterviewConsole.class);
 
     public static void main(String[] args) {
-        new MiniHarnessDemo().test();
+        new InterviewConsole().run();
     }
 
     /**
@@ -44,8 +47,8 @@ public class MiniHarnessDemo {
      * 再由下面的 {@code switch} 选择具体业务动作。这个 switch 很重要：模型只建议
      * 意图，真正执行“出下一题、评测还是退出”的仍是 Java 代码。</p>
      */
-    public void test() {
-        log.info("Starting MiniHarnessDemo...");
+    public void run() {
+        log.info("Starting InterviewConsole...");
 
         // attempts 保存“题目 + 回答 + 评测”，面向复盘。
         // history 保存多轮消息，面向给模型提供上下文。
@@ -61,20 +64,17 @@ public class MiniHarnessDemo {
         InterviewState interviewState = result.state();
         String currentQuestion = result.currentQuestion();
 
-        ChatClient intentClient = InterviewLLMService.createIntentClient();
-        
         Scanner scanner = new Scanner(System.in);
         while (scanner.hasNextLine()) {
 
             log.info("now InterviewState {}",interviewState);
 
             System.out.print("\n你 > ");
-            String line = scanner.nextLine();
+            String line = scanner.nextLine().trim();
 
             if (exitCommend(line)) {
                 // exit / quit 是本地命令，不需要发送给模型，也不必作为面试对话保存。
-                // 但退出前仍要把上一轮已经完成的出题、回答或追问强制写入磁盘，
-                // 否则用户在回答后立刻退出时，最后一轮会丢失。
+                // 但退出前仍要把上一轮已经完成的出题、回答或追问强制写入磁盘，否则用户在回答后立刻退出时，最后一轮会丢失。
                 InterviewSession.saveHistoryInfo(result.attempts(), result.history(), interviewState, currentQuestion);
                 System.out.println("退出对话。");
                 break;
@@ -84,7 +84,7 @@ public class MiniHarnessDemo {
             System.out.println("[FLOW] 控制台收到用户输入；先调用意图识别，此时它尚未写入 history。");
 
             // 先让模型把自然语言归类为 InterviewIntent。
-            IntentResult response = InterviewLLMService.getIntentResult(intentClient, line, result);
+            IntentResult response = IntentService.getIntentResult(line, result);
 
             // ANSWER / HINT / EXPLAIN / FOLLOW_UP 都依赖“当前确实有一道尚在讨论的题”。
             // 以前只有 history 恢复时，currentQuestion 仍为空，程序却继续调用评测和反馈模型，

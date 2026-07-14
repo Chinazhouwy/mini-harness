@@ -1,4 +1,4 @@
-package com.chinazhouwy.miniharness;
+package com.chinazhouwy.miniharness.intent;
 
 /**
  * 用户在控制台里输入一句话后，系统希望识别出的“操作意图”。

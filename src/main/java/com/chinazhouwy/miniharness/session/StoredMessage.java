@@ -1,4 +1,6 @@
-package com.chinazhouwy.miniharness;
+package com.chinazhouwy.miniharness.session;
+
+import com.chinazhouwy.miniharness.ChatRole;
 
 /**
  * 适合 JSON 持久化的简化消息。

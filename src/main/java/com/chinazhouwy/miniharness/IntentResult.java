@@ -1,5 +1,7 @@
 package com.chinazhouwy.miniharness;
 
+import com.chinazhouwy.miniharness.intent.InterviewIntent;
+
 /**
  * 意图识别模型的结构化输出。
  *

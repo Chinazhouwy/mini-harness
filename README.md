@@ -144,7 +144,7 @@ Structured Output
 
 ```bash
 mvn compile
-java -cp target/classes com.chinazhouwy.miniharness.MiniHarnessDemo
+java -cp target/classes com.chinazhouwy.miniharness.InterviewConsole
 ```
 
 每次模型调用时，Spring AI 自带的 `SimpleLoggerAdvisor` 都会在 DEBUG 日志中输出：

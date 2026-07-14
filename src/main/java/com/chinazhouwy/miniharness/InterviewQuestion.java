@@ -1,5 +1,7 @@
 package com.chinazhouwy.miniharness;
 
+import com.chinazhouwy.miniharness.session.QuestionStatus;
+
 import java.util.List;
 
 /**
@@ -17,10 +19,7 @@ public class InterviewQuestion {
     /** 主问题及后续追问形成的轮次列表。 */
     private List<QuestionRound> rounds;
 
-    /**
-     * 本题自己的进度。这里引用的 {@code QuestionStatus} 还没有在仓库中定义，
-     * 因此当前代码不能编译；这是正在整理的草稿，而非一个可用实现。
-     */
-//    private QuestionStatus status;
+    /** 本题自己的进度。*/
+    private QuestionStatus status;
 
 }

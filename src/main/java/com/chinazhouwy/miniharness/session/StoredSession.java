@@ -1,4 +1,6 @@
-package com.chinazhouwy.miniharness;
+package com.chinazhouwy.miniharness.session;
+
+import com.chinazhouwy.miniharness.QuestionAttempt;
 
 /**
  * 写入 {@code data/session.json} 的最小会话快照。

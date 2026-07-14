@@ -1,5 +1,6 @@
-package com.chinazhouwy.miniharness;
+package com.chinazhouwy.miniharness.session;
 
+import com.chinazhouwy.miniharness.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jspecify.annotations.NonNull;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -26,6 +27,12 @@ public class InterviewSession {
 
     /** 用于回放的最小对话历史，不等同于模型每次实际发送的上下文窗口。 */
     private List<StoredMessage> history;
+
+    /** 当前正在讨论的题目编号。 */
+    private String currentQuestion;
+
+    /** 当前正在讨论的题目编号对应的候选人回答。 */
+    private String answeringQuestion;
 
     /**
      * 从 data/ 目录恢复上次练习留下的最小数据。
