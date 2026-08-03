@@ -46,6 +46,12 @@
             <artifactId>spring-boot-starter</artifactId>
         </dependency>
 
+        <!-- 提供只读金融查询 API 和静态展示页 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
         <!-- Spring AI OpenAI Starter (OpenAI-compatible API) -->
         <dependency>
             <groupId>org.springframework.ai</groupId>

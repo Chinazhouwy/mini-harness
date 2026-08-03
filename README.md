@@ -99,6 +99,17 @@ java -cp "target/classes:$(cat target/harness-classpath.txt)" \
 
 当前使用确定性 Fixture，输出融资余额/流通市值、融资买入强度、融资增长率、融资高点回撤、净偿还压力、波动率、市场宽度，以及 Heat、Clear、Confirmation 评分。报告明确区分计算证据、数据来源和风险限制。
 
+### 前端展示页
+
+同一套后端计算结果也提供了一个只读仪表盘，用于查看当前状态、历史轨迹、任务链和来源证据：
+
+```bash
+mvn spring-boot:run
+open http://localhost:8080/
+```
+
+页面 API 是 `GET /api/finance/leverage`。当前页面使用确定性 Fixture，不需要 API Key，也不发出买卖指令。
+
 金融领域代码位于 `finance/market`，按职责拆分：
 
 ```text
@@ -111,6 +122,7 @@ finance/market/
 ├── verification/  Artifact 和报告结构验证
 ├── report/        Markdown 报告
 ├── workflow/      金融任务图
+├── web/           只读查询 API 和前端展示 DTO
 └── demo/          本地可运行入口
 ```
 

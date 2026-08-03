@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#11151b">
+    <meta name="description" content="MiniHarness 公开可观测 A 股杠杆温度计">
+    <title>A 股杠杆温度计 · MiniHarness</title>
+    <link rel="stylesheet" href="/dashboard.css">
+</head>
+<body>
+<div class="app-shell">
+    <header class="topbar">
+        <a class="brand" href="/" aria-label="MiniHarness 首页">
+            <span class="brand-mark">M</span>
+            <span>MINI<span class="muted-slash">/</span>HARNESS</span>
+        </a>
+        <div class="topbar-right">
+            <span class="eyebrow">MARKET REGIME / V0.1</span>
+            <span class="connection"><i></i><span id="connectionText">正在连接</span></span>
+        </div>
+    </header>
+
+    <main>
+        <section class="hero-grid">
+            <div class="hero-copy">
+                <p class="eyebrow accent">公开可观测 · A 股市场</p>
+                <h1>杠杆温度计<span class="headline-dot">.</span></h1>
+                <p class="hero-lede">把“杠杆出清”从直觉拆成可回放、可验证的一组市场状态信号。</p>
+                <div class="hero-meta">
+                    <span class="meta-chip"><span class="chip-dot cyan"></span><span id="marketName">A_SHARE_PUBLIC_LEVERAGE_FIXTURE</span></span>
+                    <span class="meta-chip"><span class="chip-dot amber"></span><span id="dateRange">加载数据中</span></span>
+                </div>
+            </div>
+            <div class="regime-hero-card">
+                <div class="card-label-row">
+                    <span class="eyebrow">当前状态</span>
+                    <span class="status-pill" id="regimePill"><i></i>计算中</span>
+                </div>
+                <div class="regime-name" id="regimeText">—</div>
+                <p id="regimeDescription">正在读取后端计算结果。</p>
+                <div class="regime-rule"><span></span><span></span><span></span></div>
+                <div class="regime-footnote">不是买卖指令 · 只读研究视图</div>
+            </div>
+        </section>
+
+        <section class="score-grid" aria-label="核心评分">
+            <article class="score-card score-heat">
+                <div class="score-card-top"><span class="eyebrow">HEAT / 过热</span><span class="score-index">01</span></div>
+                <div class="score-value"><span id="heatScore">—</span><small>/ 100</small></div>
+                <div class="score-bar"><span id="heatBar"></span></div>
+                <p>杠杆比例、融资买入强度与 60 日扩张速度的组合分位。</p>
+            </article>
+            <article class="score-card score-clear">
+                <div class="score-card-top"><span class="eyebrow">CLEAR / 出清</span><span class="score-index">02</span></div>
+                <div class="score-value"><span id="clearScore">—</span><small>/ 100</small></div>
+                <div class="score-bar"><span id="clearBar"></span></div>
+                <p>融资高点回撤、净偿还压力与价格波动的组合分位。</p>
+            </article>
+            <article class="score-card score-confirm">
+                <div class="score-card-top"><span class="eyebrow">CONFIRM / 止跌确认</span><span class="score-index">03</span></div>
+                <div class="score-value"><span id="confirmScore">—</span><small>/ 100</small></div>
+                <div class="score-bar"><span id="confirmBar"></span></div>
+                <p>去杠杆是否减速、指数是否止跌、市场宽度是否恢复。</p>
+            </article>
+        </section>
+
+        <div class="view-tabs" role="tablist" aria-label="仪表盘视图">
+            <button class="tab active" data-view="overview" role="tab" aria-selected="true">概览</button>
+            <button class="tab" data-view="evidence" role="tab" aria-selected="false">证据链</button>
+            <span class="tab-note">数据按交易日更新 · 当前为 Fixture 演示</span>
+        </div>
+
+        <section class="view-panel active" data-panel="overview">
+            <div class="workspace-grid">
+                <article class="panel chart-panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="eyebrow">REGIME TRAJECTORY</p>
+                            <h2>杠杆状态轨迹</h2>
+                        </div>
+                        <div class="range-switch" role="group" aria-label="图表时间范围">
+                            <button data-range="8">60D</button>
+                            <button class="active" data-range="31">250D</button>
+                            <button data-range="all">ALL</button>
+                        </div>
+                    </div>
+                    <div class="chart-summary">
+                        <span><i class="legend-line leverage-line"></i>融资余额 / 流通市值 <b id="latestLeverage">—</b></span>
+                        <span><i class="legend-line clear-line"></i>距高点回撤 <b id="latestClearance">—</b></span>
+                    </div>
+                    <div class="chart-wrap">
+                        <canvas id="regimeChart" tabindex="0" aria-label="杠杆比例和融资高点回撤历史图表"></canvas>
+                        <div class="chart-tooltip" id="chartTooltip" aria-live="polite"></div>
+                    </div>
+                    <div class="chart-footer"><span>历史轨迹仅用于观察状态变化，不代表未来走势</span><span id="chartDate">—</span></div>
+                </article>
+
+                <aside class="panel interpretation-panel">
+                    <div class="panel-header compact">
+                        <div><p class="eyebrow">READ THE SIGNAL</p><h2>状态解释</h2></div>
+                        <span class="panel-symbol">↗</span>
+                    </div>
+                    <div class="interpretation-copy" id="interpretationCopy">加载评分解释中。</div>
+                    <div class="signal-list" id="signalList"></div>
+                    <div class="caution-box"><span class="caution-icon">!</span><p>高出清分数不是抄底信号。价格不再创新低与市场宽度恢复，才是下一步需要继续观察的确认条件。</p></div>
+                </aside>
+            </div>
+
+            <div class="lower-grid">
+                <article class="panel pipeline-panel">
+                    <div class="panel-header compact">
+                        <div><p class="eyebrow">HARNESS RUN</p><h2>研究任务链</h2></div>
+                        <span class="run-status"><i></i>COMPLETED</span>
+                    </div>
+                    <div class="pipeline" id="pipeline">
+                        <button class="pipeline-step active" data-task="collect-market-data"><span class="step-number">01</span><span><b>采集市场数据</b><small>280 个交易日 · 2 个来源</small></span><em>✓</em></button>
+                        <span class="pipeline-connector"></span>
+                        <button class="pipeline-step" data-task="calculate-metrics"><span class="step-number">02</span><span><b>计算杠杆指标</b><small>31 个有效快照</small></span><em>✓</em></button>
+                        <span class="pipeline-connector"></span>
+                        <button class="pipeline-step" data-task="score-market-state"><span class="step-number">03</span><span><b>评估市场状态</b><small>Heat / Clear / Confirm</small></span><em>✓</em></button>
+                        <span class="pipeline-connector"></span>
+                        <button class="pipeline-step" data-task="write-report"><span class="step-number">04</span><span><b>生成研究报告</b><small>Markdown · 已验证</small></span><em>✓</em></button>
+                    </div>
+                    <div class="task-detail" id="taskDetail">正在读取原始数据，并关联交易日期与来源证据。</div>
+                </article>
+
+                <article class="panel metrics-panel">
+                    <div class="panel-header compact">
+                        <div><p class="eyebrow">LATEST SNAPSHOT</p><h2>最新指标</h2></div>
+                        <span class="as-of" id="asOf">—</span>
+                    </div>
+                    <div class="metric-list" id="metricList"></div>
+                </article>
+            </div>
+        </section>
+
+        <section class="view-panel evidence-panel" data-panel="evidence" hidden>
+            <div class="evidence-grid">
+                <article class="panel evidence-main">
+                    <div class="panel-header compact"><div><p class="eyebrow">TRACEABLE INPUTS</p><h2>来源和计算证据</h2></div><span class="panel-symbol">⌁</span></div>
+                    <div class="evidence-list" id="evidenceList"></div>
+                </article>
+                <aside class="panel methodology-panel">
+                    <p class="eyebrow">METHOD</p>
+                    <h2>为什么不是只看融资余额</h2>
+                    <p>余额是存量，买入强度是增量，回撤和净偿还压力描述去杠杆进程，指数与市场宽度用于确认价格是否开始承接。</p>
+                    <div class="method-stack"><span>01 <b>规模</b><small>余额 / 流通市值</small></span><span>02 <b>速度</b><small>增长率 / 买入强度</small></span><span>03 <b>出清</b><small>高点回撤 / 净偿还</small></span><span>04 <b>确认</b><small>价格 / 宽度</small></span></div>
+                </aside>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer"><span>MINIHARNESS / FINANCE MARKET</span><span>只读 · 可回放 · 有边界</span></footer>
+</div>
+<script src="/dashboard.js" defer></script>
+</body>
+</html>
