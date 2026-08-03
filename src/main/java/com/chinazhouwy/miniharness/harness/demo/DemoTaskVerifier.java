@@ -1,7 +1,9 @@
-package com.chinazhouwy.miniharness.harness.verification;
+package com.chinazhouwy.miniharness.harness.demo;
 
 import com.chinazhouwy.miniharness.harness.domain.TaskNode;
 import com.chinazhouwy.miniharness.harness.execution.TaskExecutionResult;
+import com.chinazhouwy.miniharness.harness.verification.TaskVerifier;
+import com.chinazhouwy.miniharness.harness.verification.VerifierResult;
 
 import java.util.List;
 

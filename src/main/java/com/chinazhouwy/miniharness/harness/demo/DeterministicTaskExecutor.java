@@ -1,6 +1,9 @@
-package com.chinazhouwy.miniharness.harness.execution;
+package com.chinazhouwy.miniharness.harness.demo;
 
 import com.chinazhouwy.miniharness.harness.domain.ArtifactRef;
+import com.chinazhouwy.miniharness.harness.execution.TaskExecutionContext;
+import com.chinazhouwy.miniharness.harness.execution.TaskExecutionResult;
+import com.chinazhouwy.miniharness.harness.execution.TaskExecutor;
 
 import java.util.List;
 

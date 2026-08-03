@@ -1,11 +1,25 @@
 package com.chinazhouwy.miniharness.harness.runtime;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.chinazhouwy.miniharness.harness.domain.*;
-import com.chinazhouwy.miniharness.harness.event.*;
-import com.chinazhouwy.miniharness.harness.execution.*;
-import com.chinazhouwy.miniharness.harness.persistence.*;
-import com.chinazhouwy.miniharness.harness.verification.*;
+import com.chinazhouwy.miniharness.harness.domain.ArtifactRef;
+import com.chinazhouwy.miniharness.harness.domain.Mission;
+import com.chinazhouwy.miniharness.harness.domain.MissionDefinition;
+import com.chinazhouwy.miniharness.harness.domain.MissionSnapshot;
+import com.chinazhouwy.miniharness.harness.domain.MissionStatus;
+import com.chinazhouwy.miniharness.harness.domain.TaskAttempt;
+import com.chinazhouwy.miniharness.harness.domain.TaskAttemptStatus;
+import com.chinazhouwy.miniharness.harness.domain.TaskNode;
+import com.chinazhouwy.miniharness.harness.domain.TaskStatus;
+import com.chinazhouwy.miniharness.harness.event.HarnessEvent;
+import com.chinazhouwy.miniharness.harness.event.HarnessEventPayloads;
+import com.chinazhouwy.miniharness.harness.event.HarnessEventType;
+import com.chinazhouwy.miniharness.harness.execution.TaskExecutionContext;
+import com.chinazhouwy.miniharness.harness.execution.TaskExecutionResult;
+import com.chinazhouwy.miniharness.harness.execution.TaskExecutor;
+import com.chinazhouwy.miniharness.harness.persistence.HarnessStateStore;
+import com.chinazhouwy.miniharness.harness.persistence.StateReducer;
+import com.chinazhouwy.miniharness.harness.verification.TaskVerifier;
+import com.chinazhouwy.miniharness.harness.verification.VerifierResult;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -16,7 +30,8 @@ import java.util.Objects;
 /**
  * 单节点、串行的任务推进器。
  *
- * <p>它只调度确定性的 TaskExecutor；即使未来接入模型，模型也不能直接修改这里的状态。</p>
+ * <p>它只调度传入的 TaskExecutor；即使未来接入模型，模型也不能直接修改这里的状态。
+ * Executor 和 Verifier 由调用方装配，核心运行时不依赖任何具体实现。</p>
  */
 public final class HarnessOrchestrator {
 
@@ -24,10 +39,6 @@ public final class HarnessOrchestrator {
     private final TaskExecutor taskExecutor;
     private final TaskVerifier taskVerifier;
     private final ObjectMapper mapper;
-
-    public HarnessOrchestrator(HarnessStateStore stateStore) {
-        this(stateStore, new DeterministicTaskExecutor(), new DemoTaskVerifier());
-    }
 
     public HarnessOrchestrator(
             HarnessStateStore stateStore,
@@ -97,10 +108,6 @@ public final class HarnessOrchestrator {
         state = ensureMissionRunning(state, events);
         if (state.mission().status() == MissionStatus.WAITING) {
             return new AdvanceResult(state, events, !events.isEmpty(), "等待人工输入");
-        }
-        if (state.mission().status().isTerminal()) {
-            state = checkpoint(state, events);
-            return new AdvanceResult(state, events, !events.isEmpty(), "Mission 已经处于终态");
         }
 
         List<TaskNode> currentTasks = state.tasks();
@@ -263,20 +270,6 @@ public final class HarnessOrchestrator {
                     HarnessEventType.TASK_READY,
                     task.id(),
                     new HarnessEventPayloads.TaskState(ready, retryableAttempt, latestAttempt.artifacts()),
-                    events
-            );
-        }
-
-        for (TaskNode task : List.copyOf(state.tasks())) {
-            if (task.status() != TaskStatus.RETRYABLE) {
-                continue;
-            }
-            TaskNode ready = task.transitionTo(TaskStatus.READY);
-            state = emit(
-                    state,
-                    HarnessEventType.TASK_READY,
-                    task.id(),
-                    new HarnessEventPayloads.TaskState(ready, latestAttempt(state, task.id()), List.of()),
                     events
             );
         }
