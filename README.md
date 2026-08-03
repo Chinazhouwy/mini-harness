@@ -79,16 +79,42 @@ java -cp "target/classes:$(cat target/harness-classpath.txt)" \
 
 ## 演变为股票金融分析框架
 
-第一步不做预测、自动交易或“大而全”的投研平台，而是做一个可以验证的报告闭环：
+第一条已经落地的金融闭环是不做预测和自动交易的“公开可观测 A 股杠杆温度计”：
 
 ```text
-固定股票池
-  -> 选择两只股票
-  -> 收集带时间和来源的事实
-  -> 分别分析基本面与风险
-  -> 验证证据完整性
-  -> 生成 Markdown 对比报告
+collect-market-data
+  -> calculate-metrics
+  -> score-market-state
+  -> write-report
 ```
+
+运行它：
+
+```bash
+mvn -DskipTests compile
+mvn dependency:build-classpath -Dmdep.outputFile=target/harness-classpath.txt -Dmdep.includeScope=runtime
+java -cp "target/classes:$(cat target/harness-classpath.txt)" \
+  com.chinazhouwy.miniharness.finance.market.demo.LeverageDashboardConsole
+```
+
+当前使用确定性 Fixture，输出融资余额/流通市值、融资买入强度、融资增长率、融资高点回撤、净偿还压力、波动率、市场宽度，以及 Heat、Clear、Confirmation 评分。报告明确区分计算证据、数据来源和风险限制。
+
+金融领域代码位于 `finance/market`，按职责拆分：
+
+```text
+finance/market/
+├── domain/        原始观测、指标、评分、来源证据
+├── data/          Fixture 和未来的交易所数据适配器
+├── calculation/  指标、滚动分位数、状态评分
+├── persistence/   金融 Artifact 文件
+├── execution/     可注入 Harness 的金融任务执行器
+├── verification/  Artifact 和报告结构验证
+├── report/        Markdown 报告
+├── workflow/      金融任务图
+└── demo/          本地可运行入口
+```
+
+下一条闭环再增加固定股票池、个股基本面、风险事件和两股票对比，不把这些领域概念塞进通用 Harness。
 
 长程 Harness 负责：
 
@@ -102,8 +128,8 @@ java -cp "target/classes:$(cat target/harness-classpath.txt)" \
 股票、指标、财报、公告、估值、风险事件、来源和报告模板
 ```
 
-因此下一步应该是增加股票研究领域模型和固定数据适配器，而不是先把模型调用、多 Agent 或并行调度
-塞进核心运行时。具体演进草图见：[股票研究路线图](docs/stock-research-roadmap.md)。
+因此下一步应该是把 Fixture 替换成只读数据适配器，再增加个股研究领域模型，而不是先把模型调用、多 Agent
+或并行调度塞进核心运行时。具体演进草图见：[股票研究路线图](docs/stock-research-roadmap.md)。
 
 ## 当前边界
 

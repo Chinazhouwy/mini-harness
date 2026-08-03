@@ -2,23 +2,30 @@
 
 这个文档描述的是 Harness 的下一层领域化方向，不代表当前已经接入了实时行情或财报服务。
 
-## 第一个可验证闭环
+## 第一个可验证闭环：公开可观测杠杆温度计
 
-先固定一个小股票池，选择两只股票，生成一份带来源的 Markdown 对比报告：
+先把“杠杆出清”的直觉变成可回放的市场状态研究任务：
 
 ```text
-ResearchMission
-  -> select-universe
-  -> collect-sources
-  -> collect-fundamentals
-  -> compare-business
-  -> check-risks
-  -> verify-evidence
+LeverageDashboardMission
+  -> collect-market-data
+  -> calculate-metrics
+  -> score-market-state
   -> write-report
 ```
 
-每个节点都要有明确的输入、输出、证据和完成条件。第一版允许使用固定/mock 数据，重点是验证状态、
-恢复和证据链，而不是证明模型能预测股价。
+当前实现使用固定 Fixture，重点是验证状态、恢复、指标计算、评分解释和证据链，而不是证明模型能预测股价。
+
+核心指标包括：
+
+- 融资余额 / 流通市值。
+- 融资买入额 / 市场成交额。
+- 5/20/60 日融资余额变化率。
+- 融资余额距 250 日高点的回撤。
+- 20 日净偿还压力。
+- 20 日实现波动率和上涨股票比例。
+
+所有指标先转换成历史分位数，再计算 Heat、Clear 和 Confirmation。评分是可追踪规则，不是固定的买卖阈值。
 
 ## 计划增加的领域对象
 
@@ -27,6 +34,9 @@ ResearchMission
 - `MetricSnapshot`：收入、利润、现金流、估值等指标及其期间。
 - `RiskCheck`：风险项、证据、结论和未确认原因。
 - `ResearchReport`：事实、推断、限制、风险和引用的分离结果。
+- `MarketLeverageObservation`：交易日、融资余额、融资交易、流通市值、成交额、指数和市场宽度。
+- `LeverageMetricSnapshot`：杠杆比例、增长率、出清幅度、净偿还压力和波动率。
+- `LeverageScoreSnapshot`：Heat、Clear、Confirmation、市场状态和计算证据。
 
 这些对象应该作为 `Artifact` 的结构化内容存在，不应该直接埋在 Prompt 或聊天历史里。
 
@@ -45,11 +55,12 @@ Verifier 不只检查“报告文件生成了”，还要检查：每个关键�
 
 ## 后续接入顺序
 
-1. 用固定数据完成两股票对比的全流程测试。
-2. 增加只读数据适配器和来源证据 Artifact。
-3. 增加报告验证器和可回放的研究事件。
-4. 再让 Spring AI 负责某个 Task 的摘要或比较草稿。
-5. 最后再评估并行采集、SSE 展示和更复杂的数据存储。
+1. 用固定数据完成杠杆温度计的全流程测试。
+2. 用只读交易所数据适配器替换 Fixture，并核对单位、交易日和延迟。
+3. 增加固定股票池、个股基本面和风险事件 Artifact。
+4. 生成两股票对比报告，并验证每个关键事实的来源和期间。
+5. 再让 Spring AI 负责某个 Task 的摘要或比较草稿。
+6. 最后再评估并行采集、SSE 展示和更复杂的数据存储。
 
 模型可以提出分析草稿，但不能直接改变股票、指标、来源或任务状态；最终报告必须经过 Java Harness
 的验证器确认。
