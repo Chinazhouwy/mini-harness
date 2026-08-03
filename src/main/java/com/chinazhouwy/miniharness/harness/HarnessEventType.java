@@ -1,0 +1,23 @@
+package com.chinazhouwy.miniharness.harness;
+
+/** 事件名称故意使用稳定字符串，便于之后做日志回放或迁移。 */
+public enum HarnessEventType {
+    MISSION_CREATED,
+    MISSION_READY,
+    MISSION_STARTED,
+    MISSION_WAITING,
+    MISSION_VERIFYING,
+    MISSION_COMPLETED,
+    MISSION_FAILED,
+    MISSION_BLOCKED,
+    MISSION_CANCELLED,
+    TASK_READY,
+    TASK_STARTED,
+    TASK_SUBMITTED,
+    TASK_ACCEPTED,
+    TASK_RETRY_SCHEDULED,
+    TASK_BLOCKED,
+    TASK_FAILED,
+    TASK_CANCELLED,
+    CHECKPOINT_SAVED
+}
