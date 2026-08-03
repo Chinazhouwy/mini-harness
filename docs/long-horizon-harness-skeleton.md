@@ -92,7 +92,7 @@ mvn test
 mvn -DskipTests compile
 mvn dependency:build-classpath -Dmdep.outputFile=target/harness-classpath.txt -Dmdep.includeScope=runtime
 java -cp "target/classes:$(cat target/harness-classpath.txt)" \
-  com.chinazhouwy.miniharness.harness.LongTaskHarnessConsole
+  com.chinazhouwy.miniharness.harness.demo.LongTaskHarnessConsole
 ```
 
 在 IDE 中直接运行 `LongTaskHarnessConsole.main` 更简单。它会创建 `prepare -> execute -> verify -> report`
