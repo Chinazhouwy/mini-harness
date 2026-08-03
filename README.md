@@ -43,12 +43,15 @@ prepare -> execute -> verify -> report
 harness/
 ├── domain/        Mission、Task、Artifact、状态转换
 ├── event/         HarnessEvent 和事件 payload
-├── execution/     TaskExecutor、执行上下文和确定性执行器
-├── verification/  TaskVerifier、Verdict 和验证器
+├── execution/     TaskExecutor 接口、执行上下文
+├── verification/  TaskVerifier 接口、Verdict
 ├── persistence/   JSON snapshot、JSONL event、replay
 ├── runtime/       HarnessOrchestrator、RunResult
-└── demo/          DemoMissionFactory、控制台入口
+└── demo/          DemoMissionFactory、DeterministicTaskExecutor、DemoTaskVerifier、控制台入口
 ```
+
+测试替身（`AlwaysFailTaskExecutor`、`FailOnceTaskExecutor`）放在 `src/test` 的 `execution` 包，只服务于测试，
+不参与主源码分层。
 
 任务状态和事件状态不依赖聊天历史。`ChatMemory` 将来最多只作为某个 Task 内部的模型上下文，不能代替
 业务状态、事件日志或研究证据。

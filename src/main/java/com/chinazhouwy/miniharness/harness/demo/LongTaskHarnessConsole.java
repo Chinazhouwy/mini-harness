@@ -1,9 +1,15 @@
 package com.chinazhouwy.miniharness.harness.demo;
 
-import com.chinazhouwy.miniharness.harness.domain.*;
-import com.chinazhouwy.miniharness.harness.event.*;
+import com.chinazhouwy.miniharness.harness.domain.ArtifactRef;
+import com.chinazhouwy.miniharness.harness.domain.MissionSnapshot;
+import com.chinazhouwy.miniharness.harness.domain.MissionStatus;
+import com.chinazhouwy.miniharness.harness.domain.TaskNode;
+import com.chinazhouwy.miniharness.harness.domain.TaskStatus;
+import com.chinazhouwy.miniharness.harness.event.HarnessEvent;
+import com.chinazhouwy.miniharness.harness.event.HarnessEventType;
 import com.chinazhouwy.miniharness.harness.persistence.FileHarnessStateStore;
-import com.chinazhouwy.miniharness.harness.runtime.*;
+import com.chinazhouwy.miniharness.harness.runtime.AdvanceResult;
+import com.chinazhouwy.miniharness.harness.runtime.HarnessOrchestrator;
 
 import java.nio.file.Path;
 
@@ -15,7 +21,11 @@ public final class LongTaskHarnessConsole {
 
     public static void main(String[] args) {
         FileHarnessStateStore store = new FileHarnessStateStore(Path.of("data", "harness"));
-        HarnessOrchestrator orchestrator = new HarnessOrchestrator(store);
+        HarnessOrchestrator orchestrator = new HarnessOrchestrator(
+                store,
+                new DeterministicTaskExecutor(),
+                new DemoTaskVerifier()
+        );
         MissionSnapshot created = orchestrator.createMission(DemoMissionFactory.create());
 
         System.out.println("Mission id: " + created.mission().id());

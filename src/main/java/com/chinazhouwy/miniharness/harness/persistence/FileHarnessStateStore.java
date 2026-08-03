@@ -1,7 +1,9 @@
 package com.chinazhouwy.miniharness.harness.persistence;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.chinazhouwy.miniharness.harness.domain.*;
+import com.chinazhouwy.miniharness.harness.domain.Checkpoint;
+import com.chinazhouwy.miniharness.harness.domain.Mission;
+import com.chinazhouwy.miniharness.harness.domain.MissionSnapshot;
 import com.chinazhouwy.miniharness.harness.event.HarnessEvent;
 
 import java.io.IOException;
