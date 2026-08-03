@@ -23,8 +23,8 @@ Mission
 prepare -> execute -> verify -> report
 ```
 
-核心代码位于 [`harness`](src/main/java/com/chinazhouwy/miniharness/harness/) 包，入口是
-[`LongTaskHarnessConsole`](src/main/java/com/chinazhouwy/miniharness/harness/LongTaskHarnessConsole.java)。
+核心代码位于 [`harness`](src/main/java/com/chinazhouwy/miniharness/harness/) 下的功能模块，入口是
+[`LongTaskHarnessConsole`](src/main/java/com/chinazhouwy/miniharness/harness/demo/LongTaskHarnessConsole.java)。
 
 ## 当前实现
 
@@ -36,6 +36,19 @@ prepare -> execute -> verify -> report
 - `Checkpoint`：可恢复快照，保存为 JSON。
 - `HarnessOrchestrator`：单节点串行调度、验证、重试、阻塞和完成判断。
 - `FileHarnessStateStore`：本地文件存储，snapshot 使用临时文件后原子移动。
+
+包结构按职责划分：
+
+```text
+harness/
+├── domain/        Mission、Task、Artifact、状态转换
+├── event/         HarnessEvent 和事件 payload
+├── execution/     TaskExecutor、执行上下文和确定性执行器
+├── verification/  TaskVerifier、Verdict 和验证器
+├── persistence/   JSON snapshot、JSONL event、replay
+├── runtime/       HarnessOrchestrator、RunResult
+└── demo/          DemoMissionFactory、控制台入口
+```
 
 任务状态和事件状态不依赖聊天历史。`ChatMemory` 将来最多只作为某个 Task 内部的模型上下文，不能代替
 业务状态、事件日志或研究证据。
@@ -54,7 +67,7 @@ mvn test
 mvn -DskipTests compile
 mvn dependency:build-classpath -Dmdep.outputFile=target/harness-classpath.txt -Dmdep.includeScope=runtime
 java -cp "target/classes:$(cat target/harness-classpath.txt)" \
-  com.chinazhouwy.miniharness.harness.LongTaskHarnessConsole
+  com.chinazhouwy.miniharness.harness.demo.LongTaskHarnessConsole
 ```
 
 控制台只写入当前工作目录下的 `data/harness/`，不会调用真实 LLM。
