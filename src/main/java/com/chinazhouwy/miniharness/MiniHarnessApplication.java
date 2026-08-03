@@ -7,8 +7,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class MiniHarnessApplication {
 
     public static void main(String[] args) {
-        // 这个入口用于验证 Spring Boot 与 application.yml 配置能否正常加载。
-        // 当前真正可交互的学习原型是 MiniHarnessDemo.main()，它不经过 Spring 容器。
+        // 保留 Spring Boot 入口，未来可接入模型和金融数据服务。
+        // 当前不需要启动 Spring 容器即可运行 LongTaskHarnessConsole。
         SpringApplication.run(MiniHarnessApplication.class, args);
     }
 }
