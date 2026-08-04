@@ -52,7 +52,7 @@ public final class LeverageDashboardReportRenderer {
         report.append("| 评分项 | 分位数/评分 |\n|---|---:|\n");
         scoreRow(report, "杠杆比例历史分位", score.leveragePercentile());
         scoreRow(report, "融资买入强度历史分位", score.buyIntensityPercentile());
-        scoreRow(report, "60 日融资增长历史分位", score.marginGrowth60Percentile());
+        scoreRow(report, "60 日融资扩张热度分位", score.marginGrowth60Percentile());
         scoreRow(report, "融资高点回撤历史分位", score.clearancePercentile());
         scoreRow(report, "净偿还压力历史分位", score.repaymentPercentile());
         scoreRow(report, "波动率历史分位", score.volatilityPercentile());
