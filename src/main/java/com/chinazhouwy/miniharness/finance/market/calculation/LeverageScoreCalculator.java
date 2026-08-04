@@ -31,7 +31,11 @@ public final class LeverageScoreCalculator {
         LeverageMetricSnapshot latest = snapshots.getLast();
         double leveragePercentile = percentile(snapshots, value -> value.leverageRatio());
         double buyIntensityPercentile = percentile(snapshots, value -> value.buyIntensity());
-        double marginGrowth60Percentile = percentile(snapshots, value -> value.marginGrowth60());
+        // 负增长代表去杠杆，不能因为它在“最近 31 个负值”中相对靠后，
+        // 就被误判成 Heat。只有融资余额仍在扩张时，增长分位才参与过热评分。
+        double marginGrowth60Percentile = latest.marginGrowth60() <= 0
+                ? 0
+                : percentile(snapshots, value -> value.marginGrowth60());
         double clearancePercentile = percentile(snapshots, value -> value.clearanceFromPeak250());
         double repaymentPercentile = percentile(snapshots, value -> value.netRepaymentPressure20());
         double volatilityPercentile = percentile(snapshots, value -> value.realizedVolatility20());
