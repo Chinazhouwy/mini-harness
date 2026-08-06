@@ -22,3 +22,5 @@ Thumbs.db
 
 # Local Harness and finance artifacts
 data/
+!src/main/java/com/chinazhouwy/miniharness/finance/research/data/
+!src/main/java/com/chinazhouwy/miniharness/finance/research/data/*.java

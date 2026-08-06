@@ -3,195 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#11151b">
-    <meta name="description" content="MiniHarness 公开可观测 A 股杠杆温度计">
-    <title>A 股杠杆温度计 · MiniHarness</title>
-    <link rel="stylesheet" href="/dashboard.css?v=20260804">
+    <meta name="theme-color" content="#10151a">
+    <meta name="description" content="MiniHarness 真实杠杆与股票走势拟合研究页">
+    <link rel="icon" href="data:,">
+    <title>杠杆 × 价格 · MiniHarness</title>
+    <link rel="stylesheet" href="/dashboard.css?v=20260805">
 </head>
 <body>
 <div class="app-shell">
     <header class="topbar">
-        <a class="brand" href="/" aria-label="MiniHarness 首页">
-            <span class="brand-mark">M</span>
-            <span>MINI<span class="muted-slash">/</span>HARNESS</span>
-        </a>
-        <div class="topbar-right">
-            <span class="eyebrow">RESEARCH VIEW / V0.2</span>
-            <span class="connection"><i></i><span id="connectionText">正在连接</span></span>
-        </div>
+        <a class="brand" href="/" aria-label="MiniHarness 首页"><span class="brand-mark">M</span><span>MINI<span class="muted-slash">/</span>HARNESS</span></a>
+        <div class="topbar-right"><span class="eyebrow">RESEARCH / LEVERAGE FIT</span><span class="connection" id="connection"><i></i><span id="connectionText">读取真实数据</span></span></div>
     </header>
 
     <main>
         <section class="hero-grid">
             <div class="hero-copy">
-                <p class="eyebrow accent">公开可观测 · A 股市场</p>
-                <h1>杠杆温度计<span class="headline-dot">.</span></h1>
-                <p class="hero-lede">把“杠杆出清”拆成可以回放、核验、继续观察的市场证据。</p>
-                <div class="hero-meta">
-                    <span class="meta-chip"><span class="chip-dot cyan"></span><span id="marketName">A_SHARE_PUBLIC_LEVERAGE_FIXTURE</span></span>
-                    <span class="meta-chip"><span class="chip-dot amber"></span><span>截至 <b id="heroAsOf">加载中</b></span></span>
-                    <span class="data-badge"><i></i>演示数据 · 非实时</span>
-                </div>
+                <p class="eyebrow accent">真实杠杆序列 · K 线对照 · 时间切分验证</p>
+                <h1>杠杆<span class="headline-dot">×</span>价格<span class="headline-dot">.</span></h1>
+                <p class="hero-lede">把可观测的融资余额或卖空比例，与同一标的的日 K 线对齐；方程只用于探索解释力，不把拟合曲线包装成预测。</p>
+                <div class="hero-meta"><span class="meta-chip"><span class="chip-dot cyan"></span><span id="statusBadge">REAL DATA</span></span><span class="meta-chip"><span class="chip-dot amber"></span><span id="retrievedAt">加载中</span></span></div>
             </div>
             <aside class="decision-card">
-                <div class="card-label-row">
-                    <span class="eyebrow">RESEARCH TAKEAWAY</span>
-                    <span class="status-pill" id="regimePill"><i></i>计算中</span>
-                </div>
-                <div class="decision-title" id="regimeText">—</div>
-                <p id="regimeDescription">正在读取后端计算结果。</p>
-                <div class="decision-facts">
-                    <div><span>出清评分</span><b id="clearScoreHeadline">—</b></div>
-                    <div><span>确认条件</span><b id="confirmHeadline">—</b></div>
-                    <div><span>60D 融资</span><b id="growthHeadline">—</b></div>
-                </div>
+                <div class="card-label-row"><span class="eyebrow">CURRENT STUDY</span><span class="status-pill"><i></i><span id="marketCount">—</span> 个市场</span></div>
+                <div class="decision-title" id="selectedName">—</div>
+                <p id="selectedDefinition">选择一个市场，查看其杠杆字段定义、拟合方程和验证结果。</p>
+                <div class="decision-facts"><div><span>样本</span><b id="sampleFact">—</b></div><div><span>验证 RMSE</span><b id="rmseFact">—</b></div><div><span>验证 R²</span><b id="r2Fact">—</b></div></div>
             </aside>
         </section>
 
-        <section class="takeaway-strip" aria-label="最新研究摘要">
-            <div class="strip-item">
-                <span>杠杆存量</span>
-                <b id="headlineLeverage">—</b>
-                <small id="leverageContext">融资余额 / 流通市值</small>
-            </div>
-            <div class="strip-item">
-                <span>融资速度</span>
-                <b id="headlineGrowth20">—</b>
-                <small>20D 融资余额变化</small>
-            </div>
-            <div class="strip-item">
-                <span>价格位置</span>
-                <b id="headlineIndexDistance">—</b>
-                <small>指数距离 20D 低点</small>
-            </div>
-            <div class="strip-item">
-                <span>市场宽度</span>
-                <b id="headlineBreadth">—</b>
-                <small id="breadthContext">上涨股票比例 · 20D 变化</small>
-            </div>
+        <section class="coverage-strip" aria-label="数据覆盖说明">
+            <div><span>已接入</span><b id="coverageMarkets">A股 · 港股 · 美股</b><small>真实接口返回成功的市场</small></div>
+            <div><span>杠杆口径</span><b id="coverageTypes">融资余额 / 卖空比例</b><small>不同市场不强行混成一个数</small></div>
+            <div><span>拟合目标</span><b>下一日对数收益</b><small>不是直接拟合价格水平</small></div>
+            <div><span>韩股</span><b class="muted-value">未接入</b><small>没有纳入未经验证的免费源</small></div>
         </section>
 
-        <section class="score-grid" aria-label="核心评分和驱动因素">
-            <article class="score-card score-heat">
-                <div class="score-card-top"><span class="eyebrow">HEAT / 过热</span><span class="score-index">01</span></div>
-                <div class="score-value"><span id="heatScore">—</span><small>/ 100</small></div>
-                <div class="score-bar"><span id="heatBar"></span></div>
-                <div class="driver-list" id="heatDrivers"></div>
-            </article>
-            <article class="score-card score-clear">
-                <div class="score-card-top"><span class="eyebrow">CLEAR / 出清</span><span class="score-index">02</span></div>
-                <div class="score-value"><span id="clearScore">—</span><small>/ 100</small></div>
-                <div class="score-bar"><span id="clearBar"></span></div>
-                <div class="driver-list" id="clearDrivers"></div>
-            </article>
-            <article class="score-card score-confirm">
-                <div class="score-card-top"><span class="eyebrow">CONFIRM / 止跌确认</span><span class="score-index">03</span></div>
-                <div class="score-value"><span id="confirmScore">—</span><small>/ 100</small></div>
-                <div class="score-bar"><span id="confirmBar"></span></div>
-                <div class="driver-list" id="confirmDrivers"></div>
-            </article>
-        </section>
+        <section class="research-shell">
+            <nav class="market-tabs" id="marketTabs" aria-label="选择市场"></nav>
+            <div class="selected-summary"><div><p class="eyebrow">SELECTED SERIES</p><h2 id="selectedTitle">—</h2></div><div class="selected-meta"><span id="dateRange">—</span><span id="latestPrice">—</span><span id="latestLeverage">—</span></div></div>
 
-        <div class="view-tabs" role="tablist" aria-label="仪表盘视图">
-            <button class="tab active" data-view="overview" role="tab" aria-selected="true">概览</button>
-            <button class="tab" data-view="evidence" role="tab" aria-selected="false">证据链</button>
-            <span class="tab-note">规则可回放 · 数据源和计算口径见证据链</span>
-        </div>
-
-        <section class="view-panel active" data-panel="overview">
-            <div class="workspace-grid">
+            <div class="fit-grid">
                 <article class="panel chart-panel">
-                    <div class="panel-header">
-                        <div>
-                            <p class="eyebrow">ONE METRIC AT A TIME</p>
-                            <h2>关键指标轨迹</h2>
-                        </div>
-                        <div class="range-switch" role="group" aria-label="图表时间范围">
-                            <button data-range="8">8D</button>
-                            <button class="active" data-range="31">31D</button>
-                            <button data-range="all">全部</button>
-                        </div>
-                    </div>
-                    <div class="metric-switch" role="group" aria-label="图表主指标">
-                        <button class="active" data-metric="clearance">出清回撤</button>
-                        <button data-metric="growth60">60D 融资变化</button>
-                        <button data-metric="leverage">杠杆比例</button>
-                        <button data-metric="breadth">上涨比例</button>
-                    </div>
-                    <div class="chart-summary">
-                        <span><i class="legend-line" id="chartLegend"></i><span id="chartMetricLabel">距融资高点回撤</span></span>
-                        <b id="chartMetricValue">—</b>
-                        <small id="chartMetricNote">选择单一指标，避免不同量纲叠加误读。</small>
-                    </div>
-                    <div class="chart-wrap">
-                        <canvas id="regimeChart" tabindex="0" aria-label="市场杠杆指标历史图表"></canvas>
-                        <div class="chart-tooltip" id="chartTooltip" aria-live="polite"></div>
-                    </div>
-                    <div class="chart-footer"><span id="chartRangeNote">历史轨迹仅用于观察状态变化，不代表未来走势</span><span id="chartDate">—</span></div>
+                    <div class="panel-header"><div><p class="eyebrow">ACTUAL VS EQUATION</p><h2>价格路径对照</h2></div><div class="legend"><span><i class="actual-line"></i>实际价格</span><span><i class="fit-line"></i>方程拟合</span><span><i class="validation-mark"></i>验证区间</span></div></div>
+                    <div class="chart-wrap large"><canvas id="priceChart" aria-label="实际价格与方程拟合价格对比图" tabindex="0"></canvas><div class="chart-tooltip" id="priceTooltip" aria-live="polite"></div></div>
+                    <div class="chart-axis"><span>归一化价格（首个有效点 = 100）</span><span id="priceChartRange">—</span></div>
                 </article>
-
-                <aside class="panel interpretation-panel">
-                    <div class="panel-header compact">
-                        <div><p class="eyebrow">WHAT TO WATCH</p><h2>下一步观察</h2></div>
-                        <span class="panel-symbol">↗</span>
-                    </div>
-                    <div class="interpretation-copy" id="interpretationCopy">加载评分解释中。</div>
-                    <div class="signal-list" id="signalList"></div>
-                    <div class="watch-box">
-                        <span class="watch-label">优先观察</span>
-                        <p id="nextWatch">等待指标计算。</p>
-                    </div>
-                    <div class="caution-box"><span class="caution-icon">!</span><p>出清分数高不等于抄底信号。需要继续观察去杠杆是否减速，以及价格和市场宽度能否持续。</p></div>
-                </aside>
-            </div>
-
-            <div class="lower-grid">
-                <article class="panel metrics-panel">
-                    <div class="panel-header compact">
-                        <div><p class="eyebrow">LATEST SNAPSHOT</p><h2>最新指标</h2></div>
-                        <span class="as-of" id="asOf">—</span>
-                    </div>
-                    <div class="metric-list" id="metricList"></div>
-                </article>
-
-                <article class="panel pipeline-panel">
-                    <div class="panel-header compact">
-                        <div><p class="eyebrow">EXECUTION TRACE</p><h2>计算过程</h2></div>
-                        <span class="run-status"><i></i>COMPLETED</span>
-                    </div>
-                    <p class="pipeline-intro">研究结论来自一条可回放的确定性任务链；这里展示过程，不把过程当成研究结论。</p>
-                    <div class="pipeline" id="pipeline">
-                        <button class="pipeline-step active" data-task="collect-market-data"><span class="step-number">01</span><span><b>采集市场数据</b><small>280 个交易日 · 2 个来源</small></span><em>✓</em></button>
-                        <span class="pipeline-connector"></span>
-                        <button class="pipeline-step" data-task="calculate-metrics"><span class="step-number">02</span><span><b>计算杠杆指标</b><small>31 个有效快照</small></span><em>✓</em></button>
-                        <span class="pipeline-connector"></span>
-                        <button class="pipeline-step" data-task="score-market-state"><span class="step-number">03</span><span><b>评估市场状态</b><small>Heat / Clear / Confirm</small></span><em>✓</em></button>
-                        <span class="pipeline-connector"></span>
-                        <button class="pipeline-step" data-task="write-report"><span class="step-number">04</span><span><b>生成研究报告</b><small>Markdown · 已验证</small></span><em>✓</em></button>
-                    </div>
-                    <div class="task-detail" id="taskDetail">正在读取原始数据，并关联交易日期与来源证据。</div>
+                <article class="panel leverage-panel">
+                    <div class="panel-header"><div><p class="eyebrow">INPUT SERIES</p><h2>杠杆输入</h2></div><span class="source-tag" id="leverageTag">—</span></div>
+                    <div class="chart-wrap leverage-chart"><canvas id="leverageChart" aria-label="杠杆输入历史图" tabindex="0"></canvas><div class="chart-tooltip" id="leverageTooltip" aria-live="polite"></div></div>
+                    <div class="chart-axis"><span id="leverageDefinition">—</span><span id="imputedNote">—</span></div>
                 </article>
             </div>
-        </section>
 
-        <section class="view-panel evidence-panel" data-panel="evidence" hidden>
-            <div class="evidence-grid">
-                <article class="panel evidence-main">
-                    <div class="panel-header compact"><div><p class="eyebrow">TRACEABLE INPUTS</p><h2>来源和计算证据</h2></div><span class="panel-symbol">⌁</span></div>
-                    <div class="evidence-list" id="evidenceList"></div>
-                </article>
-                <aside class="panel methodology-panel">
-                    <p class="eyebrow">METHOD</p>
-                    <h2>指标如何回答问题</h2>
-                    <p>存量回答“杠杆有多大”，增长率回答“杠杆还在不在扩张”，回撤和净偿还回答“出清走到哪里”，价格与宽度回答“市场有没有承接”。</p>
-                    <div class="method-stack"><span>01 <b>规模</b><small>余额 / 流通市值</small></span><span>02 <b>速度</b><small>5D / 20D / 60D 变化</small></span><span>03 <b>出清</b><small>高点回撤 / 净偿还</small></span><span>04 <b>确认</b><small>价格 / 宽度</small></span></div>
-                </aside>
+            <div class="detail-grid">
+                <article class="panel equation-panel"><div class="panel-header compact"><div><p class="eyebrow">SELECTED EQUATION</p><h2>候选模型选择结果</h2></div><span class="model-name" id="modelName">—</span></div><code id="equation" class="equation">加载中</code><p class="method-note" id="methodNote">—</p><div class="fit-stats"><div><span>训练误差</span><b id="trainRmse">—</b></div><div><span>验证误差</span><b id="validationRmse">—</b></div><div><span>验证相关</span><b id="validationCorrelation">—</b></div><div><span>验证样本</span><b id="validationSamples">—</b></div></div></article>
+                <article class="panel observation-panel"><div class="panel-header compact"><div><p class="eyebrow">DATA QUALITY</p><h2>数据和口径</h2></div><span class="panel-symbol">⌁</span></div><div class="quality-list" id="qualityList"></div></article>
             </div>
+
+            <section class="panel source-panel"><div class="panel-header compact"><div><p class="eyebrow">PROVENANCE</p><h2>来源证据</h2></div><span class="as-of" id="sourceAsOf">—</span></div><div class="source-list" id="sourceList"></div></section>
         </section>
     </main>
-
-    <footer class="footer"><span>MINIHARNESS / FINANCE MARKET</span><span>只读 · 可回放 · 有边界</span></footer>
+    <footer class="footer"><span>MINIHARNESS / FINANCE RESEARCH</span><span>只读 · 真实数据 · 探索性拟合</span></footer>
 </div>
-<script src="/dashboard.js?v=20260804-2" defer></script>
+<script src="/dashboard.js?v=20260805" defer></script>
 </body>
 </html>

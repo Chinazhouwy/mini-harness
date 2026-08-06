@@ -79,16 +79,20 @@ java -cp "target/classes:$(cat target/harness-classpath.txt)" \
 
 ## 演变为股票金融分析框架
 
-第一条已经落地的金融闭环是不做预测和自动交易的“公开可观测 A 股杠杆温度计”：
+金融代码现在分成两条闭环：旧的 `finance/market` 是用于回放 Harness 的确定性 Fixture 温度计；新的
+`finance/research` 是真实数据研究页，不再把 Fixture 伪装成线上数据。
+
+真实研究闭环是：
 
 ```text
-collect-market-data
-  -> calculate-metrics
-  -> score-market-state
-  -> write-report
+real market data
+  -> align price / leverage by trade date
+  -> fit candidate equations
+  -> time-split validation
+  -> browser visualization + provenance
 ```
 
-运行它：
+旧的 Fixture 控制台仍可运行：
 
 ```bash
 mvn -DskipTests compile
@@ -97,18 +101,41 @@ java -cp "target/classes:$(cat target/harness-classpath.txt)" \
   com.chinazhouwy.miniharness.finance.market.demo.LeverageDashboardConsole
 ```
 
-当前使用确定性 Fixture，输出融资余额/流通市值、融资买入强度、融资增长率、融资高点回撤、净偿还压力、波动率、市场宽度，以及 Heat、Clear、Confirmation 评分。报告明确区分计算证据、数据来源和风险限制。
+它输出融资余额/流通市值、融资买入强度、融资增长率、融资高点回撤、净偿还压力、波动率、市场宽度，以及
+Heat、Clear、Confirmation 评分。这个入口故意保留 Fixture，便于测试 Harness 的可回放性。
 
 ### 前端展示页
 
-同一套后端计算结果也提供了一个只读仪表盘，用于查看当前状态、历史轨迹、任务链和来源证据：
+前端展示的是新的真实数据研究接口：
 
 ```bash
-mvn spring-boot:run
+# WeStock CLI 需要 npm；root-owned 的用户缓存不可写时可使用临时缓存
+NPM_CONFIG_CACHE=/tmp/miniharness-npm-cache mvn spring-boot:run
 open http://localhost:8080/
 ```
 
-页面 API 是 `GET /api/finance/leverage`。当前页面使用确定性 Fixture，不需要 API Key，也不发出买卖指令。
+页面 API 是 `GET /api/finance/research`，状态字段为 `REAL_DATA`；任何真实源全部不可用时接口报错，
+不会降级为 `fixture://`。旧的 `GET /api/finance/leverage` 仍是历史 Fixture API，不是这个页面的数据源。
+
+当前真实样本：
+
+- A 股：上交所融资融券汇总中的 `rzye`（融资余额）作为杠杆输入，除以 `10^12` 转成万亿元；上证综指日 K 线来自 WeStock。
+- 港股：腾讯控股 `hk00700` 的 WeStock `ShortRatio` 与日 K 线。
+- 美股：Apple `usAAPL` 的 WeStock `ShortRatio` 与日 K 线；卖空报告日之间的缺口以前一个报告值向前填充并单独计数。
+- 韩股：暂未接入；没有把未经验证的免费接口放进真实结果。
+
+WeStock 通过 `npx -y westock-data-skillhub@1.0.5` 调用，不需要 API Key；日 K 线可能延迟，页面展示交易日期。
+上交所融资数据和 WeStock 字段、抓取时间、数据日期都会写入页面的“来源证据”。
+
+方程拟合的是下一交易日对数收益，而不是直接拟合价格水平：
+
+```text
+r(t+1) = β0 + β1·z(Lt) + β2·z(ΔLt) + β3·z(M5t) + β4·z(M20t) + ...
+```
+
+程序会在 `LEVERAGE_LINEAR`、`LEVERAGE_CURVE`、`LEVERAGE_MOMENTUM` 候选中，用时间顺序 70% 训练、
+后 30% 验证选择 RMSE 较低者，再把预测收益复合成归一化价格路径。验证 R² 和相关性低时页面照实显示；
+这条曲线是解释力实验，不是交易预测或收益承诺。
 
 金融领域代码位于 `finance/market`，按职责拆分：
 
@@ -126,6 +153,17 @@ finance/market/
 └── demo/          本地可运行入口
 ```
 
+真实研究代码位于 `finance/research`：
+
+```text
+finance/research/
+├── domain/        标的、交易日观测、数据集、方程结果
+├── data/          WeStock CLI、上交所两融 HTTP、真实源编排、测试 Fixture
+├── calculation/  候选方程、时间切分、RMSE/R²/相关性
+├── service/       缓存和研究查询服务
+└── web/           /api/finance/research 与页面 DTO
+```
+
 下一条闭环再增加固定股票池、个股基本面、风险事件和两股票对比，不把这些领域概念塞进通用 Harness。
 
 长程 Harness 负责：
@@ -140,8 +178,8 @@ finance/market/
 股票、指标、财报、公告、估值、风险事件、来源和报告模板
 ```
 
-因此下一步应该是把 Fixture 替换成只读数据适配器，再增加个股研究领域模型，而不是先把模型调用、多 Agent
-或并行调度塞进核心运行时。具体演进草图见：[股票研究路线图](docs/stock-research-roadmap.md)。
+因此下一步应该是增加数据快照、更多市场口径和个股研究模型，而不是先把模型调用、多 Agent 或并行调度塞进核心运行时。
+具体演进草图见：[股票研究路线图](docs/stock-research-roadmap.md)。
 
 ## 当前边界
 
