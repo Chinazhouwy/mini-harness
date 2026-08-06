@@ -122,10 +122,11 @@ open http://localhost:8080/
 - A 股：上交所融资融券汇总中的 `rzye`（融资余额）作为杠杆输入，除以 `10^12` 转成万亿元；上证综指日 K 线来自 WeStock。
 - 港股：腾讯控股 `hk00700` 的 WeStock `ShortRatio` 与日 K 线。
 - 美股：Apple `usAAPL` 的 WeStock `ShortRatio` 与日 K 线；卖空报告日之间的缺口以前一个报告值向前填充并单独计数。
-- 韩股：暂未接入；没有把未经验证的免费接口放进真实结果。
+- 韩股：暂未接入；WeStock 当前路由只覆盖 A 股、港股、美股，KRX [Data Marketplace 短卖查询](https://data.krx.co.kr/contents/MDC/MDI/mdiLoader/index.cmd?menuId=MDC02030201) 在本次验证中要求登录，因此没有把未经验证或不可复现的接口放进真实结果。
 
 WeStock 通过 `npx -y westock-data-skillhub@1.0.5` 调用，不需要 API Key；日 K 线可能延迟，页面展示交易日期。
 上交所融资数据和 WeStock 字段、抓取时间、数据日期都会写入页面的“来源证据”。
+`GET /api/finance/research` 另外返回 `unavailableMarkets`，记录韩国限制以及本次实时请求中失败的市场，避免把“没有返回”误解为“没有数据”。
 
 方程拟合的是下一交易日对数收益，而不是直接拟合价格水平：
 
@@ -134,7 +135,7 @@ r(t+1) = β0 + β1·z(Lt) + β2·z(ΔLt) + β3·z(M5t) + β4·z(M20t) + ...
 ```
 
 程序会在 `LEVERAGE_LINEAR`、`LEVERAGE_CURVE`、`LEVERAGE_MOMENTUM` 候选中，用时间顺序 70% 训练、
-后 30% 验证选择 RMSE 较低者，再把预测收益复合成归一化价格路径。验证 R² 和相关性低时页面照实显示；
+后 30% 验证选择 RMSE 较低者；回归系数只用前 70% 求解，后 30% 只用于评估，再把预测收益复合成归一化价格路径。验证 R² 和相关性低时页面照实显示；
 这条曲线是解释力实验，不是交易预测或收益承诺。
 
 金融领域代码位于 `finance/market`，按职责拆分：

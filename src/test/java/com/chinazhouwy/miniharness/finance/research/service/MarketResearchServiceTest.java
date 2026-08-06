@@ -26,5 +26,8 @@ class MarketResearchServiceTest {
         assertEquals(3, first.markets().size());
         assertSame(first, second);
         assertEquals("sh000001", first.markets().getFirst().instrument().symbol());
+        assertEquals(1, first.unavailableMarkets().size());
+        assertEquals(280, first.markets().getFirst().candles().size());
+        assertEquals(3, first.markets().getFirst().fit().candidates().size());
     }
 }
