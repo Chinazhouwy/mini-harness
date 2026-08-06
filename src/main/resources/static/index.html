@@ -33,10 +33,10 @@
         </section>
 
         <section class="coverage-strip" aria-label="数据覆盖说明">
-            <div><span>已接入</span><b id="coverageMarkets">A股 · 港股 · 美股</b><small>真实接口返回成功的市场</small></div>
+            <div><span>已接入</span><b id="coverageMarkets">加载中</b><small id="coverageMarketsNote">真实接口返回成功的市场</small></div>
             <div><span>杠杆口径</span><b id="coverageTypes">融资余额 / 卖空比例</b><small>不同市场不强行混成一个数</small></div>
             <div><span>拟合目标</span><b>下一日对数收益</b><small>不是直接拟合价格水平</small></div>
-            <div><span>韩股</span><b class="muted-value">未接入</b><small>没有纳入未经验证的免费源</small></div>
+            <div><span>韩股</span><b class="muted-value">未接入</b><small id="coverageKoreaNote">没有纳入未经验证的免费源</small></div>
         </section>
 
         <section class="research-shell">
@@ -45,8 +45,8 @@
 
             <div class="fit-grid">
                 <article class="panel chart-panel">
-                    <div class="panel-header"><div><p class="eyebrow">ACTUAL VS EQUATION</p><h2>价格路径对照</h2></div><div class="legend"><span><i class="actual-line"></i>实际价格</span><span><i class="fit-line"></i>方程拟合</span><span><i class="validation-mark"></i>验证区间</span></div></div>
-                    <div class="chart-wrap large"><canvas id="priceChart" aria-label="实际价格与方程拟合价格对比图" tabindex="0"></canvas><div class="chart-tooltip" id="priceTooltip" aria-live="polite"></div></div>
+                    <div class="panel-header"><div><p class="eyebrow">OHLC VS EQUATION</p><h2>日K与方程路径对照</h2></div><div class="legend"><span><i class="actual-candle"></i>日K</span><span><i class="fit-line"></i>方程拟合</span><span><i class="validation-mark"></i>验证区间</span></div></div>
+                    <div class="chart-wrap large"><canvas id="priceChart" aria-label="日K与方程拟合价格对比图" tabindex="0"></canvas><div class="chart-tooltip" id="priceTooltip" aria-live="polite"></div></div>
                     <div class="chart-axis"><span>归一化价格（首个有效点 = 100）</span><span id="priceChartRange">—</span></div>
                 </article>
                 <article class="panel leverage-panel">
@@ -57,7 +57,7 @@
             </div>
 
             <div class="detail-grid">
-                <article class="panel equation-panel"><div class="panel-header compact"><div><p class="eyebrow">SELECTED EQUATION</p><h2>候选模型选择结果</h2></div><span class="model-name" id="modelName">—</span></div><code id="equation" class="equation">加载中</code><p class="method-note" id="methodNote">—</p><div class="fit-stats"><div><span>训练误差</span><b id="trainRmse">—</b></div><div><span>验证误差</span><b id="validationRmse">—</b></div><div><span>验证相关</span><b id="validationCorrelation">—</b></div><div><span>验证样本</span><b id="validationSamples">—</b></div></div></article>
+                <article class="panel equation-panel"><div class="panel-header compact"><div><p class="eyebrow">SELECTED EQUATION</p><h2>候选模型选择结果</h2></div><span class="model-name" id="modelName">—</span></div><code id="equation" class="equation">加载中</code><p class="method-note" id="methodNote">—</p><div class="candidate-list" id="candidateList"></div><div class="fit-stats"><div><span>训练误差</span><b id="trainRmse">—</b></div><div><span>验证误差</span><b id="validationRmse">—</b></div><div><span>验证相关</span><b id="validationCorrelation">—</b></div><div><span>验证样本</span><b id="validationSamples">—</b></div></div></article>
                 <article class="panel observation-panel"><div class="panel-header compact"><div><p class="eyebrow">DATA QUALITY</p><h2>数据和口径</h2></div><span class="panel-symbol">⌁</span></div><div class="quality-list" id="qualityList"></div></article>
             </div>
 

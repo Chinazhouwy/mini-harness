@@ -24,8 +24,21 @@ function render() {
     text("marketCount", data.markets.length);
     text("retrievedAt", `抓取 ${formatInstant(data.retrievedAt)}`);
     text("sourceAsOf", `RETRIEVED / ${formatInstant(data.retrievedAt)}`);
+    renderCoverage();
     renderTabs();
     renderSelected();
+}
+
+function renderCoverage() {
+    const unavailable = dataUnavailableMarkets();
+    text("coverageMarkets", state.data.markets.map((market) => market.instrument.market).join(" · "));
+    text("coverageMarketsNote", unavailable.length ? `未接入/失败：${unavailable.join("；")}` : "真实接口返回成功的市场");
+    const koreaNote = unavailable.find((item) => item.includes("韩股"));
+    text("coverageKoreaNote", koreaNote || "当前未发现韩国数据源限制");
+}
+
+function dataUnavailableMarkets() {
+    return Array.isArray(state.data?.unavailableMarkets) ? state.data.unavailableMarkets : [];
 }
 
 function renderTabs() {
@@ -64,6 +77,7 @@ function renderSelected() {
     text("validationRmse", `${fit.validationRmsePct.toFixed(2)}%`);
     text("validationCorrelation", fit.validationCorrelation.toFixed(3));
     text("validationSamples", `${Math.max(0, fit.sampleCount - fit.trainCount)} / ${fit.sampleCount}`);
+    renderCandidates(fit);
     text("leverageTag", instrument.leverageType);
     text("leverageDefinition", instrument.leverageDefinition);
     text("imputedNote", market.imputedLeverageCount ? `${market.imputedLeverageCount} 个点向前填充` : "无填充");
@@ -77,6 +91,7 @@ function renderQuality(market) {
     const instrument = market.instrument;
     const rows = [
         ["数据点", `${market.observationCount} 个交易日`],
+        ["价格数据", market.candles?.length ? "OHLC 日K" : "仅收盘价"],
         ["价格单位", instrument.currency],
         ["杠杆单位", instrument.leverageUnit],
         ["杠杆字段", instrument.leverageType],
@@ -84,6 +99,16 @@ function renderQuality(market) {
         ["填充点", market.imputedLeverageCount ? `${market.imputedLeverageCount} 个，图上保持同色` : "0 个"]
     ];
     document.getElementById("qualityList").innerHTML = rows.map(([label, value]) => `<div><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`).join("");
+}
+
+function renderCandidates(fit) {
+    const candidates = [...(fit.candidates || [])].sort((left, right) => left.validationRmsePct - right.validationRmsePct);
+    document.getElementById("candidateList").innerHTML = candidates.map((candidate) => `
+        <div class="candidate-row ${candidate.modelName === fit.modelName ? "selected" : ""}">
+            <span>${candidate.modelName === fit.modelName ? "✓" : "·"} ${escapeHtml(candidate.modelName)}</span>
+            <b>验证 ${candidate.validationRmsePct.toFixed(2)}% · R² ${candidate.validationR2.toFixed(3)}</b>
+        </div>
+    `).join("");
 }
 
 function renderSources(sources) {
@@ -103,6 +128,8 @@ function renderSelectedCharts() {
 function drawPriceChart(market) {
     const canvas = document.getElementById("priceChart");
     const points = market.fit.points;
+    const candleByDate = new Map((market.candles || []).map((candle) => [candle.tradeDate, candle]));
+    const candles = points.map((point) => candleByDate.get(point.tradeDate)).filter(Boolean);
     const rect = canvas.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
     const ratio = window.devicePixelRatio || 1;
@@ -111,18 +138,30 @@ function drawPriceChart(market) {
     const ctx = canvas.getContext("2d");
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     const actualBase = points[0].actualClose;
-    const fittedBase = points[0].fittedClose;
     const actual = points.map((point) => point.actualClose / actualBase * 100);
-    const fitted = points.map((point) => point.fittedClose / fittedBase * 100);
-    const bounds = boundsOf([...actual, ...fitted]);
+    const fitted = points.map((point) => point.fittedClose / actualBase * 100);
+    const normalizedCandles = candles.map((candle) => ({
+        ...candle,
+        open: candle.open / actualBase * 100,
+        high: candle.high / actualBase * 100,
+        low: candle.low / actualBase * 100,
+        close: candle.close / actualBase * 100
+    }));
+    const candleValues = normalizedCandles.flatMap((candle) => [candle.high, candle.low]);
+    const bounds = boundsOf([...actual, ...fitted, ...candleValues]);
     const geometry = chartGeometry(rect.width, rect.height, bounds.min, bounds.max);
     clearCanvas(ctx, rect.width, rect.height);
     drawValidationBand(ctx, geometry, points);
     drawGrid(ctx, geometry, 100);
-    drawLine(ctx, geometry, actual, "#f4f5f0");
+    if (normalizedCandles.length === points.length) drawCandles(ctx, geometry, normalizedCandles);
+    else drawLine(ctx, geometry, actual, "#f4f5f0");
     drawLine(ctx, geometry, fitted, "#69d1d8");
     drawLabels(ctx, geometry, points);
-    canvas.onmousemove = (event) => showChartTooltip(event, canvas, points, (point) => `${point.tradeDate}<br>实际 ${point.actualClose.toFixed(2)} · 拟合 ${point.fittedClose.toFixed(2)}`, "priceTooltip");
+    canvas.onmousemove = (event) => showChartTooltip(event, canvas, points, (point) => {
+        const candle = candleByDate.get(point.tradeDate);
+        const ohlc = candle ? `<br>O ${candle.open.toFixed(2)} · H ${candle.high.toFixed(2)} · L ${candle.low.toFixed(2)} · C ${candle.close.toFixed(2)}` : "";
+        return `${point.tradeDate}${ohlc}<br>方程 ${point.fittedClose.toFixed(2)}${point.validationPoint ? " · 验证点" : " · 训练点"}`;
+    }, "priceTooltip");
     canvas.onmouseleave = () => hideTooltip("priceTooltip");
 }
 
@@ -180,6 +219,30 @@ function drawLine(ctx, geometry, values, color) {
     ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.lineJoin = "round"; ctx.lineCap = "round"; ctx.beginPath();
     values.forEach((value, index) => { const px = x(index), py = valueToY(geometry, value); if (index === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); });
     ctx.stroke();
+}
+
+function drawCandles(ctx, geometry, candles) {
+    const x = index => geometry.padding.left + index / Math.max(1, candles.length - 1) * geometry.plotWidth;
+    const bodyWidth = Math.max(2, Math.min(8, geometry.plotWidth / Math.max(1, candles.length) * .62));
+    candles.forEach((candle, index) => {
+        const px = x(index);
+        const openY = valueToY(geometry, candle.open);
+        const highY = valueToY(geometry, candle.high);
+        const lowY = valueToY(geometry, candle.low);
+        const closeY = valueToY(geometry, candle.close);
+        const rising = candle.close >= candle.open;
+        const color = rising ? "#e88074" : "#79b8a5";
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(px, highY);
+        ctx.lineTo(px, lowY);
+        ctx.stroke();
+        const top = Math.min(openY, closeY);
+        const height = Math.max(1, Math.abs(closeY - openY));
+        ctx.fillRect(px - bodyWidth / 2, top, bodyWidth, height);
+    });
 }
 
 function drawLabels(ctx, geometry, points) {

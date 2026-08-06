@@ -13,6 +13,7 @@ public record EquationFitResult(
         double validationRmsePct,
         double validationR2,
         double validationCorrelation,
+        List<CandidateFit> candidates,
         List<EquationFitPoint> points,
         List<String> notes
 ) {
@@ -27,10 +28,30 @@ public record EquationFitResult(
         requireNonNegative("validationRmsePct", validationRmsePct);
         requireFinite("validationR2", validationR2);
         requireFinite("validationCorrelation", validationCorrelation);
+        candidates = List.copyOf(Objects.requireNonNull(candidates, "candidates"));
         points = List.copyOf(Objects.requireNonNull(points, "points"));
         notes = List.copyOf(Objects.requireNonNull(notes, "notes"));
         if (points.isEmpty()) {
             throw new IllegalArgumentException("Fit result must contain points");
+        }
+    }
+
+    public record CandidateFit(
+            String modelName,
+            String equation,
+            double trainRmsePct,
+            double validationRmsePct,
+            double validationR2,
+            double validationCorrelation
+    ) {
+
+        public CandidateFit {
+            modelName = requireText(modelName, "modelName");
+            equation = requireText(equation, "equation");
+            requireNonNegative("trainRmsePct", trainRmsePct);
+            requireNonNegative("validationRmsePct", validationRmsePct);
+            requireFinite("validationR2", validationR2);
+            requireFinite("validationCorrelation", validationCorrelation);
         }
     }
 

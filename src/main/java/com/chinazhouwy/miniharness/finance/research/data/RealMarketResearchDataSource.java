@@ -41,6 +41,8 @@ public final class RealMarketResearchDataSource implements MarketResearchDataSou
             "SHORT_RATIO", "%",
             "WeStock ShortRatio（卖空比例，供应商字段）"
     );
+    private static final String KOREA_LIMITATION =
+            "韩股: WeStock当前支持A股、港股、美股；KRX Data Marketplace短卖查询当前要求登录，未接入";
 
     private final WestockCommandClient westock;
     private final SseMarginHistoryClient sseMargin;
@@ -74,30 +76,30 @@ public final class RealMarketResearchDataSource implements MarketResearchDataSou
         LocalDate start = end.minusDays(lookbackDays);
         Instant retrievedAt = Instant.now(clock);
         List<MarketSeries> result = new ArrayList<>();
-        List<String> failures = new ArrayList<>();
+        List<String> unavailableMarkets = new ArrayList<>(List.of(KOREA_LIMITATION));
         try {
             result.add(loadAshare(start, end, retrievedAt));
         } catch (RuntimeException exception) {
-            failures.add("A股: " + message(exception));
+            unavailableMarkets.add("A股: " + message(exception));
         }
         try {
             result.add(loadShortSeries(HONG_KONG, start, end, retrievedAt));
         } catch (RuntimeException exception) {
-            failures.add("港股: " + message(exception));
+            unavailableMarkets.add("港股: " + message(exception));
         }
         try {
             result.add(loadShortSeries(UNITED_STATES, start, end, retrievedAt));
         } catch (RuntimeException exception) {
-            failures.add("美股: " + message(exception));
+            unavailableMarkets.add("美股: " + message(exception));
         }
         if (result.isEmpty()) {
-            throw new IllegalStateException("真实杠杆数据全部不可用: " + String.join("; ", failures));
+            throw new IllegalStateException("真实杠杆数据全部不可用: " + String.join("; ", unavailableMarkets));
         }
         List<SourceEvidence> sources = result.stream()
                 .flatMap(series -> series.sources().stream())
                 .distinct()
                 .toList();
-        return new MarketResearchDataset(retrievedAt, result, sources);
+        return new MarketResearchDataset(retrievedAt, result, sources, unavailableMarkets);
     }
 
     private MarketSeries loadAshare(LocalDate start, LocalDate end, Instant retrievedAt) {
@@ -114,6 +116,9 @@ public final class RealMarketResearchDataSource implements MarketResearchDataSou
             if (margin == null) continue;
             observations.add(new MarketObservation(
                     date,
+                    priceValue(price, "open", "OpenPrice"),
+                    priceValue(price, "high", "HighPrice"),
+                    priceValue(price, "low", "LowPrice"),
                     close(price),
                     margin.financingBalanceYuan() / 1_000_000_000_000.0,
                     false
@@ -160,6 +165,9 @@ public final class RealMarketResearchDataSource implements MarketResearchDataSou
             if (latestRatio == null) continue;
             observations.add(new MarketObservation(
                     date,
+                    priceValue(price, "open", "OpenPrice"),
+                    priceValue(price, "high", "HighPrice"),
+                    priceValue(price, "low", "LowPrice"),
                     close(price),
                     latestRatio,
                     !shortRatio.containsKey(date)
@@ -219,12 +227,26 @@ public final class RealMarketResearchDataSource implements MarketResearchDataSou
     }
 
     private static double close(JsonNode node) {
-        JsonNode value = node.get("last");
-        if (value == null) value = node.get("ClosePrice");
-        if (value == null || !value.isNumber() && value.asText().isBlank()) {
-            throw new IllegalStateException("数据缺少收盘价: " + node);
+        return priceValue(node, "last", "ClosePrice");
+    }
+
+    private static double priceValue(JsonNode node, String... fields) {
+        JsonNode value = null;
+        for (String field : fields) {
+            JsonNode candidate = node.get(field);
+            if (candidate != null && !candidate.isNull() && !candidate.asText().isBlank()) {
+                value = candidate;
+                break;
+            }
         }
-        return value.asDouble();
+        if (value == null) {
+            throw new IllegalStateException("K线缺少字段 " + String.join(",", fields) + ": " + node);
+        }
+        double parsed = value.asDouble(Double.NaN);
+        if (!Double.isFinite(parsed) || parsed <= 0) {
+            throw new IllegalStateException("K线字段不是正数 " + String.join(",", fields) + ": " + node);
+        }
+        return parsed;
     }
 
     private static String message(RuntimeException exception) {

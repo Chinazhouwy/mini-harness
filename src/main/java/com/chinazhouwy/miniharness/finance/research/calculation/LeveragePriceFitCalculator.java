@@ -50,10 +50,22 @@ public final class LeveragePriceFitCalculator {
                 new ModelSpec("LEVERAGE_MOMENTUM", List.of("z(L)", "z(ΔL)", "z(M5)", "z(M20)"))
         );
 
-        FittedModel best = candidates.stream()
+        List<FittedModel> fittedCandidates = candidates.stream()
                 .map(spec -> fitModel(spec, rows, finalTrainCount))
+                .toList();
+        FittedModel best = fittedCandidates.stream()
                 .min(Comparator.comparingDouble(FittedModel::validationRmsePct))
                 .orElseThrow();
+        List<EquationFitResult.CandidateFit> candidateFits = fittedCandidates.stream()
+                .map(model -> new EquationFitResult.CandidateFit(
+                        model.spec().name(),
+                        model.equation(),
+                        model.trainRmsePct(),
+                        model.validationRmsePct(),
+                        model.validationR2(),
+                        model.validationCorrelation()
+                ))
+                .toList();
 
         List<EquationFitPoint> points = buildPoints(rows, best, finalTrainCount);
         return new EquationFitResult(
@@ -65,9 +77,11 @@ public final class LeveragePriceFitCalculator {
                 best.validationRmsePct(),
                 best.validationR2(),
                 best.validationCorrelation(),
+                candidateFits,
                 points,
                 List.of(
                         "训练集按时间顺序占 " + formatPercent(TRAIN_RATIO) + "，验证集使用之后的交易日",
+                        "回归系数只使用训练集求解，验证集不参与拟合",
                         "杠杆字段按市场保留原始语义，回归前只在本序列内做 z-score",
                         "预测日对数收益限制在 ±25%，用于避免异常值把价格路径画出数值范围"
                 )
@@ -111,7 +125,10 @@ public final class LeveragePriceFitCalculator {
             targets[index] = rows.get(index).targetReturn();
         }
 
-        double[] coefficients = solveRidge(design, targets, RIDGE);
+        // 只用时间上更早的训练行求系数；验证行只能用于评估，不能参与回归。
+        double[][] trainDesign = Arrays.copyOf(design, trainCount);
+        double[] trainTargets = Arrays.copyOf(targets, trainCount);
+        double[] coefficients = solveRidge(trainDesign, trainTargets, RIDGE);
         double[] predictions = new double[rows.size()];
         for (int index = 0; index < rows.size(); index++) {
             predictions[index] = bounded(design[index], coefficients);

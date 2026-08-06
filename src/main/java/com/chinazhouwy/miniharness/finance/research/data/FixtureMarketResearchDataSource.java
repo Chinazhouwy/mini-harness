@@ -26,7 +26,12 @@ public final class FixtureMarketResearchDataSource implements MarketResearchData
                 create("united-states", "美股", "usAAPL", "Apple", "USD", "SHORT_RATIO", "%", 210, 1.2, 0.003)
         );
         List<SourceEvidence> sources = series.stream().flatMap(value -> value.sources().stream()).toList();
-        return new MarketResearchDataset(RETRIEVED_AT, series, sources);
+        return new MarketResearchDataset(
+                RETRIEVED_AT,
+                series,
+                sources,
+                List.of("韩股: Fixture 也不伪造未经验证的韩国短卖源")
+        );
     }
 
     private static MarketSeries create(
@@ -63,8 +68,12 @@ public final class FixtureMarketResearchDataSource implements MarketResearchData
             double returnValue = 0.0005
                     - (nextLeverage - leverage) * 0.55
                     + Math.sin(index / 17.0) * 0.004;
+            double open = close;
             close *= Math.exp(returnValue);
-            observations.add(new MarketObservation(date, close, nextLeverage, false));
+            double intradayRange = 0.002 + Math.abs(Math.sin(index / 9.0)) * 0.003;
+            double high = Math.max(open, close) * (1 + intradayRange);
+            double low = Math.min(open, close) * (1 - intradayRange);
+            observations.add(new MarketObservation(date, open, high, low, close, nextLeverage, false));
             leverage = nextLeverage;
         }
         SourceEvidence evidence = new SourceEvidence(
@@ -73,7 +82,7 @@ public final class FixtureMarketResearchDataSource implements MarketResearchData
                 "fixture://market-research/" + id,
                 observations.getLast().tradeDate(),
                 RETRIEVED_AT,
-                "close,leverageValue",
+                "open,high,low,close,leverageValue",
                 currency + " / " + leverageUnit,
                 "仅用于验证方程、JSON 序列化和前端图表"
         );

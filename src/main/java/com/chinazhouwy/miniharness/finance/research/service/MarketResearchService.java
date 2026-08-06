@@ -64,7 +64,13 @@ public final class MarketResearchService {
         List<MarketResearchView.MarketSeriesView> markets = dataset.series().stream()
                 .map(this::toMarketView)
                 .toList();
-        return new MarketResearchView(dataset.retrievedAt(), "REAL_DATA", markets, dataset.sources());
+        return new MarketResearchView(
+                dataset.retrievedAt(),
+                "REAL_DATA",
+                markets,
+                dataset.sources(),
+                dataset.unavailableMarkets()
+        );
     }
 
     private MarketResearchView.MarketSeriesView toMarketView(MarketSeries series) {
@@ -77,6 +83,9 @@ public final class MarketResearchService {
                 (int) series.observations().stream().filter(value -> value.leverageImputed()).count(),
                 series.observations().getLast().close(),
                 series.observations().getLast().leverageValue(),
+                series.observations().stream()
+                        .map(MarketResearchView.PriceBarView::from)
+                        .toList(),
                 fit,
                 series.sources()
         );

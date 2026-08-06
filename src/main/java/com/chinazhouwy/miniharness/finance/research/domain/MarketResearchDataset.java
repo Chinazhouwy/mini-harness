@@ -10,13 +10,15 @@ import java.util.Objects;
 public record MarketResearchDataset(
         Instant retrievedAt,
         List<MarketSeries> series,
-        List<SourceEvidence> sources
+        List<SourceEvidence> sources,
+        List<String> unavailableMarkets
 ) {
 
     public MarketResearchDataset {
         retrievedAt = Objects.requireNonNull(retrievedAt, "retrievedAt");
         series = List.copyOf(Objects.requireNonNull(series, "series"));
         sources = List.copyOf(Objects.requireNonNull(sources, "sources"));
+        unavailableMarkets = List.copyOf(Objects.requireNonNull(unavailableMarkets, "unavailableMarkets"));
         if (series.isEmpty()) {
             throw new IllegalArgumentException("Research dataset must contain a market series");
         }
