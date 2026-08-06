@@ -2,6 +2,12 @@ logging:
   level:
     com.chinazhouwy.miniharness.harness: INFO
 
+finance:
+  research:
+    # 真实数据接口；测试通过构造 FixtureMarketResearchDataSource，不读取这里的网络配置。
+    lookback-days: 420
+    cache-seconds: 900
+
 # 页面和 Fixture API 无需模型凭据；未来接入模型时再按环境覆盖这些开关。
 spring:
   ai:
