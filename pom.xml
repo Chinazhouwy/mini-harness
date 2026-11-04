@@ -20,6 +20,7 @@
     <properties>
         <java.version>21</java.version>
         <spring-ai.version>2.0.0</spring-ai.version>
+        <agentscope.version>2.0.4</agentscope.version>
     </properties>
 
     <dependencyManagement>
@@ -70,6 +71,18 @@
             <groupId>com.github.victools</groupId>
             <artifactId>jsonschema-module-jackson</artifactId>
             <version>5.0.0</version>
+        </dependency>
+
+        <!-- AgentScope Java 2.0：Harness 入口，会带上 agentscope-core -->
+        <dependency>
+            <groupId>io.agentscope</groupId>
+            <artifactId>agentscope-harness</artifactId>
+            <version>${agentscope.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.agentscope</groupId>
+            <artifactId>agentscope-extensions-model-dashscope</artifactId>
+            <version>${agentscope.version}</version>
         </dependency>
 
         <!-- Spring Boot Test -->

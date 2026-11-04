@@ -70,12 +70,19 @@ function renderSelected() {
     text("sampleFact", `${fit.sampleCount} 个日收益`);
     text("rmseFact", `${fit.validationRmsePct.toFixed(2)}%`);
     text("r2Fact", formatR2(fit.validationR2));
+    text("fitVerdict", fit.beatsBaseline ? `超过零收益基线 · 改善 ${formatSignedPercent(fit.baselineImprovementPct)}` : "未超过零收益基线 · 如实保留");
+    document.getElementById("fitVerdict")?.classList.toggle("negative", !fit.beatsBaseline);
     text("modelName", fit.modelName);
     text("equation", fit.equation);
     text("methodNote", fit.notes.join(" · "));
     text("trainRmse", `${fit.trainRmsePct.toFixed(2)}%`);
     text("validationRmse", `${fit.validationRmsePct.toFixed(2)}%`);
+    text("baselineRmse", `${fit.baselineValidationRmsePct.toFixed(2)}%`);
+    text("baselineImprovement", formatSignedPercent(fit.baselineImprovementPct));
+    text("validationDirection", formatPercent(fit.validationDirectionAccuracy));
     text("validationCorrelation", fit.validationCorrelation.toFixed(3));
+    text("endPriceDeviation", formatSignedPercent(fit.validationEndPriceDeviationPct));
+    text("drawdownDifference", formatSignedPercent(fit.validationMaxDrawdownDiffPct));
     text("validationSamples", `${Math.max(0, fit.sampleCount - fit.trainCount)} / ${fit.sampleCount}`);
     renderCandidates(fit);
     text("leverageTag", instrument.leverageType);
@@ -102,11 +109,11 @@ function renderQuality(market) {
 }
 
 function renderCandidates(fit) {
-    const candidates = [...(fit.candidates || [])].sort((left, right) => left.validationRmsePct - right.validationRmsePct);
+    const candidates = [...(fit.candidates || [])].sort((left, right) => left.selectionValidationRmsePct - right.selectionValidationRmsePct);
     document.getElementById("candidateList").innerHTML = candidates.map((candidate) => `
         <div class="candidate-row ${candidate.modelName === fit.modelName ? "selected" : ""}">
             <span>${candidate.modelName === fit.modelName ? "✓" : "·"} ${escapeHtml(candidate.modelName)}</span>
-            <b>验证 ${candidate.validationRmsePct.toFixed(2)}% · R² ${candidate.validationR2.toFixed(3)}</b>
+            <b>外测 ${candidate.validationRmsePct.toFixed(2)}% · 内选 ${candidate.selectionValidationRmsePct.toFixed(2)}%</b>
         </div>
     `).join("");
 }
@@ -140,27 +147,19 @@ function drawPriceChart(market) {
     const actualBase = points[0].actualClose;
     const actual = points.map((point) => point.actualClose / actualBase * 100);
     const fitted = points.map((point) => point.fittedClose / actualBase * 100);
-    const normalizedCandles = candles.map((candle) => ({
-        ...candle,
-        open: candle.open / actualBase * 100,
-        high: candle.high / actualBase * 100,
-        low: candle.low / actualBase * 100,
-        close: candle.close / actualBase * 100
-    }));
-    const candleValues = normalizedCandles.flatMap((candle) => [candle.high, candle.low]);
-    const bounds = boundsOf([...actual, ...fitted, ...candleValues]);
+    const bounds = boundsOf([...actual, ...fitted]);
     const geometry = chartGeometry(rect.width, rect.height, bounds.min, bounds.max);
     clearCanvas(ctx, rect.width, rect.height);
     drawValidationBand(ctx, geometry, points);
     drawGrid(ctx, geometry, 100);
-    if (normalizedCandles.length === points.length) drawCandles(ctx, geometry, normalizedCandles);
-    else drawLine(ctx, geometry, actual, "#f4f5f0");
-    drawLine(ctx, geometry, fitted, "#69d1d8");
+    drawLine(ctx, geometry, actual, "#1c1c1e");
+    drawLine(ctx, geometry, fitted, "#185fa5");
     drawLabels(ctx, geometry, points);
     canvas.onmousemove = (event) => showChartTooltip(event, canvas, points, (point) => {
         const candle = candleByDate.get(point.tradeDate);
+        const actualValue = point.actualClose.toFixed(2);
         const ohlc = candle ? `<br>O ${candle.open.toFixed(2)} · H ${candle.high.toFixed(2)} · L ${candle.low.toFixed(2)} · C ${candle.close.toFixed(2)}` : "";
-        return `${point.tradeDate}${ohlc}<br>方程 ${point.fittedClose.toFixed(2)}${point.validationPoint ? " · 验证点" : " · 训练点"}`;
+        return `${point.tradeDate}<br>实际 ${actualValue} · 方程 ${point.fittedClose.toFixed(2)}${ohlc}${point.validationPoint ? " · 验证点" : " · 训练点"}`;
     }, "priceTooltip");
     canvas.onmouseleave = () => hideTooltip("priceTooltip");
 }
@@ -181,7 +180,8 @@ function drawLeverageChart(market) {
     clearCanvas(ctx, rect.width, rect.height);
     drawValidationBand(ctx, geometry, points);
     drawGrid(ctx, geometry, bounds.min === bounds.max ? bounds.min : (bounds.min + bounds.max) / 2);
-    drawLine(ctx, geometry, values, "#f3b86a");
+    drawLine(ctx, geometry, values, "#8a4b08");
+    drawImputedMarkers(ctx, geometry, points, values);
     drawLabels(ctx, geometry, points);
     canvas.onmousemove = (event) => showChartTooltip(event, canvas, points, (point) => `${point.tradeDate}<br>杠杆 ${formatLeverage(point.leverageValue, market.instrument.leverageUnit)}${point.validationPoint ? " · 验证点" : " · 训练点"}`, "leverageTooltip");
     canvas.onmouseleave = () => hideTooltip("leverageTooltip");
@@ -197,19 +197,19 @@ function drawValidationBand(ctx, geometry, points) {
     const firstValidation = points.findIndex((point) => point.validationPoint);
     if (firstValidation < 0) return;
     const x = index => geometry.padding.left + index / Math.max(1, points.length - 1) * geometry.plotWidth;
-    ctx.fillStyle = "rgba(105,209,216,.08)";
+    ctx.fillStyle = "rgba(24,95,165,.08)";
     ctx.fillRect(x(firstValidation), geometry.padding.top, geometry.width - geometry.padding.right - x(firstValidation), geometry.plotHeight);
-    ctx.fillStyle = "#7a8a8d";
+    ctx.fillStyle = "#7a7975";
     ctx.font = "10px ui-monospace, monospace";
     ctx.fillText("VALIDATION", x(firstValidation) + 8, geometry.padding.top + 14);
 }
 
 function drawGrid(ctx, geometry, midpoint) {
     const y = valueToY(geometry, midpoint);
-    ctx.strokeStyle = "rgba(255,255,255,.12)";
+    ctx.strokeStyle = "rgba(28,28,30,.10)";
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(geometry.padding.left, y); ctx.lineTo(geometry.width - geometry.padding.right, y); ctx.stroke();
-    ctx.fillStyle = "#637176"; ctx.font = "10px ui-monospace, monospace"; ctx.textAlign = "right";
+    ctx.fillStyle = "#7a7975"; ctx.font = "10px ui-monospace, monospace"; ctx.textAlign = "right";
     ctx.fillText(formatAxis(midpoint), geometry.padding.left - 8, y + 3);
     ctx.textAlign = "left";
 }
@@ -221,32 +221,22 @@ function drawLine(ctx, geometry, values, color) {
     ctx.stroke();
 }
 
-function drawCandles(ctx, geometry, candles) {
-    const x = index => geometry.padding.left + index / Math.max(1, candles.length - 1) * geometry.plotWidth;
-    const bodyWidth = Math.max(2, Math.min(8, geometry.plotWidth / Math.max(1, candles.length) * .62));
-    candles.forEach((candle, index) => {
-        const px = x(index);
-        const openY = valueToY(geometry, candle.open);
-        const highY = valueToY(geometry, candle.high);
-        const lowY = valueToY(geometry, candle.low);
-        const closeY = valueToY(geometry, candle.close);
-        const rising = candle.close >= candle.open;
-        const color = rising ? "#e88074" : "#79b8a5";
-        ctx.strokeStyle = color;
-        ctx.fillStyle = color;
-        ctx.lineWidth = 1;
+function drawImputedMarkers(ctx, geometry, points, values) {
+    const x = index => geometry.padding.left + index / Math.max(1, values.length - 1) * geometry.plotWidth;
+    ctx.fillStyle = "#8a4b08";
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 1;
+    points.forEach((point, index) => {
+        if (!point.leverageImputed) return;
         ctx.beginPath();
-        ctx.moveTo(px, highY);
-        ctx.lineTo(px, lowY);
+        ctx.arc(x(index), valueToY(geometry, values[index]), 2.5, 0, Math.PI * 2);
+        ctx.fill();
         ctx.stroke();
-        const top = Math.min(openY, closeY);
-        const height = Math.max(1, Math.abs(closeY - openY));
-        ctx.fillRect(px - bodyWidth / 2, top, bodyWidth, height);
     });
 }
 
 function drawLabels(ctx, geometry, points) {
-    ctx.fillStyle = "#637176"; ctx.font = "10px ui-monospace, monospace";
+    ctx.fillStyle = "#7a7975"; ctx.font = "10px ui-monospace, monospace";
     ctx.textAlign = "left"; ctx.fillText(points[0].tradeDate, geometry.padding.left, geometry.height - 7);
     ctx.textAlign = "right"; ctx.fillText(points.at(-1).tradeDate, geometry.width - geometry.padding.right, geometry.height - 7); ctx.textAlign = "left";
 }
@@ -271,5 +261,7 @@ function text(id, value) { const element = document.getElementById(id); if (elem
 function formatPrice(value, currency) { return `${currency} ${Number(value).toLocaleString("zh-CN", { maximumFractionDigits: 2 })}`; }
 function formatLeverage(value, unit) { return `${Number(value).toLocaleString("zh-CN", { maximumFractionDigits: 3 })}${unit}`; }
 function formatR2(value) { return Number(value).toFixed(3); }
+function formatPercent(value) { return `${(Number(value) * 100).toFixed(1)}%`; }
+function formatSignedPercent(value) { const number = Number(value); return `${number >= 0 ? "+" : ""}${number.toFixed(1)}%`; }
 function formatInstant(value) { return value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "—"; }
 function escapeHtml(value) { return String(value ?? "").replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]); }

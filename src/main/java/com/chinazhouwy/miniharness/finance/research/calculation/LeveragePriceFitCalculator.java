@@ -43,6 +43,9 @@ public final class LeveragePriceFitCalculator {
         int trainCount = Math.max(12, (int) Math.floor(rows.size() * TRAIN_RATIO));
         trainCount = Math.min(trainCount, rows.size() - 8);
         int finalTrainCount = trainCount;
+        int innerTrainCount = Math.max(12, (int) Math.floor(finalTrainCount * 0.75));
+        innerTrainCount = Math.min(innerTrainCount, finalTrainCount - 4);
+        int selectionTrainCount = innerTrainCount;
 
         List<ModelSpec> candidates = List.of(
                 new ModelSpec("LEVERAGE_LINEAR", List.of("z(L)", "z(ΔL)")),
@@ -50,24 +53,50 @@ public final class LeveragePriceFitCalculator {
                 new ModelSpec("LEVERAGE_MOMENTUM", List.of("z(L)", "z(ΔL)", "z(M5)", "z(M20)"))
         );
 
-        List<FittedModel> fittedCandidates = candidates.stream()
-                .map(spec -> fitModel(spec, rows, finalTrainCount))
+        // 候选模型只能使用训练集内部的时间切分来选；外层验证区间只在
+        // 选定模型重新用完整训练集拟合后评估，避免“看验证集选模型”。
+        List<FittedModel> selectionCandidates = candidates.stream()
+                .map(spec -> fitModel(spec, rows, selectionTrainCount, selectionTrainCount, finalTrainCount))
                 .toList();
-        FittedModel best = fittedCandidates.stream()
+        List<FittedModel> fittedCandidates = candidates.stream()
+                .map(spec -> fitModel(spec, rows, finalTrainCount, finalTrainCount, rows.size()))
+                .toList();
+        String selectedModelName = selectionCandidates.stream()
                 .min(Comparator.comparingDouble(FittedModel::validationRmsePct))
+                .orElseThrow()
+                .spec()
+                .name();
+        FittedModel best = fittedCandidates.stream()
+                .filter(model -> model.spec().name().equals(selectedModelName))
+                .findFirst()
                 .orElseThrow();
         List<EquationFitResult.CandidateFit> candidateFits = fittedCandidates.stream()
-                .map(model -> new EquationFitResult.CandidateFit(
-                        model.spec().name(),
-                        model.equation(),
-                        model.trainRmsePct(),
-                        model.validationRmsePct(),
-                        model.validationR2(),
-                        model.validationCorrelation()
-                ))
+                .map(model -> {
+                    FittedModel selection = selectionCandidates.stream()
+                            .filter(candidate -> candidate.spec().name().equals(model.spec().name()))
+                            .findFirst()
+                            .orElseThrow();
+                    return new EquationFitResult.CandidateFit(
+                            model.spec().name(),
+                            model.equation(),
+                            model.trainRmsePct(),
+                            model.validationRmsePct(),
+                            model.validationR2(),
+                            model.validationCorrelation(),
+                            selection.validationRmsePct()
+                    );
+                })
                 .toList();
 
         List<EquationFitPoint> points = buildPoints(rows, best, finalTrainCount);
+        double[] targets = rows.stream().mapToDouble(FeatureRow::targetReturn).toArray();
+        double baselineRmse = rmse(targets, new double[targets.length], finalTrainCount, targets.length);
+        double baselineImprovement = baselineRmse == 0
+                ? 0
+                : (baselineRmse - best.validationRmsePct()) / baselineRmse * 100;
+        double endPriceDeviation = endPriceDeviationPct(targets, best.predictions(), finalTrainCount);
+        double drawdownDifference = (maxDrawdown(best.predictions(), finalTrainCount)
+                - maxDrawdown(targets, finalTrainCount)) * 100;
         return new EquationFitResult(
                 best.spec().name(),
                 best.equation(),
@@ -75,14 +104,22 @@ public final class LeveragePriceFitCalculator {
                 finalTrainCount,
                 best.trainRmsePct(),
                 best.validationRmsePct(),
+                baselineRmse,
+                baselineImprovement,
                 best.validationR2(),
                 best.validationCorrelation(),
+                directionAccuracy(targets, best.predictions(), finalTrainCount),
+                endPriceDeviation,
+                drawdownDifference,
+                best.validationRmsePct() < baselineRmse,
                 candidateFits,
                 points,
                 List.of(
                         "训练集按时间顺序占 " + formatPercent(TRAIN_RATIO) + "，验证集使用之后的交易日",
+                        "候选模型只用训练集内部的时间切分选择，外层验证集只用于最终评估",
                         "回归系数只使用训练集求解，验证集不参与拟合",
                         "杠杆字段按市场保留原始语义，回归前只在本序列内做 z-score",
+                        "零收益基线与模型使用同一外层验证区间比较",
                         "预测日对数收益限制在 ±25%，用于避免异常值把价格路径画出数值范围"
                 )
         );
@@ -109,6 +146,7 @@ public final class LeveragePriceFitCalculator {
                     current.close(),
                     next.close(),
                     current.leverageValue(),
+                    current.leverageImputed(),
                     targetReturn,
                     new double[]{currentLevel, deltaLevel, momentum5, momentum20}
             ));
@@ -116,7 +154,13 @@ public final class LeveragePriceFitCalculator {
         return List.copyOf(rows);
     }
 
-    private FittedModel fitModel(ModelSpec spec, List<FeatureRow> rows, int trainCount) {
+    private FittedModel fitModel(
+            ModelSpec spec,
+            List<FeatureRow> rows,
+            int trainCount,
+            int evaluationStart,
+            int evaluationEnd
+    ) {
         Standardizer standardizer = Standardizer.from(rows, trainCount);
         double[][] design = new double[rows.size()][];
         double[] targets = new double[rows.size()];
@@ -139,9 +183,9 @@ public final class LeveragePriceFitCalculator {
                 coefficients,
                 predictions,
                 rmse(targets, predictions, 0, trainCount),
-                rmse(targets, predictions, trainCount, rows.size()),
-                r2(targets, predictions, trainCount, rows.size()),
-                correlation(targets, predictions, trainCount, rows.size()),
+                rmse(targets, predictions, evaluationStart, evaluationEnd),
+                r2(targets, predictions, evaluationStart, evaluationEnd),
+                correlation(targets, predictions, evaluationStart, evaluationEnd),
                 equation(spec, coefficients)
         );
     }
@@ -159,6 +203,7 @@ public final class LeveragePriceFitCalculator {
                     row.targetReturn() * 100,
                     model.predictions()[index] * 100,
                     row.leverageValue(),
+                    row.leverageImputed(),
                     index >= trainCount
             ));
         }
@@ -267,6 +312,40 @@ public final class LeveragePriceFitCalculator {
         return denominator == 0 ? 0 : numerator / denominator;
     }
 
+    private static double directionAccuracy(double[] actual, double[] predicted, int start) {
+        if (start >= actual.length) return 0;
+        int matches = 0;
+        int count = 0;
+        for (int index = start; index < actual.length; index++) {
+            if (Math.signum(actual[index]) == Math.signum(predicted[index])) matches++;
+            count++;
+        }
+        return count == 0 ? 0 : (double) matches / count;
+    }
+
+    private static double endPriceDeviationPct(double[] actual, double[] predicted, int start) {
+        if (start >= actual.length) return 0;
+        double actualGrowth = 1;
+        double predictedGrowth = 1;
+        for (int index = start; index < actual.length; index++) {
+            actualGrowth *= Math.exp(actual[index]);
+            predictedGrowth *= Math.exp(predicted[index]);
+        }
+        return actualGrowth == 0 ? 0 : (predictedGrowth / actualGrowth - 1) * 100;
+    }
+
+    private static double maxDrawdown(double[] logReturns, int start) {
+        double equity = 1;
+        double peak = 1;
+        double maxDrawdown = 0;
+        for (int index = start; index < logReturns.length; index++) {
+            equity *= Math.exp(logReturns[index]);
+            peak = Math.max(peak, equity);
+            maxDrawdown = Math.max(maxDrawdown, 1 - equity / peak);
+        }
+        return maxDrawdown;
+    }
+
     private static double dot(double[] left, double[] right) {
         double result = 0;
         for (int index = 0; index < left.length; index++) {
@@ -302,6 +381,7 @@ public final class LeveragePriceFitCalculator {
             double currentClose,
             double nextClose,
             double leverageValue,
+            boolean leverageImputed,
             double targetReturn,
             double[] rawFeatures
     ) {
