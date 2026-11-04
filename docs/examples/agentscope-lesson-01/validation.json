@@ -1,0 +1,12 @@
+{
+  "tests": "1",
+  "failures": "0",
+  "errors": "0",
+  "skipped": "0",
+  "time": "0.284",
+  "framework": "io.agentscope:agentscope-core:2.0.4",
+  "runtimeJdk": "25.0.2",
+  "compilerRelease": 21,
+  "scope": "Real ReActAgent call with scripted Model; no live LLM; no full upstream test suite.",
+  "sourceSha256": "c7794a56534ea8599281bcf1a3c2c8af446ab76a6953441a6de546dd2e75c66a"
+}

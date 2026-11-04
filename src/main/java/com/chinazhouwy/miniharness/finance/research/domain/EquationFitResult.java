@@ -11,8 +11,14 @@ public record EquationFitResult(
         int trainCount,
         double trainRmsePct,
         double validationRmsePct,
+        double baselineValidationRmsePct,
+        double baselineImprovementPct,
         double validationR2,
         double validationCorrelation,
+        double validationDirectionAccuracy,
+        double validationEndPriceDeviationPct,
+        double validationMaxDrawdownDiffPct,
+        boolean beatsBaseline,
         List<CandidateFit> candidates,
         List<EquationFitPoint> points,
         List<String> notes
@@ -26,8 +32,13 @@ public record EquationFitResult(
         }
         requireNonNegative("trainRmsePct", trainRmsePct);
         requireNonNegative("validationRmsePct", validationRmsePct);
+        requireNonNegative("baselineValidationRmsePct", baselineValidationRmsePct);
+        requireFinite("baselineImprovementPct", baselineImprovementPct);
         requireFinite("validationR2", validationR2);
         requireFinite("validationCorrelation", validationCorrelation);
+        requireFinite("validationDirectionAccuracy", validationDirectionAccuracy);
+        requireFinite("validationEndPriceDeviationPct", validationEndPriceDeviationPct);
+        requireFinite("validationMaxDrawdownDiffPct", validationMaxDrawdownDiffPct);
         candidates = List.copyOf(Objects.requireNonNull(candidates, "candidates"));
         points = List.copyOf(Objects.requireNonNull(points, "points"));
         notes = List.copyOf(Objects.requireNonNull(notes, "notes"));
@@ -42,7 +53,8 @@ public record EquationFitResult(
             double trainRmsePct,
             double validationRmsePct,
             double validationR2,
-            double validationCorrelation
+            double validationCorrelation,
+            double selectionValidationRmsePct
     ) {
 
         public CandidateFit {
@@ -52,6 +64,7 @@ public record EquationFitResult(
             requireNonNegative("validationRmsePct", validationRmsePct);
             requireFinite("validationR2", validationR2);
             requireFinite("validationCorrelation", validationCorrelation);
+            requireNonNegative("selectionValidationRmsePct", selectionValidationRmsePct);
         }
     }
 

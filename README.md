@@ -86,10 +86,11 @@ java -cp "target/classes:$(cat target/harness-classpath.txt)" \
 
 ```text
 real market data
+  -> paginated response / source evidence
   -> align price / leverage by trade date
-  -> fit candidate equations
-  -> time-split validation
-  -> browser visualization + provenance
+  -> factor rows with explicit forward-fill marks
+  -> inner model selection / outer time validation
+  -> browser line chart + provenance
 ```
 
 旧的 Fixture 控制台仍可运行：
@@ -134,8 +135,9 @@ WeStock 通过 `npx -y westock-data-skillhub@1.0.5` 调用，不需要 API Key�
 r(t+1) = β0 + β1·z(Lt) + β2·z(ΔLt) + β3·z(M5t) + β4·z(M20t) + ...
 ```
 
-程序会在 `LEVERAGE_LINEAR`、`LEVERAGE_CURVE`、`LEVERAGE_MOMENTUM` 候选中，用时间顺序 70% 训练、
-后 30% 验证选择 RMSE 较低者；回归系数只用前 70% 求解，后 30% 只用于评估，再把预测收益复合成归一化价格路径。验证 R² 和相关性低时页面照实显示；
+程序会在 `LEVERAGE_LINEAR`、`LEVERAGE_CURVE`、`LEVERAGE_MOMENTUM` 候选中，先在训练集内部按时间切分选型，
+再用完整训练段重拟合，并只在最后 30% 外层验证区间报告 RMSE、零收益基线改善、方向准确率、期末偏差和回撤差异；
+外层验证数据不会参与候选选择。预测收益再复合成归一化价格路径，页面用实际收盘线、拟合路径线和验证区间阴影展示。验证 R² 和相关性低时页面照实显示；
 这条曲线是解释力实验，不是交易预测或收益承诺。
 
 金融领域代码位于 `finance/market`，按职责拆分：
@@ -164,6 +166,9 @@ finance/research/
 ├── service/       缓存和研究查询服务
 └── web/           /api/finance/research 与页面 DTO
 ```
+
+WeStock 日 K 线范围查询按约 240 个自然日分页并按交易日去重，避免单次约 250 条限制静默截断历史。
+两融和卖空属于报告日/披露日数据；没有新报告的交易日以前值填充，并在杠杆图上用标记区分，不把填充值伪装成实时数据。
 
 下一条闭环再增加固定股票池、个股基本面、风险事件和两股票对比，不把这些领域概念塞进通用 Harness。
 

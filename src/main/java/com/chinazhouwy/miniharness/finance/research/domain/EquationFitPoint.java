@@ -11,6 +11,7 @@ public record EquationFitPoint(
         double actualReturnPct,
         double predictedReturnPct,
         double leverageValue,
+        boolean leverageImputed,
         boolean validationPoint
 ) {
 

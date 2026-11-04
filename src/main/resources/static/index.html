@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#10151a">
+    <meta name="theme-color" content="#f7f8fa">
     <meta name="description" content="MiniHarness 真实杠杆与股票走势拟合研究页">
     <link rel="icon" href="data:,">
     <title>杠杆 × 价格 · MiniHarness</title>
-    <link rel="stylesheet" href="/dashboard.css?v=20260805">
+    <link rel="stylesheet" href="/dashboard.css?v=20260807">
 </head>
 <body>
 <div class="app-shell">
@@ -28,6 +28,7 @@
                 <div class="card-label-row"><span class="eyebrow">CURRENT STUDY</span><span class="status-pill"><i></i><span id="marketCount">—</span> 个市场</span></div>
                 <div class="decision-title" id="selectedName">—</div>
                 <p id="selectedDefinition">选择一个市场，查看其杠杆字段定义、拟合方程和验证结果。</p>
+                <div class="fit-verdict" id="fitVerdict">等待验证结果</div>
                 <div class="decision-facts"><div><span>样本</span><b id="sampleFact">—</b></div><div><span>验证 RMSE</span><b id="rmseFact">—</b></div><div><span>验证 R²</span><b id="r2Fact">—</b></div></div>
             </aside>
         </section>
@@ -45,8 +46,8 @@
 
             <div class="fit-grid">
                 <article class="panel chart-panel">
-                    <div class="panel-header"><div><p class="eyebrow">OHLC VS EQUATION</p><h2>日K与方程路径对照</h2></div><div class="legend"><span><i class="actual-candle"></i>日K</span><span><i class="fit-line"></i>方程拟合</span><span><i class="validation-mark"></i>验证区间</span></div></div>
-                    <div class="chart-wrap large"><canvas id="priceChart" aria-label="日K与方程拟合价格对比图" tabindex="0"></canvas><div class="chart-tooltip" id="priceTooltip" aria-live="polite"></div></div>
+                    <div class="panel-header"><div><p class="eyebrow">PRICE PATH VS EQUATION</p><h2>实际价格与方程路径</h2></div><div class="legend"><span><i class="actual-line"></i>实际收盘</span><span><i class="fit-line"></i>拟合路径</span><span><i class="validation-mark"></i>验证区间</span></div></div>
+                    <div class="chart-wrap large"><canvas id="priceChart" aria-label="实际收盘与方程拟合价格路径对比图" tabindex="0"></canvas><div class="chart-tooltip" id="priceTooltip" aria-live="polite"></div></div>
                     <div class="chart-axis"><span>归一化价格（首个有效点 = 100）</span><span id="priceChartRange">—</span></div>
                 </article>
                 <article class="panel leverage-panel">
@@ -57,7 +58,7 @@
             </div>
 
             <div class="detail-grid">
-                <article class="panel equation-panel"><div class="panel-header compact"><div><p class="eyebrow">SELECTED EQUATION</p><h2>候选模型选择结果</h2></div><span class="model-name" id="modelName">—</span></div><code id="equation" class="equation">加载中</code><p class="method-note" id="methodNote">—</p><div class="candidate-list" id="candidateList"></div><div class="fit-stats"><div><span>训练误差</span><b id="trainRmse">—</b></div><div><span>验证误差</span><b id="validationRmse">—</b></div><div><span>验证相关</span><b id="validationCorrelation">—</b></div><div><span>验证样本</span><b id="validationSamples">—</b></div></div></article>
+                <article class="panel equation-panel"><div class="panel-header compact"><div><p class="eyebrow">SELECTED EQUATION</p><h2>候选模型选择结果</h2></div><span class="model-name" id="modelName">—</span></div><code id="equation" class="equation">加载中</code><p class="method-note" id="methodNote">—</p><div class="candidate-list" id="candidateList"></div><div class="fit-stats"><div><span>训练误差</span><b id="trainRmse">—</b></div><div><span>外层验证</span><b id="validationRmse">—</b></div><div><span>零收益基线</span><b id="baselineRmse">—</b></div><div><span>相对基线</span><b id="baselineImprovement">—</b></div><div><span>方向准确率</span><b id="validationDirection">—</b></div><div><span>验证相关</span><b id="validationCorrelation">—</b></div><div><span>期末偏差</span><b id="endPriceDeviation">—</b></div><div><span>回撤差异</span><b id="drawdownDifference">—</b></div><div><span>验证样本</span><b id="validationSamples">—</b></div></div></article>
                 <article class="panel observation-panel"><div class="panel-header compact"><div><p class="eyebrow">DATA QUALITY</p><h2>数据和口径</h2></div><span class="panel-symbol">⌁</span></div><div class="quality-list" id="qualityList"></div></article>
             </div>
 
@@ -66,6 +67,6 @@
     </main>
     <footer class="footer"><span>MINIHARNESS / FINANCE RESEARCH</span><span>只读 · 真实数据 · 探索性拟合</span></footer>
 </div>
-<script src="/dashboard.js?v=20260805" defer></script>
+<script src="/dashboard.js?v=20260807" defer></script>
 </body>
 </html>

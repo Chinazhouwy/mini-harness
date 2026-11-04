@@ -23,10 +23,16 @@ class LeveragePriceFitCalculatorTest {
         assertEquals(259, result.sampleCount());
         assertTrue(result.trainCount() < result.sampleCount());
         assertTrue(result.validationRmsePct() >= 0);
+        assertTrue(result.baselineValidationRmsePct() >= 0);
+        assertTrue(result.validationDirectionAccuracy() >= 0 && result.validationDirectionAccuracy() <= 1);
+        assertTrue(Double.isFinite(result.baselineImprovementPct()));
+        assertTrue(Double.isFinite(result.validationEndPriceDeviationPct()));
+        assertTrue(Double.isFinite(result.validationMaxDrawdownDiffPct()));
         assertTrue(result.validationCorrelation() >= -1 && result.validationCorrelation() <= 1);
         assertFalse(result.equation().isBlank());
         assertEquals(result.sampleCount(), result.points().size());
         assertTrue(result.points().stream().anyMatch(point -> point.validationPoint()));
+        assertTrue(result.candidates().stream().allMatch(candidate -> candidate.selectionValidationRmsePct() >= 0));
     }
 
     @Test

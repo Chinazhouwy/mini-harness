@@ -110,18 +110,22 @@ public final class RealMarketResearchDataSource implements MarketResearchDataSou
         Map<LocalDate, SseMarginHistoryClient.MarginRow> marginByDate = new HashMap<>();
         marginRows.forEach(row -> marginByDate.put(row.tradeDate(), row));
         List<MarketObservation> observations = new ArrayList<>();
+        SseMarginHistoryClient.MarginRow latestMargin = null;
         for (JsonNode price : sortedNodes(westock.kline(A_SHARE.symbol(), start, end), "date")) {
             LocalDate date = date(price, "date");
             SseMarginHistoryClient.MarginRow margin = marginByDate.get(date);
-            if (margin == null) continue;
+            if (margin != null) latestMargin = margin;
+            // 两融是报告日数据，不在没有报告的交易日伪造新值；从第一条
+            // 已披露记录开始沿用上一条，并把填充状态交给页面和验证层。
+            if (latestMargin == null) continue;
             observations.add(new MarketObservation(
                     date,
                     priceValue(price, "open", "OpenPrice"),
                     priceValue(price, "high", "HighPrice"),
                     priceValue(price, "low", "LowPrice"),
                     close(price),
-                    margin.financingBalanceYuan() / 1_000_000_000_000.0,
-                    false
+                    latestMargin.financingBalanceYuan() / 1_000_000_000_000.0,
+                    margin == null
             ));
         }
         if (observations.size() < 30) {
@@ -138,7 +142,7 @@ public final class RealMarketResearchDataSource implements MarketResearchDataSou
                 "yuan",
                 "融资余额、融资买入额和融资偿还额；A股杠杆输入只取上交所汇总口径"
         );
-        SourceEvidence priceSource = priceEvidence(A_SHARE, observations.getLast().tradeDate(), retrievedAt);
+        SourceEvidence priceSource = priceEvidence(A_SHARE, start, end, observations.getLast().tradeDate(), retrievedAt);
         return new MarketSeries(A_SHARE, observations, List.of(marginSource, priceSource));
     }
 
@@ -180,22 +184,30 @@ public final class RealMarketResearchDataSource implements MarketResearchDataSou
         SourceEvidence leverageSource = new SourceEvidence(
                 "westock-short-" + instrument.symbol() + "-" + start + "-" + end,
                 "WeStock 腾讯自选股卖空数据",
-                "skill://westock-data/fund-short/" + instrument.symbol(),
+                "npx -y westock-data-skillhub@1.0.5 fund short " + instrument.symbol()
+                        + " --start " + start + " --end " + end,
                 observations.getLast().tradeDate(),
                 retrievedAt,
                 "ShortRatio,ShortShares,ShortRecoverDays",
                 "%",
                 "ShortRatio 是供应商字段；缺少报告日时以前值向前填充，并在图表中标记"
         );
-        SourceEvidence priceSource = priceEvidence(instrument, observations.getLast().tradeDate(), retrievedAt);
+        SourceEvidence priceSource = priceEvidence(instrument, start, end, observations.getLast().tradeDate(), retrievedAt);
         return new MarketSeries(instrument, observations, List.of(leverageSource, priceSource));
     }
 
-    private SourceEvidence priceEvidence(MarketInstrument instrument, LocalDate date, Instant retrievedAt) {
+    private SourceEvidence priceEvidence(
+            MarketInstrument instrument,
+            LocalDate start,
+            LocalDate end,
+            LocalDate date,
+            Instant retrievedAt
+    ) {
         return new SourceEvidence(
                 "westock-kline-" + instrument.symbol(),
                 "WeStock 腾讯自选股日 K 线",
-                "skill://westock-data/kline/" + instrument.symbol(),
+                "npx -y westock-data-skillhub@1.0.5 kline " + instrument.symbol()
+                        + " --period day --start " + start + " --end " + end,
                 date,
                 retrievedAt,
                 "date,last,open,high,low,volume,amount",
