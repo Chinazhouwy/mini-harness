@@ -8,14 +8,4 @@ finance:
     lookback-days: 420
     cache-seconds: 900
 
-# 页面和 Fixture API 无需模型凭据；未来接入模型时再按环境覆盖这些开关。
-spring:
-  ai:
-    model:
-      chat: none
-      embedding: none
-      image: none
-      moderation: none
-      audio:
-        speech: none
-        transcription: none
+# 页面和 Fixture API 无需模型凭据；模型侧由 AgentScope + 环境变量配置（见 FirstAgent）。

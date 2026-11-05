@@ -17,6 +17,7 @@ Thumbs.db
 # Environment
 .env
 .env.example
+src/main/resources/openrouter.local.properties
 # Logs
 *.log
 
