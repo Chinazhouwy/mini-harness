@@ -359,27 +359,133 @@ public class BuilderTest {
     }
 
     @Test
-    @DisplayName("消息与事件：一次流式调用里出现了哪些事件")
+    @DisplayName("消息与事件：按“每次调用”汇总展示，不逐 token 打印")
     public void test11Events() {
-        RuntimeContext ctx = RuntimeContext.builder().userId("zhouwy").sessionId("sEvents").build();
-        List<String> types = new java.util.ArrayList<>();
+        RuntimeContext ctx = RuntimeContext.builder().userId("zhouwy").sessionId("sEvents3").build();
+
+        java.util.concurrent.atomic.AtomicInteger round = new java.util.concurrent.atomic.AtomicInteger();
+        Map<String, String> toolNames = new HashMap<>();           // toolCallId -> 工具名
+        Map<String, StringBuilder> pendingArgs = new HashMap<>();  // toolCallId -> 参数累积
+        StringBuilder text = new StringBuilder();                  // 文本累积
 
         try (HarnessAgent agent = agentBuilder.build()) {
-            agent.streamEvents(new UserMessage("今日伤害天气"), ctx)
+            agent.streamEvents(new UserMessage("上海天气如何？"), ctx)
                     .doOnNext(ev -> {
-                        types.add(ev.getType().name());
-                        if (ev instanceof TextBlockDeltaEvent t) {
-                            System.out.print(t.getDelta());          // 文本是一小块一小块来的
-                        } else if (ev instanceof ToolCallStartEvent s) {
-                            System.out.println("\n[要调工具] " + s.getToolCallName());
-                        } else if (ev instanceof ToolResultStartEvent r) {
-                            System.out.println("\n[工具开始执行] " + r.getToolCallName());
+                        switch (ev.getType()) {
+                            case MODEL_CALL_START -> System.out.println("\n--- 第 "
+                                    + round.incrementAndGet() + " 次模型调用 ---");
+                            case TEXT_BLOCK_DELTA -> text.append(((TextBlockDeltaEvent) ev).getDelta());
+                            case TEXT_BLOCK_END -> {
+                                if (text.length() > 0) {
+                                    System.out.println("  [模型文本] " + text);
+                                    text.setLength(0);
+                                }
+                            }
+                            case TOOL_CALL_START -> {
+                                ToolCallStartEvent s = (ToolCallStartEvent) ev;
+                                toolNames.put(s.getToolCallId(), s.getToolCallName());
+                                pendingArgs.put(s.getToolCallId(), new StringBuilder());
+                            }
+                            case TOOL_CALL_DELTA -> {
+                                ToolCallDeltaEvent d = (ToolCallDeltaEvent) ev;
+                                pendingArgs.computeIfAbsent(d.getToolCallId(), k -> new StringBuilder())
+                                        .append(d.getDelta());
+                            }
+                            case TOOL_CALL_END -> {
+                                io.agentscope.core.event.ToolCallEndEvent e =
+                                        (io.agentscope.core.event.ToolCallEndEvent) ev;
+                                System.out.println("  [模型要调工具] " + toolNames.get(e.getToolCallId())
+                                        + " 参数=" + pendingArgs.get(e.getToolCallId()));
+                            }
+                            case TOOL_RESULT_START -> {
+                                ToolResultStartEvent r = (ToolResultStartEvent) ev;
+                                System.out.println("  [开始执行] " + r.getToolCallName());
+                            }
+                            case TOOL_RESULT_END -> {
+                                ToolResultEndEvent e = (ToolResultEndEvent) ev;
+                                System.out.println("  [执行结束] " + e.getState());
+                            }
+                            default -> { }
                         }
                     })
                     .blockLast();
         }
-        System.out.println("\n\n事件类型序列:");
-        types.forEach(t -> System.out.println("  " + t));
+        System.out.println("\n总模型调用次数: " + round.get());
+    }
+
+    @Test
+    @DisplayName("提示词约束：一次只调一个工具（对比默认的并行工具调用）")
+    public void test12SingleToolPerRound() {
+        // 每次新建一个实例，跑两轮完整问答，看每轮模型要调几个工具
+        for (int run = 1; run <= 2; run++) {
+            System.out.println("\n########## 第 " + run + " 次完整问答 ##########");
+            int finalRun = run;
+
+            MiddlewareBase trace = new MiddlewareBase() {
+                private final java.util.concurrent.atomic.AtomicInteger round =
+                        new java.util.concurrent.atomic.AtomicInteger();
+
+                @Override
+                public Flux<AgentEvent> onModelCall(Agent agent, RuntimeContext ctx, ModelCallInput in,
+                                                    Function<ModelCallInput, Flux<AgentEvent>> next) {
+                    int n = round.incrementAndGet();
+                    Map<String, String> names = new HashMap<>();
+                    Map<String, StringBuilder> args = new HashMap<>();
+                    StringBuilder text = new StringBuilder();
+                    return next.apply(in).doOnNext(ev -> {
+                        if (ev instanceof TextBlockDeltaEvent t && t.getDelta() != null) {
+                            text.append(t.getDelta());
+                        }
+                        if (ev instanceof ToolCallStartEvent st) {
+                            names.put(st.getToolCallId(), st.getToolCallName());
+                            args.put(st.getToolCallId(), new StringBuilder());
+                        }
+                        if (ev instanceof ToolCallDeltaEvent d && d.getDelta() != null) {
+                            args.computeIfAbsent(d.getToolCallId(), k -> new StringBuilder()).append(d.getDelta());
+                        }
+                    }).doOnComplete(() -> {
+                        System.out.println("  第 " + n + " 轮模型调用：工具数=" + names.size());
+                        args.forEach((id, sb) -> System.out.println("     调用 " + names.get(id)
+                                + " 参数=" + sb));
+                        if (text.length() > 0) {
+                            System.out.println("     文本=" + text);
+                        }
+                    });
+                }
+            };
+
+            HarnessAgent.Builder b = HarnessAgent.builder()
+                    .name("single-tool")
+                    .agentId("single-tool")
+                    .sysPrompt("you are a helper。每次回复最多只能调用一个工具，禁止在同一次回复里并行调用多个工具。")
+                    .model(agentBuilderModel())
+                    .middleware(trace)
+                    .workspace(Path.of("./data/workspace"))
+                    .stateStore(new JsonFileAgentStateStore(Path.of("./data/.agentscope-state")));
+
+            RuntimeContext ctx = RuntimeContext.builder().userId("zhouwy")
+                    .sessionId("sSingle-" + finalRun).build();
+            try (HarnessAgent agent = b.build()) {
+                Msg ret = agent.call(new UserMessage("上海天气如何？"), ctx).block();
+                System.out.println("  最终回答: " + ret.getTextContent());
+            }
+        }
+    }
+
+    /** 复用 before() 里那套模型配置（读 properties 构造），给需要自定义 sysPrompt 的用例用。 */
+    private static OpenAIChatModel agentBuilderModel() {
+        try {
+            Properties props = loadLocalProperties();
+            return OpenAIChatModel.builder()
+                    .apiKey(props.getProperty("openrouter.api.key"))
+                    .modelName(props.getProperty("openrouter.model"))
+                    .baseUrl(props.getProperty("openrouter.base.url"))
+                    .nativeStructuredOutput(false)
+                    .stream(true)
+                    .build();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
         /** 读取 src/main/resources/openrouter.local.properties（已写入 .gitignore，不会入库）。 */        private static Properties loadLocalProperties() throws IOException {
