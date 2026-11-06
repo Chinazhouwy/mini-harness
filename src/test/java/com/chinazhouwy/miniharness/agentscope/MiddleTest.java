@@ -7,6 +7,7 @@ import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.UserMessage;
 import io.agentscope.core.middleware.AgentInput;
 import io.agentscope.core.middleware.MiddlewareBase;
+import io.agentscope.core.middleware.ReasoningInput;
 import io.agentscope.core.state.JsonFileAgentStateStore;
 import io.agentscope.extensions.model.openai.OpenAIChatModel;
 import io.agentscope.harness.agent.HarnessAgent;
@@ -20,7 +21,9 @@ import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Middleware 六个钩子，一个钩子一个 @Test。
@@ -97,19 +100,22 @@ public class MiddleTest {
     @Test
     @DisplayName("钩子 2/5 onReasoning：包住每一轮推理")
     public void test03OnReasoning() {
-        java.util.concurrent.atomic.AtomicInteger round = new java.util.concurrent.atomic.AtomicInteger();
+        AtomicInteger round = new AtomicInteger();
 
         MiddlewareBase mw = new MiddlewareBase() {
             @Override
             public Flux<AgentEvent> onReasoning(Agent agent, RuntimeContext ctx,
-                                                io.agentscope.core.middleware.ReasoningInput in,
-                                                Function<io.agentscope.core.middleware.ReasoningInput, Flux<AgentEvent>> next) {
+                                                ReasoningInput in,
+                                                Function<ReasoningInput, Flux<AgentEvent>> next) {
                 int n = round.incrementAndGet();
                 System.out.println("[onReasoning] 第 " + n + " 轮开始: 消息数=" + in.messages().size()
-                        + " 可用工具数=" + in.tools().size()
+                        + " 可用工具数=" + in.tools().size() + "可用工具: " + in.tools().stream().map(tool -> tool.getName()).collect(Collectors.joining(","))
                         + " toolChoice=" + (in.options() == null ? null : in.options().getToolChoice()));
+                long start = System.currentTimeMillis();
                 return next.apply(in)
-                        .doOnComplete(() -> System.out.println("[onReasoning] 第 " + n + " 轮结束"));
+                        .doFirst(() -> System.out.println("[onReasoning] 开始: agent=" + agent.getName() + " 输入消息数=" + in.messages().size() + " 第一条=" + in.messages().get(0).getTextContent().replace("\n","")))
+                        .doOnComplete(() -> System.out.println("[onReasoning] 第 " + n + " 轮结束: 耗时=" + (System.currentTimeMillis() - start) + "ms"))
+                        .doOnError(e -> System.out.println("[onReasoning] 出错: " + e.getMessage()));
             }
         };
 
