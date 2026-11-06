@@ -1,6 +1,6 @@
-logging:
-  level:
-    com.chinazhouwy.miniharness.harness: INFO
+#logging:
+#  level:
+#    com.chinazhouwy.miniharness.harness: INFO
 
 finance:
   research:
@@ -9,3 +9,14 @@ finance:
     cache-seconds: 900
 
 # 页面和 Fixture API 无需模型凭据；模型侧由 AgentScope + 环境变量配置（见 FirstAgent）。
+
+logging:
+  level:
+    io.agentscope.harness.agent.workspace.WorkspaceManager: ERROR   # 缺 AGENTS.md 的 WARN 不看
+    io.agentscope.core.tool.Toolkit: ERROR                          # 注册工具那一串 INFO 不看
+    io.agentscope.harness.agent.HarnessAgent: ERROR                 # 构建信息不看
+    io.agentscope.core.model.transport.JdkHttpTransport: WARN
+    io.agentscope.harness.agent.middleware.AgentTraceMiddleware: WARN
+
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%-5level] %msg%n"
