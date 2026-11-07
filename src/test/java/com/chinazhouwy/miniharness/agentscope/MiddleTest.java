@@ -4,10 +4,15 @@ import io.agentscope.core.agent.Agent;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.event.AgentEvent;
 import io.agentscope.core.event.ToolCallStartEvent;
+import io.agentscope.core.event.ToolResultEndEvent;
+import io.agentscope.core.event.ToolResultStartEvent;
+import io.agentscope.core.event.ToolResultTextDeltaEvent;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.UserMessage;
+import io.agentscope.core.middleware.ActingInput;
 import io.agentscope.core.middleware.AgentInput;
 import io.agentscope.core.middleware.MiddlewareBase;
+import io.agentscope.core.middleware.ModelCallInput;
 import io.agentscope.core.middleware.ReasoningInput;
 import io.agentscope.core.state.JsonFileAgentStateStore;
 import io.agentscope.extensions.model.openai.OpenAIChatModel;
@@ -149,8 +154,7 @@ public class MiddleTest {
             @Override
             public Mono<String> onSystemPrompt(Agent agent, RuntimeContext ctx, String prompt) {
                 System.out.println("[onSystemPrompt] 原始长度=" + prompt.length()
-                        + " 开头=" + prompt.substring(0, Math.min(50, prompt.length())).replace("\n", " "));
-
+                        + " 开头=" + prompt.replace("\n", " ").substring(0, Math.min(100, prompt.length())));
                 String changed = prompt + "\n\n【middleware 注入的规则】回答必须以「【已改写】」开头。";
                 System.out.println("[onSystemPrompt] 改写后长度=" + changed.length());
                 return Mono.just(changed);
@@ -170,6 +174,93 @@ public class MiddleTest {
             RuntimeContext ctx = RuntimeContext.builder()
                     .userId("zhouwy").sessionId("s-" + UUID.randomUUID()).build();
             Msg ret = agent.call(new UserMessage("用一句话介绍你自己"), ctx).block();
+            System.out.println("回答: " + ret.getTextContent());
+        }
+    }
+
+    // ================= 4/5 onModelCall =================
+
+    @Test
+    @DisplayName("钩子 4/5 onModelCall：真正发给模型的那一层")
+    public void test05OnModelCall() {
+        MiddlewareBase mw = new MiddlewareBase() {
+            int call = 0;
+
+            @Override
+            public Flux<AgentEvent> onModelCall(Agent agent, RuntimeContext ctx, ModelCallInput in,
+                                                Function<ModelCallInput, Flux<AgentEvent>> next) {
+                int n = ++call;
+                long start = System.currentTimeMillis();
+                Msg first = in.messages().getFirst();
+                return next.apply(in)
+                        .doFirst(() -> System.out.println("[onModelCall] 第 " + n + " 次请求: 消息数="
+                                + in.messages().size() + " 工具数=" + in.tools().size()
+                                + " toolChoice=" + (in.options() == null ? null : in.options().getToolChoice())
+                                + "\n      第一条=[" + first.getRole() + "] "
+                                + first.getTextContent().substring(0, Math.min(40, first.getTextContent().length()))
+                                        .replace("\n", " ")))
+                        .doOnComplete(() -> System.out.println("[onModelCall] 第 " + n + " 次请求结束 耗时="
+                                + (System.currentTimeMillis() - start) + "ms"));
+            }
+        };
+
+        try (HarnessAgent agent = HarnessAgent.builder()
+                .name("middle-demo").agentId("middle-demo")
+                .sysPrompt("you are a helper")
+                .model(model)
+                .middleware(mw)
+                .workspace(Path.of("./data/workspace"))
+                .stateStore(new JsonFileAgentStateStore(Path.of("./data/.agentscope-state")))
+                .disableMemoryTools().disableSubagents()
+                .build()) {
+
+            RuntimeContext ctx = RuntimeContext.builder()
+                    .userId("zhouwy").sessionId("s-" + UUID.randomUUID()).build();
+            Msg ret = agent.call(new UserMessage("上海天气如何？一句话回答"), ctx).block();
+            System.out.println("回答: " + ret.getTextContent());
+        }
+    }
+
+    // ================= 5/5 onActing =================
+
+    @Test
+    @DisplayName("钩子 5/5 onActing：工具执行前后")
+    public void test06OnActing() {
+        MiddlewareBase mw = new MiddlewareBase() {
+            @Override
+            public Flux<AgentEvent> onActing(Agent agent, RuntimeContext ctx, ActingInput in,
+                                             Function<ActingInput, Flux<AgentEvent>> next) {
+                long start = System.currentTimeMillis();
+                return next.apply(in)
+                        .doFirst(() -> {
+                            // 这里直接拿得到要执行的工具名和参数
+                            in.toolCalls().forEach(tc -> System.out.println("[onActing] 要执行工具: "
+                                    + tc.getName() + " 参数=" + tc.getInput()));
+                        })
+                        .doOnNext(ev -> {
+                            if (ev instanceof ToolResultEndEvent e) {
+                                System.out.println("[onActing] 工具执行结束: " + e.getToolCallName()
+                                        + " 状态=" + e.getState());
+                            }
+                        })
+                        .doOnComplete(() -> System.out.println("[onActing] 本批工具耗时="
+                                + (System.currentTimeMillis() - start) + "ms"));
+            }
+        };
+
+        try (HarnessAgent agent = HarnessAgent.builder()
+                .name("middle-demo").agentId("middle-demo")
+                .sysPrompt("you are a helper")
+                .model(model)
+                .middleware(mw)
+                .workspace(Path.of("./data/workspace"))
+                .stateStore(new JsonFileAgentStateStore(Path.of("./data/.agentscope-state")))
+                .disableMemoryTools().disableSubagents()
+                .build()) {
+
+            RuntimeContext ctx = RuntimeContext.builder()
+                    .userId("zhouwy").sessionId("s-" + UUID.randomUUID()).build();
+            Msg ret = agent.call(new UserMessage("上海天气如何？一句话回答"), ctx).block();
             System.out.println("回答: " + ret.getTextContent());
         }
     }
