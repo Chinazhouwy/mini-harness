@@ -5,8 +5,18 @@ import io.agentscope.core.agent.Agent;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.event.AgentEvent;
 import io.agentscope.core.event.TextBlockDeltaEvent;
+import io.agentscope.core.event.ToolCallDeltaEvent;
+import io.agentscope.core.event.ToolCallEndEvent;
+import io.agentscope.core.event.ToolCallStartEvent;
+import io.agentscope.core.message.ContentBlock;
 import io.agentscope.core.message.Msg;
+import io.agentscope.core.message.TextBlock;
+import io.agentscope.core.message.ToolResultBlock;
+import io.agentscope.core.message.ToolUseBlock;
 import io.agentscope.core.message.UserMessage;
+import io.agentscope.core.tool.Tool;
+import io.agentscope.core.tool.ToolParam;
+import io.agentscope.core.tool.Toolkit;
 import io.agentscope.core.middleware.ActingInput;
 import io.agentscope.core.middleware.AgentInput;
 import io.agentscope.core.middleware.MiddlewareBase;
@@ -292,6 +302,105 @@ public class ModelTest {
             // 同一会话连问两次：第二次请求里能直接看到上一轮历史
             agent.call(List.of(new UserMessage("1+1等于几？只回答数字")), ctx).block();
             agent.call(List.of(new UserMessage("再乘以10呢？只回答数字")), ctx).block();
+        }
+    }
+
+    // ================= 4. 同样的干净 dump，但带上工具调用 =================
+
+    /** 最小工具集：一个查净值工具，模型不调它就答不了问题。 */
+    public static class NavTools {
+
+        @Tool(name = "query_fund_nav", description = "查询基金最新净值（估值）。用户问某个基金的净值时必须调用此工具。")
+        public String queryFundNav(
+                @ToolParam(name = "fund_code", description = "基金六位代码，例如 005827") String fundCode) {
+            return "{\"code\":\"" + fundCode + "\",\"name\":\"易方达蓝筹精选\",\"nav\":2.3456,\"day_change\":\"+1.23%\"}";
+        }
+    }
+
+    @Test
+    @DisplayName("干净 dump + 工具：模型要调工具 → 工具结果回填 → 第二次请求才出最终回答")
+    public void test05CleanRequestResponseWithTool() {
+        MiddlewareBase dump = new MiddlewareBase() {
+            int req = 0;
+
+            @Override
+            public Flux<AgentEvent> onModelCall(Agent agent, RuntimeContext ctx, ModelCallInput in,
+                                                Function<ModelCallInput, Flux<AgentEvent>> next) {
+                int n = ++req;
+                long start = System.currentTimeMillis();
+                StringBuilder text = new StringBuilder();
+                String[] toolName = {null};
+                StringBuilder toolArgs = new StringBuilder();
+                return next.apply(in)
+                        .doFirst(() -> {
+                            System.out.println("\n===== 第 " + n + " 次请求（消息数=" + in.messages().size()
+                                    + " 工具数=" + in.tools().size() + "）=====");
+                            for (Msg m : in.messages()) {
+                                String t = m.getTextContent();
+                                if (t != null && !t.isBlank()) {
+                                    System.out.println("  [" + m.getRole() + "] " + t);
+                                }
+                                for (ToolUseBlock u : m.getContentBlocks(ToolUseBlock.class)) {
+                                    System.out.println("  [" + m.getRole() + "] →要调工具 " + u.getName()
+                                            + " 参数=" + u.getInput());
+                                }
+                                for (ToolResultBlock r : m.getContentBlocks(ToolResultBlock.class)) {
+                                    StringBuilder out = new StringBuilder();
+                                    for (ContentBlock b : r.getOutput()) {
+                                        if (b instanceof TextBlock tb) out.append(tb.getText());
+                                    }
+                                    System.out.println("  [" + m.getRole() + "] →工具结果 " + r.getName()
+                                            + " = " + out);
+                                }
+                            }
+                        })
+                        .doOnNext(ev -> {
+                            if (ev instanceof TextBlockDeltaEvent t && t.getDelta() != null) {
+                                text.append(t.getDelta());
+                            } else if (ev instanceof ToolCallStartEvent s) {
+                                toolName[0] = s.getToolCallName();
+                            } else if (ev instanceof ToolCallDeltaEvent d && d.getDelta() != null) {
+                                toolArgs.append(d.getDelta());
+                            } else if (ev instanceof ToolCallEndEvent) {
+                                System.out.println("  （模型要调工具: " + toolName[0]
+                                        + " 参数=" + toolArgs + "）");
+                            }
+                        })
+                        .doOnComplete(() -> {
+                            System.out.println("----- 返回 -----");
+                            if (text.length() > 0) {
+                                System.out.println("  " + text);
+                            }
+                            System.out.println("  （耗时 " + (System.currentTimeMillis() - start) + "ms）");
+                        });
+            }
+
+            @Override
+            public Flux<AgentEvent> onActing(Agent agent, RuntimeContext ctx, ActingInput in,
+                                             Function<ActingInput, Flux<AgentEvent>> next) {
+                return next.apply(in)
+                        .doFirst(() -> in.toolCalls().forEach(tc ->
+                                System.out.println("  ⚙ 工具执行: " + tc.getName() + " 参数=" + tc.getInput())));
+            }
+        };
+
+        Toolkit toolkit = new Toolkit();
+        toolkit.registerTool(new NavTools());
+
+        // ReActAgent + 1 个工具：第 1 次请求带 tools，模型返回的是工具调用而不是文字
+        try (ReActAgent agent = ReActAgent.builder()
+                .name("clean-tool")
+                .sysPrompt("you are a helper")
+                .model(model)
+                .toolkit(toolkit)
+                .middlewares(List.of(dump))
+                .stateStore(new JsonFileAgentStateStore(Path.of("./data/.agentscope-state")))
+                .build()) {
+
+            RuntimeContext ctx = RuntimeContext.builder()
+                    .userId("zhouwy").sessionId("sCleanTool-" + UUID.randomUUID()).build();
+
+            agent.call(List.of(new UserMessage("帮我查一下 005827 这只基金今天的净值")), ctx).block();
         }
     }
 }
