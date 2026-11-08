@@ -36,11 +36,13 @@ import reactor.core.publisher.Mono;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Scanner;
 import java.util.UUID;
 import java.util.function.Function;
 
@@ -333,9 +335,34 @@ public class PermissionTest {
     }
 
     @Test
-    @DisplayName("Permission 6：ask 规则+确认响应器——DELETE 暂停问你，批准后续跑")
+    @DisplayName("Permission 6：ask 规则+真人确认（交互入口在本类的 main 方法，JUnit 窗口收不了键盘）")
     public void test06AskApproval() {
-        // ---- 权限配置：三档分工 ----
+        askApprovalDemo(model);
+    }
+
+    /**
+     * 交互式 demo 的真正入口：IDEA 里打开本文件，点 main 方法旁边的绿色三角运行。
+     * 为什么不用 JUnit 跑：JUnit 的运行窗口是只读的，键盘输入进不去——
+     * 你看到的"此视图为只读"就是这个原因。
+     */
+    public static void main(String[] args) throws IOException {
+        Properties props = new Properties();
+        try (InputStream in = PermissionTest.class.getClassLoader()
+                .getResourceAsStream("openrouter.local.properties")) {
+            props.load(in);
+        }
+        OpenAIChatModel model = OpenAIChatModel.builder()
+                .apiKey(props.getProperty("openrouter.api.key"))
+                .modelName(props.getProperty("openrouter.model"))
+                .baseUrl(props.getProperty("openrouter.base.url"))
+                .nativeStructuredOutput(false)
+                .stream(true)
+                .build();
+        askApprovalDemo(model);
+    }
+
+    private static void askApprovalDemo(OpenAIChatModel model) {
+        // ---- 权限配置 ----
         // ASK 规则：故意挂在 SELECT 上——真实场景该放 DROP/DELETE 等危险关键字，但模型对
         // 删除类 SQL 会自我审查、根本不调用（上面跑过两次都没触发暂停）；SELECT 它必调，
         // 暂停才能确定发生。ask 优先级高于 allow（评估顺序 deny > ask > 自检 > allow）
@@ -376,12 +403,11 @@ public class PermissionTest {
             RuntimeContext ctx = RuntimeContext.builder()
                     .userId("zhouwy").sessionId("sPerm6-" + UUID.randomUUID()).build();
 
-            // ---- 循环执行：暂停就批准续跑，直到出最终结果 ----
-            // streamEvents() 而不是 call()：call() 只给最终 Msg，中间事件全被扔掉；
-            // 事件流里关心两种事件：
-            //   AgentResultEvent        → 流程走完，带着最终 Msg
-            //   RequireUserConfirmEvent → 被 ask 规则扣下了，暂停等批复
-            // 循环是因为模型可能重试（比如给 SELECT 加别名再查一遍），每次重试都再触发暂停
+            // 真人批复：agent 每次停下来，就在终端里问你 y/n，你说了算
+            Scanner scanner = new Scanner(System.in);
+
+            // ---- 主循环：agent 每次停下来问你，你答完它接着跑，直到它跑完出最终答案 ----
+            // 必须用 streamEvents() 拿事件：call() 只返回最终答案，看不见"agent 在等你批准"这件事
             List<Msg> msgs = List.of(new UserMessage(
                     "你是运维助手，这是测试库。用 run_sql 工具依次执行两条 SQL，必须调用工具："
                             + "第一条 SELECT count(*) FROM users；"
@@ -391,31 +417,42 @@ public class PermissionTest {
             for (int round = 1; round <= 6; round++) {
                 List<AgentEvent> events = agent.streamEvents(msgs, ctx).collectList().block();
 
-                // 关键顺序：先查确认请求，再查结果。
-                // 暂停批次的流里也会带一个 AgentResultEvent，但文本是空的——
-                // 它只代表"这轮流结束了"，不是最终答案；先查它会把暂停误判成跑完
+                // 注意顺序：先看有没有"等你批准"的请求，再看有没有跑完。
+                // 有个坑：agent 暂停时也会发一个"跑完"事件，但内容是空的——
+                // 先看它会把"等着批准"误判成"跑完了"
                 RequireUserConfirmEvent confirm = events.stream()
                         .filter(RequireUserConfirmEvent.class::isInstance)
                         .map(RequireUserConfirmEvent.class::cast)
                         .findFirst()
                         .orElse(null);
                 if (confirm != null && !confirm.getToolCalls().isEmpty()) {
-                    System.out.println("第 " + round + " 轮暂停，扣下: "
-                            + confirm.getToolCalls().stream()
-                                    .map(tc -> tc.getName() + " " + tc.getInput()).toList());
+                    System.out.println();
+                    System.out.println("===== agent 停下来了，等你决定 =====");
 
-                    // 从事件里拿被扣的调用列表（ToolUseBlock 带 id+工具名+参数，
-                    // id 是续跑对账的钥匙），全部批准。ConfirmResult 还可带 rules
-                    //（"以后都放行"=弹窗的"始终允许"勾选）和拒绝时的 reason。
-                    // 批复送达的暗号：List<ConfirmResult> 塞进下一条消息 metadata，
-                    // key = Msg.METADATA_CONFIRM_RESULTS；同 (userId, sessionId) 再跑，
-                    // agent 从磁盘捡起 ASKING 状态、对账 id、批准的调用跳过引擎直接执行。
-                    // 注意必须把本轮扣下的调用【全部】裁决——漏一个，续跑马上又暂停在它身上
-                    List<ConfirmResult> decisions = confirm.getToolCalls().stream()
-                            .map(tc -> new ConfirmResult(true, tc))
-                            .toList();
+                    // 事件里带着被扣下的每次调用（id + 工具名 + 参数）。你逐条决定 y/n。
+                    // 必须每条都给答复——漏一条，agent 接着跑时立刻又停在那条没答的上面。
+                    // 拒绝时可以附一句理由，这句话会原样变成工具结果回给模型。
+                    List<ConfirmResult> decisions = new ArrayList<>();
+                    for (ToolUseBlock tc : confirm.getToolCalls()) {
+                        System.out.println("agent 想调用: " + tc.getName() + " 参数=" + tc.getInput());
+                        System.out.print("同意执行吗？y=同意 / n=拒绝 > ");
+                        System.out.flush();
+                        String answer = scanner.hasNextLine()
+                                ? scanner.nextLine().trim().toLowerCase()
+                                : "n";   // 终端关着输入不了时（比如 CI），按拒绝处理
+                        if (answer.startsWith("y")) {
+                            decisions.add(new ConfirmResult(true, tc));
+                            System.out.println("→ 你同意了");
+                        } else {
+                            decisions.add(new ConfirmResult(false, tc, null, "用户在终端拒绝了这次调用"));
+                            System.out.println("→ 你拒绝了");
+                        }
+                    }
+
+                    // 把你的决定告诉 agent 的方式是框架定好的：装进下一条消息里，
+                    // key 用 Msg.METADATA_CONFIRM_RESULTS，同一个会话再跑一遍即可
                     msgs = List.of(UserMessage.builder()
-                            .textContent("同意执行")
+                            .textContent("用户已批复")
                             .metadata(Map.of(Msg.METADATA_CONFIRM_RESULTS, decisions))
                             .build());
                     continue;
