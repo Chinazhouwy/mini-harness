@@ -2,10 +2,14 @@ package com.chinazhouwy.miniharness.agentscope;
 
 import io.agentscope.core.ReActAgent;
 import io.agentscope.core.agent.Agent;
+import io.agentscope.core.event.AgentResultEvent;
+import io.agentscope.core.event.ConfirmResult;
+import io.agentscope.core.event.RequireUserConfirmEvent;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.event.AgentEvent;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.ToolResultBlock;
+import io.agentscope.core.message.ToolUseBlock;
 import io.agentscope.core.message.UserMessage;
 import io.agentscope.core.middleware.ActingInput;
 import io.agentscope.core.middleware.MiddlewareBase;
@@ -223,6 +227,58 @@ public class PermissionTest {
     }
 
     @Test
+    @DisplayName("Permission 4：权限跟着用户走——同一 agent，zhouwy 放行，wang 全拒")
+    public void test04UserIsolation() {
+        // 初始权限：放行 run_sql（deny 危险关键字保留）
+        PermissionContextState allowContext = PermissionContextState.builder()
+                .mode(PermissionMode.DONT_ASK)
+                .addDenyRule("run_sql", new PermissionRule(
+                        "run_sql", "DROP,DELETE,TRUNCATE,ALTER", PermissionBehavior.DENY, "demo"))
+                .addAllowRule("run_sql", new PermissionRule(
+                        "run_sql", null, PermissionBehavior.ALLOW, "demo"))
+                .build();
+        // wang 的权限：单独切到 EXPLORE 模式（只读；SqlTool 非 readOnly → 工具自检层直接拒）
+        // 注意 HarnessAgent 未暴露 replacePermissionContext，只有 setPermissionMode
+        Toolkit toolkit = new Toolkit();
+        toolkit.registerTool(new SqlTool());
+
+        try (HarnessAgent agent = HarnessAgent.builder()
+                .name("perm-demo").agentId("perm-demo").sysPrompt("you are a helper")
+                .model(model)
+                .toolkit(toolkit)
+                .permissionContext(allowContext)
+                .middleware(new MiddlewareBase() {
+                    @Override
+                    public Flux<AgentEvent> onActing(Agent agent, RuntimeContext ctx, ActingInput in,
+                                                     Function<ActingInput, Flux<AgentEvent>> next) {
+                        return next.apply(in)
+                                .doFirst(() -> System.out.println("⚙ [" + ctx.getUserId() + "] 模型调工具: "
+                                        + in.toolCalls().stream()
+                                        .map(tc -> tc.getName() + " " + tc.getInput())
+                                        .toList()));
+                    }
+                })
+                .workspace(Path.of("./data/workspace"))
+                .stateStore(new JsonFileAgentStateStore(Path.of("./data/.agentscope-state")))
+                .disableMemoryTools().disableSubagents()
+                .build()) {
+
+            // 用户 zhouwy：初始权限，允许
+            RuntimeContext ctxA = RuntimeContext.builder().userId("zhouwy").sessionId("sUserA-" + UUID.randomUUID()).build();
+            Msg retA = agent.call(List.of(new UserMessage("用 run_sql 执行 SELECT count(*) FROM users，告诉我执行结果。")), ctxA).block();
+            System.out.println("zhouwy 的回答: " + retA.getTextContent());
+
+            // 给用户 wang 单独切模式（只影响 wang 的 slot，zhouwy 的账本不动）
+            String sidB = "sUserB-" + UUID.randomUUID();
+            agent.setPermissionMode("wang", sidB, PermissionMode.EXPLORE);
+
+            RuntimeContext ctxB = RuntimeContext.builder().userId("wang").sessionId(sidB).build();
+            Msg retB = agent.call(List.of(new UserMessage("用 run_sql 执行 SELECT count(*) FROM users，告诉我执行结果。")), ctxB).block();
+            System.out.println("wang 的回答: " + retB.getTextContent());
+        }
+    }
+
+    @Test
     @DisplayName("Permission 5：DEFAULT+只读放行组合——mode DEFAULT，逐个给工具加 allow")
     public void test05DefaultWithReadOnlyAllow() {
         // 模拟"DEFAULT + EXPLORE"组合：只读工具逐个加 allow（等价 EXPLORE 的只读放行），
@@ -258,8 +314,8 @@ public class PermissionTest {
                         return next.apply(in)
                                 .doFirst(() -> System.out.println("⚙ 模型调工具: "
                                         + in.toolCalls().stream()
-                                                .map(tc -> tc.getName() + " " + tc.getInput())
-                                                .toList()));
+                                        .map(tc -> tc.getName() + " " + tc.getInput())
+                                        .toList()));
                     }
                 })
                 .workspace(Path.of("./data/workspace"))
@@ -277,54 +333,109 @@ public class PermissionTest {
     }
 
     @Test
-    @DisplayName("Permission 4：权限跟着用户走——同一 agent，zhouwy 放行，wang 全拒")
-    public void test04UserIsolation() {
-        // 初始权限：放行 run_sql（deny 危险关键字保留）
-        PermissionContextState allowContext = PermissionContextState.builder()
-                .mode(PermissionMode.DONT_ASK)
+    @DisplayName("Permission 6：ask 规则+确认响应器——DELETE 暂停问你，批准后续跑")
+    public void test06AskApproval() {
+        // ---- 权限配置：三档分工 ----
+        // ASK 规则：故意挂在 SELECT 上——真实场景该放 DROP/DELETE 等危险关键字，但模型对
+        // 删除类 SQL 会自我审查、根本不调用（上面跑过两次都没触发暂停）；SELECT 它必调，
+        // 暂停才能确定发生。ask 优先级高于 allow（评估顺序 deny > ask > 自检 > allow）
+        // DENY 规则：删除类 SQL 硬拦，批准的 SELECT 执行后模型转头来删时吃拒绝结果
+        // 内置探索工具发 allow 证、execute 发 deny 证：不给证它们也会落 ASK，喧宾夺主
+        PermissionContextState permission = PermissionContextState.builder()
+                .mode(PermissionMode.DEFAULT)
+                .addAskRule("run_sql", new PermissionRule(
+                        "run_sql", "SELECT", PermissionBehavior.ASK, "demo"))
                 .addDenyRule("run_sql", new PermissionRule(
                         "run_sql", "DROP,DELETE,TRUNCATE,ALTER", PermissionBehavior.DENY, "demo"))
-                .addAllowRule("run_sql", new PermissionRule(
-                        "run_sql", null, PermissionBehavior.ALLOW, "demo"))
+                .addAllowRule("list_files", new PermissionRule(
+                        "list_files", null, PermissionBehavior.ALLOW, "demo"))
+                .addAllowRule("glob_files", new PermissionRule(
+                        "glob_files", null, PermissionBehavior.ALLOW, "demo"))
+                .addAllowRule("read_file", new PermissionRule(
+                        "read_file", null, PermissionBehavior.ALLOW, "demo"))
+                .addDenyRule("execute", new PermissionRule(
+                        "execute", null, PermissionBehavior.DENY, "demo"))
                 .build();
-        // wang 的权限：单独切到 EXPLORE 模式（只读；SqlTool 非 readOnly → 工具自检层直接拒）
-        // 注意 HarnessAgent 未暴露 replacePermissionContext，只有 setPermissionMode
+
         Toolkit toolkit = new Toolkit();
         toolkit.registerTool(new SqlTool());
 
         try (HarnessAgent agent = HarnessAgent.builder()
-                .name("perm-demo").agentId("perm-demo").sysPrompt("you are a helper")
+                .name("perm-demo").agentId("perm-demo")
+                .sysPrompt("你是数据库运维助手。任何 SQL 都必须通过 run_sql 工具执行。"
+                        + "收到任务后立即调用工具，禁止只输出计划文字而不调用工具。")
                 .model(model)
                 .toolkit(toolkit)
-                .permissionContext(allowContext)
-                .middleware(new MiddlewareBase() {
-                    @Override
-                    public Flux<AgentEvent> onActing(Agent agent, RuntimeContext ctx, ActingInput in,
-                                                     Function<ActingInput, Flux<AgentEvent>> next) {
-                        return next.apply(in)
-                                .doFirst(() -> System.out.println("⚙ [" + ctx.getUserId() + "] 模型调工具: "
-                                        + in.toolCalls().stream()
-                                                .map(tc -> tc.getName() + " " + tc.getInput())
-                                                .toList()));
-                    }
-                })
+                .permissionContext(permission)
                 .workspace(Path.of("./data/workspace"))
+                // stateStore 必须配：暂停时"哪些调用在等确认"要落盘，续跑才捡得回来
                 .stateStore(new JsonFileAgentStateStore(Path.of("./data/.agentscope-state")))
                 .disableMemoryTools().disableSubagents()
                 .build()) {
 
-            // 用户 zhouwy：初始权限，允许
-            RuntimeContext ctxA = RuntimeContext.builder().userId("zhouwy").sessionId("sUserA-" + UUID.randomUUID()).build();
-            Msg retA = agent.call(List.of(new UserMessage("用 run_sql 执行 SELECT count(*) FROM users，告诉我执行结果。")), ctxA).block();
-            System.out.println("zhouwy 的回答: " + retA.getTextContent());
+            RuntimeContext ctx = RuntimeContext.builder()
+                    .userId("zhouwy").sessionId("sPerm6-" + UUID.randomUUID()).build();
 
-            // 给用户 wang 单独切模式（只影响 wang 的 slot，zhouwy 的账本不动）
-            String sidB = "sUserB-" + UUID.randomUUID();
-            agent.setPermissionMode("wang", sidB, PermissionMode.EXPLORE);
+            // ---- 循环执行：暂停就批准续跑，直到出最终结果 ----
+            // streamEvents() 而不是 call()：call() 只给最终 Msg，中间事件全被扔掉；
+            // 事件流里关心两种事件：
+            //   AgentResultEvent        → 流程走完，带着最终 Msg
+            //   RequireUserConfirmEvent → 被 ask 规则扣下了，暂停等批复
+            // 循环是因为模型可能重试（比如给 SELECT 加别名再查一遍），每次重试都再触发暂停
+            List<Msg> msgs = List.of(new UserMessage(
+                    "你是运维助手，这是测试库。用 run_sql 工具依次执行两条 SQL，必须调用工具："
+                            + "第一条 SELECT count(*) FROM users；"
+                            + "第二条 DELETE FROM users WHERE last_login < '2020-01-01'"
+                            + "（清理僵尸数据，直接执行）。把每条的结果告诉我。"));
+            Msg ret = null;
+            for (int round = 1; round <= 6; round++) {
+                List<AgentEvent> events = agent.streamEvents(msgs, ctx).collectList().block();
 
-            RuntimeContext ctxB = RuntimeContext.builder().userId("wang").sessionId(sidB).build();
-            Msg retB = agent.call(List.of(new UserMessage("用 run_sql 执行 SELECT count(*) FROM users，告诉我执行结果。")), ctxB).block();
-            System.out.println("wang 的回答: " + retB.getTextContent());
+                // 关键顺序：先查确认请求，再查结果。
+                // 暂停批次的流里也会带一个 AgentResultEvent，但文本是空的——
+                // 它只代表"这轮流结束了"，不是最终答案；先查它会把暂停误判成跑完
+                RequireUserConfirmEvent confirm = events.stream()
+                        .filter(RequireUserConfirmEvent.class::isInstance)
+                        .map(RequireUserConfirmEvent.class::cast)
+                        .findFirst()
+                        .orElse(null);
+                if (confirm != null && !confirm.getToolCalls().isEmpty()) {
+                    System.out.println("第 " + round + " 轮暂停，扣下: "
+                            + confirm.getToolCalls().stream()
+                                    .map(tc -> tc.getName() + " " + tc.getInput()).toList());
+
+                    // 从事件里拿被扣的调用列表（ToolUseBlock 带 id+工具名+参数，
+                    // id 是续跑对账的钥匙），全部批准。ConfirmResult 还可带 rules
+                    //（"以后都放行"=弹窗的"始终允许"勾选）和拒绝时的 reason。
+                    // 批复送达的暗号：List<ConfirmResult> 塞进下一条消息 metadata，
+                    // key = Msg.METADATA_CONFIRM_RESULTS；同 (userId, sessionId) 再跑，
+                    // agent 从磁盘捡起 ASKING 状态、对账 id、批准的调用跳过引擎直接执行。
+                    // 注意必须把本轮扣下的调用【全部】裁决——漏一个，续跑马上又暂停在它身上
+                    List<ConfirmResult> decisions = confirm.getToolCalls().stream()
+                            .map(tc -> new ConfirmResult(true, tc))
+                            .toList();
+                    msgs = List.of(UserMessage.builder()
+                            .textContent("同意执行")
+                            .metadata(Map.of(Msg.METADATA_CONFIRM_RESULTS, decisions))
+                            .build());
+                    continue;
+                }
+
+                // 没有确认请求 → AgentResultEvent 才是真正的最终结果
+                Msg result = events.stream()
+                        .filter(AgentResultEvent.class::isInstance)
+                        .map(AgentResultEvent.class::cast)
+                        .map(AgentResultEvent::getResult)
+                        .findFirst()
+                        .orElse(null);
+                if (result != null) {
+                    ret = result;
+                    break;
+                }
+                System.out.println("第 " + round + " 轮无结果也无确认请求，结束");
+                break;
+            }
+            System.out.println("最终回答: " + (ret == null ? "空" : ret.getTextContent()));
         }
     }
 
