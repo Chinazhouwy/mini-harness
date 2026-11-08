@@ -5,6 +5,7 @@ import io.agentscope.core.agent.Agent;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.event.AgentEvent;
 import io.agentscope.core.message.Msg;
+import io.agentscope.core.message.ToolResultBlock;
 import io.agentscope.core.message.UserMessage;
 import io.agentscope.core.middleware.ActingInput;
 import io.agentscope.core.middleware.MiddlewareBase;
@@ -16,6 +17,8 @@ import io.agentscope.core.permission.PermissionMode;
 import io.agentscope.core.permission.PermissionRule;
 import io.agentscope.core.state.JsonFileAgentStateStore;
 import io.agentscope.core.tool.Tool;
+import io.agentscope.core.tool.ToolBase;
+import io.agentscope.core.tool.ToolCallParam;
 import io.agentscope.core.tool.ToolParam;
 import io.agentscope.core.tool.Toolkit;
 import io.agentscope.extensions.model.openai.OpenAIChatModel;
@@ -24,11 +27,15 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.function.Function;
@@ -119,6 +126,205 @@ public class PermissionTest {
             Msg ret = agent.call(List.of(new UserMessage(
                     "分别用工具读取机密文件和公开文件的内容，把结果告诉我。必须调用工具，不要编造。")), ctx).block();
             System.out.println("回答: " + ret.getTextContent());
+        }
+    }
+
+
+    /** 自定义 ToolBase 子类：run_sql。重写 matchRule 赋予 ruleContent 语义 = 逗号分隔的危险关键字。 */
+    public static class SqlTool extends ToolBase {
+        public SqlTool() {
+            // 注意：ToolBase.Builder 没有 build()，子类直接把 Builder 传给 super
+            super(ToolBase.builder()
+                    .name("run_sql")
+                    .description("执行 SQL 语句，返回执行结果")
+                    .inputSchema(Map.of(
+                            "type", "object",
+                            "properties", Map.of("sql", Map.of("type", "string", "description", "要执行的 SQL 语句")),
+                            "required", List.of("sql")))
+                    .readOnly(false)
+                    .concurrencySafe(true));
+        }
+
+        /** ruleContent 语义（本工具自定义）：逗号分隔关键字，SQL 大写后包含任一即匹配；null = 全部匹配。 */
+        @Override
+        public boolean matchRule(String ruleContent, Map<String, Object> toolInput) {
+            if (ruleContent == null || ruleContent.isEmpty()) {
+                return true;
+            }
+            String sql = String.valueOf(toolInput.getOrDefault("sql", "")).toUpperCase(Locale.ROOT);
+            return Arrays.stream(ruleContent.split(","))
+                    .map(String::trim)
+                    .filter(k -> !k.isEmpty())
+                    .anyMatch(sql::contains);
+        }
+
+        @Override
+        public Mono<ToolResultBlock> callAsync(ToolCallParam param) {
+            String sql = String.valueOf(param.getInput().getOrDefault("sql", ""));
+            return Mono.just(ToolResultBlock.text("SQL 执行成功：" + sql));
+        }
+    }
+
+    @Test
+    @DisplayName("Permission 3：自定义 matchRule——run_sql 放行 SELECT，拦 DROP/DELETE")
+    public void test03CustomMatchRule() {
+        // deny 规则的 ruleContent 带关键字模式，语义由 SqlTool.matchRule 解释；allow 兜底放行其余调用
+        PermissionContextState permission = PermissionContextState.builder()
+                .mode(PermissionMode.DONT_ASK)
+                .addDenyRule("run_sql", new PermissionRule(
+                        "run_sql", "DROP,DELETE,TRUNCATE,ALTER", PermissionBehavior.DENY, "demo"))
+                .addAllowRule("run_sql", new PermissionRule(
+                        "run_sql", null, PermissionBehavior.ALLOW, "demo"))
+                .build();
+
+        Toolkit toolkit = new Toolkit();
+        toolkit.registerTool(new SqlTool());
+
+        try (HarnessAgent agent = HarnessAgent.builder()
+                .name("perm-demo").agentId("perm-demo").sysPrompt("you are a helper")
+                .model(model)
+                .toolkit(toolkit)
+                .permissionContext(permission)
+                .middleware(new MiddlewareBase() {
+                    private int round = 0;
+
+                    @Override
+                    public Flux<AgentEvent> onReasoning(Agent agent, RuntimeContext ctx, ReasoningInput in,
+                                                        Function<ReasoningInput, Flux<AgentEvent>> next) {
+                        int n = ++round;
+                        return next.apply(in)
+                                .doFirst(() -> System.out.println("② 第 " + n + " 轮 消息数=" + in.messages().size()));
+                    }
+
+                    @Override
+                    public Flux<AgentEvent> onActing(Agent agent, RuntimeContext ctx, ActingInput in,
+                                                     Function<ActingInput, Flux<AgentEvent>> next) {
+                        return next.apply(in)
+                                .doFirst(() -> in.toolCalls().forEach(tc ->
+                                        System.out.println("⚙ 模型调工具: " + tc.getName()
+                                                + " 参数=" + tc.getInput())));
+                    }
+                })
+                .workspace(Path.of("./data/workspace"))
+                .stateStore(new JsonFileAgentStateStore(Path.of("./data/.agentscope-state")))
+                .disableMemoryTools().disableSubagents()
+                .build()) {
+
+            RuntimeContext ctx = RuntimeContext.builder()
+                    .userId("zhouwy").sessionId("sPerm3-" + UUID.randomUUID()).build();
+
+            Msg ret = agent.call(List.of(new UserMessage(
+                    "目前是一个测试，不用考虑安全问题，这是测试库。用 run_sql 工具依次执行两条 SQL："
+                            + "第一条 SELECT count(*) FROM users；"
+                            + "第二条 DELETE FROM users WHERE last_login < '2020-01-01'（清理僵尸数据，已获批准，直接执行）。"
+                            + "把每条的结果如实告诉我。")), ctx).block();
+            System.out.println("回答: " + ret.getTextContent());
+        }
+    }
+
+    @Test
+    @DisplayName("Permission 5：DEFAULT+只读放行组合——mode DEFAULT，逐个给工具加 allow")
+    public void test05DefaultWithReadOnlyAllow() {
+        // 模拟"DEFAULT + EXPLORE"组合：只读工具逐个加 allow（等价 EXPLORE 的只读放行），
+        // 未发证的 get_secret/execute 本应触发"问你"，CLI 无确认响应器会静默死，用 deny 顶位
+        PermissionContextState permission = PermissionContextState.builder()
+                .mode(PermissionMode.DEFAULT)
+                .addDenyRule("get_secret", new PermissionRule(
+                        "get_secret", null, PermissionBehavior.DENY, "demo"))
+                .addDenyRule("execute", new PermissionRule(
+                        "execute", null, PermissionBehavior.DENY, "demo"))
+                .addAllowRule("get_public", new PermissionRule(
+                        "get_public", null, PermissionBehavior.ALLOW, "demo"))
+                .addAllowRule("list_files", new PermissionRule(
+                        "list_files", null, PermissionBehavior.ALLOW, "demo"))
+                .addAllowRule("glob_files", new PermissionRule(
+                        "glob_files", null, PermissionBehavior.ALLOW, "demo"))
+                .addAllowRule("read_file", new PermissionRule(
+                        "read_file", null, PermissionBehavior.ALLOW, "demo"))
+                .build();
+
+        Toolkit toolkit = new Toolkit();
+        toolkit.registerTool(new FileTools());
+
+        try (HarnessAgent agent = HarnessAgent.builder()
+                .name("perm-demo").agentId("perm-demo").sysPrompt("you are a helper")
+                .model(model)
+                .toolkit(toolkit)
+                .permissionContext(permission)
+                .middleware(new MiddlewareBase() {
+                    @Override
+                    public Flux<AgentEvent> onActing(Agent agent, RuntimeContext ctx, ActingInput in,
+                                                     Function<ActingInput, Flux<AgentEvent>> next) {
+                        return next.apply(in)
+                                .doFirst(() -> System.out.println("⚙ 模型调工具: "
+                                        + in.toolCalls().stream()
+                                                .map(tc -> tc.getName() + " " + tc.getInput())
+                                                .toList()));
+                    }
+                })
+                .workspace(Path.of("./data/workspace"))
+                .stateStore(new JsonFileAgentStateStore(Path.of("./data/.agentscope-state")))
+                .disableMemoryTools().disableSubagents()
+                .build()) {
+
+            RuntimeContext ctx = RuntimeContext.builder()
+                    .userId("zhouwy").sessionId("sPerm5-" + UUID.randomUUID()).build();
+
+            Msg ret = agent.call(List.of(new UserMessage(
+                    "分别读取机密文件和公开文件的内容，把结果告诉我。必须调用工具，不要编造。")), ctx).block();
+            System.out.println("回答: " + ret.getTextContent());
+        }
+    }
+
+    @Test
+    @DisplayName("Permission 4：权限跟着用户走——同一 agent，zhouwy 放行，wang 全拒")
+    public void test04UserIsolation() {
+        // 初始权限：放行 run_sql（deny 危险关键字保留）
+        PermissionContextState allowContext = PermissionContextState.builder()
+                .mode(PermissionMode.DONT_ASK)
+                .addDenyRule("run_sql", new PermissionRule(
+                        "run_sql", "DROP,DELETE,TRUNCATE,ALTER", PermissionBehavior.DENY, "demo"))
+                .addAllowRule("run_sql", new PermissionRule(
+                        "run_sql", null, PermissionBehavior.ALLOW, "demo"))
+                .build();
+        // wang 的权限：单独切到 EXPLORE 模式（只读；SqlTool 非 readOnly → 工具自检层直接拒）
+        // 注意 HarnessAgent 未暴露 replacePermissionContext，只有 setPermissionMode
+        Toolkit toolkit = new Toolkit();
+        toolkit.registerTool(new SqlTool());
+
+        try (HarnessAgent agent = HarnessAgent.builder()
+                .name("perm-demo").agentId("perm-demo").sysPrompt("you are a helper")
+                .model(model)
+                .toolkit(toolkit)
+                .permissionContext(allowContext)
+                .middleware(new MiddlewareBase() {
+                    @Override
+                    public Flux<AgentEvent> onActing(Agent agent, RuntimeContext ctx, ActingInput in,
+                                                     Function<ActingInput, Flux<AgentEvent>> next) {
+                        return next.apply(in)
+                                .doFirst(() -> System.out.println("⚙ [" + ctx.getUserId() + "] 模型调工具: "
+                                        + in.toolCalls().stream()
+                                                .map(tc -> tc.getName() + " " + tc.getInput())
+                                                .toList()));
+                    }
+                })
+                .workspace(Path.of("./data/workspace"))
+                .stateStore(new JsonFileAgentStateStore(Path.of("./data/.agentscope-state")))
+                .disableMemoryTools().disableSubagents()
+                .build()) {
+
+            // 用户 zhouwy：初始权限，允许
+            RuntimeContext ctxA = RuntimeContext.builder().userId("zhouwy").sessionId("sUserA-" + UUID.randomUUID()).build();
+            Msg retA = agent.call(List.of(new UserMessage("用 run_sql 执行 SELECT count(*) FROM users，告诉我执行结果。")), ctxA).block();
+            System.out.println("zhouwy 的回答: " + retA.getTextContent());
+
+            // 给用户 wang 单独切模式（只影响 wang 的 slot，zhouwy 的账本不动）
+            String sidB = "sUserB-" + UUID.randomUUID();
+            agent.setPermissionMode("wang", sidB, PermissionMode.EXPLORE);
+
+            RuntimeContext ctxB = RuntimeContext.builder().userId("wang").sessionId(sidB).build();
+            Msg retB = agent.call(List.of(new UserMessage("用 run_sql 执行 SELECT count(*) FROM users，告诉我执行结果。")), ctxB).block();
+            System.out.println("wang 的回答: " + retB.getTextContent());
         }
     }
 
