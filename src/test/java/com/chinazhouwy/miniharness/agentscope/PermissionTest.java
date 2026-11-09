@@ -335,6 +335,42 @@ public class PermissionTest {
     }
 
     @Test
+    @DisplayName("Permission 7：@Tool readOnly——EXPLORE 模式下只读的放行，非只读的直接拒")
+    public void test07ReadOnlyFlag() {
+        // readOnly 的意思是"这个工具只读不写、没有副作用"。
+        // 它不是万能通行证：只在 EXPLORE（只读模式）和 ACCEPT_EDITS 两种模式下有特权——
+        // 只读的直接放行，非只读的直接拒。普通模式（DEFAULT/DONT_ASK）下这个标记不起作用。
+        // 这里一个规则都不写，全靠模式 + 标记决定：
+        //   get_public（readOnly=true）  → 放行
+        //   get_secret（没标）           → 拒绝
+        PermissionContextState permission = PermissionContextState.builder()
+                .mode(PermissionMode.EXPLORE)
+                .build();
+
+        Toolkit toolkit = new Toolkit();
+        toolkit.registerTool(new FileTools());
+
+        try (HarnessAgent agent = HarnessAgent.builder()
+                .name("perm-demo").agentId("perm-demo")
+                .sysPrompt("你是文件助手，用提供的工具完成任务。")
+                .model(model)
+                .toolkit(toolkit)
+                .permissionContext(permission)
+                .workspace(Path.of("./data/workspace"))
+                .stateStore(new JsonFileAgentStateStore(Path.of("./data/.agentscope-state")))
+                .disableMemoryTools().disableSubagents()
+                .build()) {
+
+            RuntimeContext ctx = RuntimeContext.builder()
+                    .userId("zhouwy").sessionId("sPerm7-" + UUID.randomUUID()).build();
+
+            Msg ret = agent.call(List.of(new UserMessage(
+                    "分别读取机密文件和公开文件的内容，必须调用工具，把结果告诉我。")), ctx).block();
+            System.out.println("回答: " + ret.getTextContent());
+        }
+    }
+
+    @Test
     @DisplayName("Permission 6：ask 规则+真人确认（交互入口在本类的 main 方法，JUnit 窗口收不了键盘）")
     public void test06AskApproval() {
         askApprovalDemo(model);
