@@ -19,7 +19,7 @@
 
     <properties>
         <java.version>21</java.version>
-        <agentscope.version>2.0.4</agentscope.version>
+        <agentscope.version>2.1.0-SNAPSHOT</agentscope.version>
     </properties>
 
     <dependencies>
@@ -40,7 +40,7 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
-        <!-- AgentScope Java 2.0：Harness 入口，会带上 agentscope-core
+        <!-- AgentScope Java：Harness 入口，会带上 agentscope-core
              （victools jsonschema 由 agentscope-core 传递引入，版本 4.38.0，
              切勿再在本 pom 显式声明 5.0.0，会与 AgentScope 字节码冲突） -->
         <dependency>
