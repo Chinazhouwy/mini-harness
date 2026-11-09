@@ -8,7 +8,6 @@ import io.agentscope.core.event.ToolCallEndEvent;
 import io.agentscope.core.message.ContentBlock;
 import io.agentscope.core.message.HintBlock;
 import io.agentscope.core.message.Msg;
-import io.agentscope.core.message.MsgRole;
 import io.agentscope.core.message.TextBlock;
 import io.agentscope.core.message.ThinkingBlock;
 import io.agentscope.core.message.ToolResultBlock;
@@ -22,10 +21,12 @@ import io.agentscope.extensions.model.openai.dto.OpenAIMessage;
 import io.agentscope.extensions.model.openai.dto.OpenAIToolCall;
 import io.agentscope.extensions.model.openai.formatter.OpenAIChatFormatter;
 import io.agentscope.harness.agent.HarnessAgent;
+import io.agentscope.harness.agent.context.ContextBlock;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -172,15 +173,12 @@ public class HarnessTestDemo {
     }
 
     /**
-     * 第三步「每轮推理：让模型看到当前需要的信息」里的第一个小点：
+     * 第三节「接入会变化的业务信息」：用文档原样的 builder.contextSource(...) 注册动态来源。
      * 每轮现取现发的信息会变，和上一节的 AGENTS.md（每趟读一次）正好相反。
-     *
-     * <p>注意：中文文档这节用的 contextSource / ContextBlock 属于 2.1.0-SNAPSHOT，
-     * 本机依赖的 2.0.4 里没有这两个类。这里用 2.0.4 已有的中间件机制，
-     * 在每轮准备请求时现取一次业务状态，演示的是同一件事。
+     * 文档示例返回固定值；这里让内容带上读取次数，才能看出每轮拿的是不是新值。
      */
     @Test
-    @DisplayName("上下文管理 3：每轮现取的信息会刷新")
+    @DisplayName("上下文管理 3：动态来源每轮重新读取")
     public void test04RuntimeStateRefreshesEachRound() throws IOException {
 
         Path ws = Path.of("./data/context-demo").toAbsolutePath().normalize();
@@ -196,7 +194,11 @@ public class HarnessTestDemo {
                 .sysPrompt("你是一个助手。需要文件内容时必须调用 read_file 工具，不要凭空猜。")
                 .model(model)
                 .workspace(ws)
-                .middleware(new RuntimeSource(loads))
+                .contextSource("build-status", request -> {
+                    int n = loads.incrementAndGet();
+                    return Mono.just(List.of(ContextBlock.runtime("latest",
+                            "当前构建状态（第 " + n + " 次读取）：测试失败")));
+                })
                 .middleware(probe)
                 .build()) {
 
@@ -626,30 +628,6 @@ public class HarnessTestDemo {
 
         int roundCount() {
             return round.get();
-        }
-    }
-
-    /** 每轮准备请求时现取一次业务状态，当成一条临时消息塞进本轮清单。 */
-    private static final class RuntimeSource implements MiddlewareBase {
-
-        private final AtomicInteger loads;
-
-        RuntimeSource(AtomicInteger loads) {
-            this.loads = loads;
-        }
-
-        @Override
-        public Flux<AgentEvent> onReasoning(Agent a, RuntimeContext ctx, ReasoningInput in,
-                                            Function<ReasoningInput, Flux<AgentEvent>> next) {
-            int n = loads.incrementAndGet();
-            List<Msg> rebuilt = new ArrayList<>(in.messages());
-            rebuilt.add(Msg.builder()
-                    .role(MsgRole.USER)
-                    .textContent("<HARNESS_CONTEXT>\nCurrent runtime state:\n"
-                            + "当前构建状态（第 " + n + " 次读取）：测试失败\n"
-                            + "</HARNESS_CONTEXT>")
-                    .build());
-            return next.apply(new ReasoningInput(rebuilt, in.tools(), in.options()));
         }
     }
 
