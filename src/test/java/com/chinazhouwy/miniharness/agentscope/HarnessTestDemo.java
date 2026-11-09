@@ -8,6 +8,7 @@ import io.agentscope.core.event.ToolCallEndEvent;
 import io.agentscope.core.message.ContentBlock;
 import io.agentscope.core.message.HintBlock;
 import io.agentscope.core.message.Msg;
+import io.agentscope.core.message.MsgRole;
 import io.agentscope.core.message.TextBlock;
 import io.agentscope.core.message.ThinkingBlock;
 import io.agentscope.core.message.ToolResultBlock;
@@ -136,6 +137,111 @@ public class HarnessTestDemo {
             probe.markCall(2);
             agent.call(List.of(new UserMessage("再说一句自我介绍。")), rc).block();
         }
+    }
+
+    /**
+     * 补上一步没验的那半句：同一趟里、第 1 轮问完之后把 AGENTS.md 换掉，
+     * 看第 2 轮请求会不会实时读到新内容。
+     */
+    @Test
+    @DisplayName("上下文管理 2 补验：同一趟中改规则文件")
+    public void test03EditDuringOneCall() throws IOException {
+
+        Path ws = Path.of("./data/context-demo").toAbsolutePath().normalize();
+        Path agents = ws.resolve("zhouwy").resolve("AGENTS.md");
+        Files.createDirectories(agents.getParent());
+        Files.writeString(agents, "项目规则标记：RULE_V1。\n");
+
+        MidCallProbe probe = new MidCallProbe(agents);
+
+        try (HarnessAgent agent = HarnessAgent.builder()
+                .name("ctx-demo").agentId("ctx-demo")
+                .sysPrompt("你是一个助手。需要文件内容时必须调用 read_file 工具，不要凭空猜。")
+                .model(model)
+                .workspace(ws)
+                .middleware(probe)
+                .build()) {
+
+            RuntimeContext rc = RuntimeContext.builder()
+                    .userId("zhouwy").sessionId("sCtx-" + UUID.randomUUID()).build();
+            agent.call(List.of(new UserMessage(
+                    "调用 read_file 读取 note.txt，然后把文件内容原样告诉我。")), rc).block();
+        }
+
+        System.out.println("\n===== 同一趟共请求模型 " + probe.roundCount() + " 轮 =====");
+    }
+
+    /**
+     * 第三步「每轮推理：让模型看到当前需要的信息」里的第一个小点：
+     * 每轮现取现发的信息会变，和上一节的 AGENTS.md（每趟读一次）正好相反。
+     *
+     * <p>注意：中文文档这节用的 contextSource / ContextBlock 属于 2.1.0-SNAPSHOT，
+     * 本机依赖的 2.0.4 里没有这两个类。这里用 2.0.4 已有的中间件机制，
+     * 在每轮准备请求时现取一次业务状态，演示的是同一件事。
+     */
+    @Test
+    @DisplayName("上下文管理 3：每轮现取的信息会刷新")
+    public void test04RuntimeStateRefreshesEachRound() throws IOException {
+
+        Path ws = Path.of("./data/context-demo").toAbsolutePath().normalize();
+        Files.createDirectories(ws.resolve("zhouwy"));
+        Files.writeString(ws.resolve("zhouwy").resolve("note.txt"), "上下文管理第三节的探针内容 42");
+
+        // 每被取一次，内容就变一次，这样能看出这一轮拿的是新值还是旧值
+        AtomicInteger loads = new AtomicInteger();
+        DynamicProbe probe = new DynamicProbe(loads);
+
+        try (HarnessAgent agent = HarnessAgent.builder()
+                .name("ctx-demo").agentId("ctx-demo")
+                .sysPrompt("你是一个助手。需要文件内容时必须调用 read_file 工具，不要凭空猜。")
+                .model(model)
+                .workspace(ws)
+                .middleware(new RuntimeSource(loads))
+                .middleware(probe)
+                .build()) {
+
+            RuntimeContext rc = RuntimeContext.builder()
+                    .userId("zhouwy").sessionId("sCtx-" + UUID.randomUUID()).build();
+            agent.call(List.of(new UserMessage(
+                    "调用 read_file 读取 note.txt，然后把文件内容原样告诉我。")), rc).block();
+        }
+
+        System.out.println("\n===== 一趟共请求模型 " + probe.roundCount()
+                + " 轮，业务状态累计现取 " + loads.get() + " 次 =====");
+    }
+
+    /** 把一条 SYSTEM 消息里的文字拼起来，两个探针共用 */
+    private static String systemText(List<Msg> msgs) {
+        StringBuilder sb = new StringBuilder();
+        for (Msg m : msgs) {
+            if (String.valueOf(m.getRole()).contains("SYSTEM") && m.getTextContent() != null) {
+                sb.append(m.getTextContent());
+            }
+        }
+        return sb.toString();
+    }
+
+    /** 只看提示词里 AGENTS.md 那一小段，别被 MEMORY.md 里自动记下的旧标记带偏 */
+    private static String agentsBlock(String system) {
+        int a = system.indexOf("<agents_context>");
+        int b = system.indexOf("</agents_context>");
+        if (a < 0 || b < 0 || b <= a) {
+            return "";
+        }
+        return system.substring(a, b);
+    }
+
+    /** 动态信息不进 System，是单独一条 USER 消息，外面套 HARNESS_CONTEXT 标签 */
+    private static List<String> harnessBlocks(List<Msg> msgs) {
+        List<String> blocks = new ArrayList<>();
+        for (Msg m : msgs) {
+            String t = m.getTextContent();
+            if (t != null && t.contains("<HARNESS_CONTEXT>")) {
+                int b = t.indexOf("</HARNESS_CONTEXT>");
+                blocks.add(b > 0 ? t.substring(0, b) : t);
+            }
+        }
+        return blocks;
     }
 
     /** 开头 n 字 + 末尾 n 字，中间 ....；换行压成空格，保证只占一行 */
@@ -472,26 +578,139 @@ public class HarnessTestDemo {
         }
 
         private void printRule(List<Msg> msgs, int r) {
-            StringBuilder sb = new StringBuilder();
-            for (Msg m : msgs) {
-                if (String.valueOf(m.getRole()).contains("SYSTEM") && m.getTextContent() != null) {
-                    sb.append(m.getTextContent());
-                }
-            }
-            String s = sb.toString();
-            int p = s.indexOf("RULE_V1");
-            if (p < 0) {
-                p = s.indexOf("RULE_V2");
-            }
+            String s = systemText(msgs);
+            String block = agentsBlock(s);
             System.out.println("\n  第 " + call.get() + " 次 call · 第 " + r + " 轮请求");
             System.out.println("    本轮共 " + msgs.size() + " 条消息（上一轮的问答还在不在，看这个数）");
-            System.out.println("    【系统提示词】" + s.length() + "字 | 含 RULE_V1："
-                    + s.contains("RULE_V1") + " | 含 RULE_V2：" + s.contains("RULE_V2"));
-            if (p >= 0) {
-                String near = s.substring(Math.max(0, p - 35), Math.min(s.length(), p + 45))
-                        .replaceAll("\\s+", " ");
-                System.out.println("    规则所在处：…" + near + "…");
+            System.out.println("    【系统提示词】" + s.length() + "字，其中 AGENTS.md 那段："
+                    + block.replaceAll("\\s+", " ").trim());
+            System.out.println("    那段含 RULE_V1：" + block.contains("RULE_V1")
+                    + " | 含 RULE_V2：" + block.contains("RULE_V2"));
+        }
+    }
+
+    /** 第 1 轮问完之后换掉规则文件，再看第 2 轮的提示词是不是实时变了。 */
+    private static final class MidCallProbe implements MiddlewareBase {
+
+        private final Path agents;
+        private final AtomicInteger round = new AtomicInteger();
+        private final AtomicBoolean edited = new AtomicBoolean(false);
+
+        MidCallProbe(Path agents) {
+            this.agents = agents;
+        }
+
+        @Override
+        public Flux<AgentEvent> onModelCall(Agent a, RuntimeContext ctx, ModelCallInput in,
+                                            Function<ModelCallInput, Flux<AgentEvent>> next) {
+            int r = round.incrementAndGet();
+            return next.apply(in)
+                    .doFirst(() -> {
+                        String block = agentsBlock(systemText(in.messages()));
+                        System.out.println("  第 " + r + " 轮请求 | AGENTS.md 那段："
+                                + block.replace("<agents_context>", "").replaceAll("\\s+", " ").trim()
+                                + " | 含 RULE_V1：" + block.contains("RULE_V1")
+                                + " | 含 RULE_V2：" + block.contains("RULE_V2"));
+                    })
+                    .doFinally(sig -> {
+                        if (r == 1 && edited.compareAndSet(false, true)) {
+                            try {
+                                Files.writeString(agents, "项目规则标记：RULE_V2。\n");
+                                System.out.println("  ---- 第 1 轮问完、第 2 轮问之前，把 AGENTS.md 换成了 RULE_V2 ----");
+                            } catch (IOException e) {
+                                throw new java.io.UncheckedIOException(e);
+                            }
+                        }
+                    });
+        }
+
+        int roundCount() {
+            return round.get();
+        }
+    }
+
+    /** 每轮准备请求时现取一次业务状态，当成一条临时消息塞进本轮清单。 */
+    private static final class RuntimeSource implements MiddlewareBase {
+
+        private final AtomicInteger loads;
+
+        RuntimeSource(AtomicInteger loads) {
+            this.loads = loads;
+        }
+
+        @Override
+        public Flux<AgentEvent> onReasoning(Agent a, RuntimeContext ctx, ReasoningInput in,
+                                            Function<ReasoningInput, Flux<AgentEvent>> next) {
+            int n = loads.incrementAndGet();
+            List<Msg> rebuilt = new ArrayList<>(in.messages());
+            rebuilt.add(Msg.builder()
+                    .role(MsgRole.USER)
+                    .textContent("<HARNESS_CONTEXT>\nCurrent runtime state:\n"
+                            + "当前构建状态（第 " + n + " 次读取）：测试失败\n"
+                            + "</HARNESS_CONTEXT>")
+                    .build());
+            return next.apply(new ReasoningInput(rebuilt, in.tools(), in.options()));
+        }
+    }
+
+    /** 只盯每轮请求里那块动态业务信息，顺带把规则文件那段当对照。 */
+    private static final class DynamicProbe implements MiddlewareBase {
+
+        private final AtomicInteger loads;
+        private final AtomicInteger round = new AtomicInteger();
+        private final AtomicReference<String> lastDynamic = new AtomicReference<>();
+        private final AtomicReference<String> lastAgents = new AtomicReference<>();
+
+        DynamicProbe(AtomicInteger loads) {
+            this.loads = loads;
+        }
+
+        @Override
+        public Flux<AgentEvent> onModelCall(Agent a, RuntimeContext ctx, ModelCallInput in,
+                                            Function<ModelCallInput, Flux<AgentEvent>> next) {
+            int r = round.incrementAndGet();
+            StringBuffer reply = new StringBuffer();
+            List<String> tools = new ArrayList<>();
+            return next.apply(in)
+                    .doFirst(() -> printRound(in.messages(), r))
+                    .doOnNext(ev -> {
+                        if (ev instanceof TextBlockDeltaEvent d && d.getDelta() != null) {
+                            reply.append(d.getDelta());
+                        } else if (ev instanceof ToolCallEndEvent t) {
+                            tools.add(t.getToolCallName());
+                        }
+                    })
+                    .doFinally(sig -> {
+                        String t = reply.toString().trim();
+                        System.out.println("    【模型回复】"
+                                + (t.isEmpty() ? "这一轮没有文字"
+                                        : t.length() + "字 | " + headTail(t, 50))
+                                + (tools.isEmpty() ? "" : " | 调用工具" + tools));
+                    });
+        }
+
+        private void printRound(List<Msg> msgs, int r) {
+            List<String> blocks = harnessBlocks(msgs);
+            List<String> oneLine = new ArrayList<>();
+            for (String b : blocks) {
+                oneLine.add(b.replaceAll("\\s+", " ").trim());
             }
+            String dynamic = String.join(" || ", oneLine);
+            String agents = agentsBlock(systemText(msgs)).replaceAll("\\s+", " ").trim();
+            String prevDynamic = lastDynamic.getAndSet(dynamic);
+            String prevAgents = lastAgents.getAndSet(agents);
+
+            System.out.println("\n===== 第 " + r + " 轮请求 | 共 " + msgs.size() + " 条消息 =====");
+            System.out.println("  【动态来源】共 " + blocks.size() + " 段 | "
+                    + (dynamic.isEmpty() ? "这一轮没看到" : headTail(dynamic, 120)));
+            System.out.println("    与上轮不同：" + (prevDynamic != null && !prevDynamic.equals(dynamic))
+                    + " | 累计现取 " + loads.get() + " 次");
+            System.out.println("  【系统提示词】AGENTS.md 那段与上轮一致："
+                    + (prevAgents == null ? "—（首轮）" : prevAgents.equals(agents)));
+        }
+
+        int roundCount() {
+            return round.get();
         }
     }
 }
