@@ -27,3 +27,6 @@ data/
 !src/main/java/com/chinazhouwy/miniharness/finance/research/data/*.java
 /.playwright-cli/
 .agentscope/
+
+# 第三方参考文档（AgentScope 官方文档快照，28MB，不入库）
+docs/agentscope-java/
