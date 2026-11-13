@@ -1,9 +1,24 @@
-# MiniHarness：长程任务与股票研究 Harness
+# MiniHarness：Java Agent 与长程任务 Harness 学习项目
 
-这个仓库现在专门研究一件事：如何让一个可以运行很久、可以暂停恢复、可以验证结果的任务可靠地推进。
+本项目用于结对学习和实践 Java Agent / Harness：以 Spring AI 提供模型、消息和工具等基础能力，逐步设计和实现自己的关键机制，并对照 AgentScope Java 理解不同做法。哪些能力复用、哪些自研，留待实践和实际需求决定。
 
-它不再以面试 Demo 或普通 Chat 为主线。当前先用不调用模型的确定性任务，把长程任务运行时的骨架跑通；
-后续再把这个骨架演变成一个有真实使用价值的股票/金融分析框架。
+学习从具体问题和可运行的小例子出发，关注代码、测试、日志以及必要的 Java 并发知识。任务关联型个人 Bot 是候选应用场景，尚未确定为项目目标。
+
+仓库也保留了此前的长程任务 Harness 和股票研究代码。以下相关说明描述这部分已有实现及其原有演进方向，不代表 Agent 学习路线已经完成或被股票场景限定。
+
+## Agent 学习现状
+
+- [Reactor 学习测试](src/test/java/com/chinazhouwy/miniharness/agentscope/study/ReactorStudyTest.java)和 [Spring AI 学习测试](src/test/java/com/chinazhouwy/miniharness/springai/study/SpringAiStudyTest.java)是正在整理的练习；[Reactor 复盘](docs/articles/Reactor学习复盘-初稿.md)仍为初稿。
+- [手写 Spring AI 工具循环](src/test/java/com/chinazhouwy/miniharness/springai/study/ManualSpringAiLoopTest.java)使用 `ChatModel` 与 `ToolCallingManager`，由自己的代码组织同步循环。固定响应测试验证了两次模型调用和一次工具执行；尚未用真实模型验证该循环。
+- [扩展点对照测试](src/test/java/com/chinazhouwy/miniharness/springai/study/AgentHookComparisonTest.java)对照 AgentScope 和 Spring AI，依赖本地模型配置与外部服务；它目前同时引用两套框架。
+- 当前 POM 使用 Spring AI 2.0.2 和本机 AgentScope 2.1.0-SNAPSHOT。后者是快照依赖，新环境需要先取得对应版本。
+
+### 已知依赖冲突
+
+当前两套框架放在同一个 Maven 依赖树中：Spring AI 引入 victools JSON Schema 5.0.0，AgentScope 引入 4.38.0；当前解析结果选中了 5.0.0。已用带参数的 AgentScope 工具注册复现 `NoSuchMethodError`，因此当前混合环境不能认为两边都可正常使用。
+
+在临时独立 Maven 工程中，Spring AI 固定响应循环和 AgentScope 带参数工具注册分别通过。建议后续拆成独立学习模块并使用各自的运行时 classpath；拆分、完整测试迁移和 IDE 配置**尚未完成**。同时引用两套框架的对照测试也需要拆成分别运行的示例。以上验证没有调用真实模型。
+
 
 ## 当前闭环
 
@@ -58,10 +73,10 @@ harness/
 
 ## 运行
 
-Harness 测试不需要 API Key、网络或外部服务：
+长程 Harness 的确定性测试本身不需要 API Key、网络或外部服务。仓库中也有需要本地模型配置、外部服务或其他资源的学习测试；不要假设直接运行 `mvn test` 能在任意环境全部通过。运行离线工具循环测试：
 
 ```bash
-mvn test
+mvn -Dtest=ManualSpringAiLoopTest test
 ```
 
 运行确定性控制台：
@@ -184,7 +199,7 @@ WeStock 日 K 线范围查询按约 240 个自然日分页并按交易日去重�
 股票、指标、财报、公告、估值、风险事件、来源和报告模板
 ```
 
-因此下一步应该是增加数据快照、更多市场口径和个股研究模型，而不是先把模型调用、多 Agent 或并行调度塞进核心运行时。
+此前的股票研究路线提出增加数据快照、更多市场口径和个股研究模型，并让领域能力与通用 Harness 保持分离。
 具体演进草图见：[股票研究路线图](docs/stock-research-roadmap.md)。
 
 ## 当前边界
@@ -199,4 +214,4 @@ WeStock 日 K 线范围查询按约 240 个自然日分页并按交易日去重�
 
 保留的 Spring Boot 入口是为了未来接入 Spring AI 或数据服务；核心 Harness 不依赖 API Key 才能测试。
 
-原始面试 Demo 和 Spring AI 学习代码保存在分支：`codex/miniharness-legacy`。
+原始面试 Demo 和此前的学习代码可在 `codex/miniharness-legacy` 分支查看；当前分支也有上文列出的 Spring AI 和 Reactor 学习代码。
