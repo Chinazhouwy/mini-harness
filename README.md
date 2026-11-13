@@ -12,6 +12,20 @@
 - [手写 Spring AI 工具循环](src/test/java/com/chinazhouwy/miniharness/springai/study/ManualSpringAiLoopTest.java)使用 `ChatModel` 与 `ToolCallingManager`，由自己的代码组织同步循环。固定响应测试验证了两次模型调用和一次工具执行；尚未用真实模型验证该循环。
 - [扩展点对照测试](src/test/java/com/chinazhouwy/miniharness/springai/study/AgentHookComparisonTest.java)对照 AgentScope 和 Spring AI，依赖本地模型配置与外部服务；它目前同时引用两套框架。
 - 当前 POM 使用 Spring AI 2.0.2 和本机 AgentScope 2.1.0-SNAPSHOT。后者是快照依赖，新环境需要先取得对应版本。
+- 已引入 Spring AI Community `spring-ai-agent-utils` 0.13.0，通用工具由调用方显式选择和注册。[接入测试](src/test/java/com/chinazhouwy/miniharness/springai/study/AgentUtilsToolStudyTest.java)用固定工具请求，经 Spring AI Manager 实际执行临时目录内的 Glob 查找；不调用模型和网络。网页抓取、搜索等工具尚未运行验证。[工具包文档](https://github.com/spring-ai-community/spring-ai-agent-utils/tree/v0.13.0/docs/tools)。
+- [HarnessCore Demo](src/test/java/com/chinazhouwy/miniharness/HarnessCoreDemo.java)已通过本地配置完成真实模型的流式聊天和 Glob 文件查找示例；它使用 `ChatClient` 内置工具循环，并非上面的手写循环验证。模型配置从被 Git 忽略的 `src/main/resources/openrouter.local.properties` 加载，配置键为 `miniharness.api.key`、`miniharness.base.url`、`miniharness.model`。无本地配置时，当前 `HarnessCore` Bean 初始化也会失败。
+
+### 结对实践安排
+
+目标是亲手理解并设计 Agent / Harness；以 Spring AI 为基础能力，通用工具优先评估复用，对照 Spring AI 原生循环、Spring AI Alibaba 和 AgentScope 的实现。以下为计划，未完成部分不视为已有能力。
+
+1. **最小 Agent**：从已有工具循环出发，共同确定模型、工具、消息和循环控制的职责，逐步提取最小实现。用同一固定响应测试验证，再单独验证真实模型。
+2. **执行边界**：一次处理调用预算、工具异常、超时、取消或多工具策略中的一个问题。复杂实现前先对照现成框架，决定复用或自研。
+3. **上下文与记忆**：设计消息保留、会话存储、长工具结果处理、token 预算和摘要压缩；实验检查压缩是否保留目标、约束及工具消息配对。
+4. **任务 Harness**：确认实际场景后，设计任务身份、状态、证据关联、完成验证和暂停恢复；结合已有 Harness 代码判断复用边界。任务关联型 Bot 仍是候选场景。
+5. **协作与取舍**：单 Agent 闭环成立后，再按需求加入子 Agent、上下文隔离和结果汇总；根据实验选择实现层，不预先承诺重写完整框架。
+
+每次结对按“一个问题 → 小段代码 → 共同判断或修改 → 日志/测试验证”推进。框架对照贯穿相关步骤；Alibaba 和 AgentScope 的运行实验需要独立依赖环境，不能直接假定与当前 Spring AI 版本兼容。
 
 ### 已知依赖冲突
 
@@ -77,6 +91,18 @@ harness/
 
 ```bash
 mvn -Dtest=ManualSpringAiLoopTest test
+```
+
+验证通用工具接入及原循环：
+
+```bash
+mvn -Dtest=AgentUtilsToolStudyTest,ManualSpringAiLoopTest test
+```
+
+手动运行真实模型 Demo（需要本地配置及网络，会请求外部模型服务；不在默认 `*Test` 扫描范围内）：
+
+```bash
+mvn -Dtest=HarnessCoreDemo test
 ```
 
 运行确定性控制台：

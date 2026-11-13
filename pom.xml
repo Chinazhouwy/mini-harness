@@ -21,6 +21,7 @@
         <java.version>21</java.version>
         <agentscope.version>2.1.0-SNAPSHOT</agentscope.version>
         <spring-ai.version>2.0.2</spring-ai.version>
+        <spring-ai-agent-utils.version>0.13.0</spring-ai-agent-utils.version>
     </properties>
 
     <dependencyManagement>
@@ -61,6 +62,13 @@
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-openai</artifactId>
+        </dependency>
+
+        <!-- 通用 Agent 工具；由调用方显式选择并注册，不会自动启用。 -->
+        <dependency>
+            <groupId>org.springaicommunity</groupId>
+            <artifactId>spring-ai-agent-utils</artifactId>
+            <version>${spring-ai-agent-utils.version}</version>
         </dependency>
 
         <!-- AgentScope 学习依赖暂时保留。它需要 victools 4.38.0，而当前
