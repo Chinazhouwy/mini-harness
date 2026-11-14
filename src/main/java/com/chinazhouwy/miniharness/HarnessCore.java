@@ -29,6 +29,9 @@ public class HarnessCore {
                         .baseUrl(config.baseUrl())
                         .model(config.model())
                         .build())
+                .httpClientBuilderCustomizer(
+                        builder -> builder.interceptor(new ModelHttpTraceInterceptor())
+                )
                 .build();
     }
 
