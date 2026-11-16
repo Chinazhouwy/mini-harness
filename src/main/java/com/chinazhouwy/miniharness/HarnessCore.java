@@ -15,24 +15,12 @@ import java.io.IOException;
 import java.util.List;
 
 
-@Component
 public class HarnessCore {
 
-    private OpenAiChatModel model;
+    private final OpenAiChatModel model;
 
-    @PostConstruct
-    void initModel() throws IOException {
-        ModelConfig config = ModelConfig.loadProperties();
-        model = OpenAiChatModel.builder()
-                .options(OpenAiChatOptions.builder()
-                        .apiKey(config.apiKey())
-                        .baseUrl(config.baseUrl())
-                        .model(config.model())
-                        .build())
-                .httpClientBuilderCustomizer(
-                        builder -> builder.interceptor(new ModelHttpTraceInterceptor())
-                )
-                .build();
+    public HarnessCore(OpenAiChatModel model) {
+        this.model = model;
     }
 
     public Flux<String> run(String system, String user, List<Object> tools, boolean stream){

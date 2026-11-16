@@ -6,7 +6,7 @@
         </encoder>
     </appender>
     <logger name="com.chinazhouwy.miniharness" level="ERROR"/>
-    <logger name="com.chinazhouwy.miniharness.ModelHttpTraceInterceptor" level="INFO"/>
+    <logger name="com.chinazhouwy.miniharness.interceptor.ModelHttpTraceInterceptor" level="INFO"/>
     <logger name="com.chinazhouwy.miniharness.advisor.TraceStreamAdvisor" level="INFO"/>
     <root level="INFO">
         <appender-ref ref="STDOUT"/>

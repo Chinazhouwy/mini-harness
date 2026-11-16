@@ -1,5 +1,6 @@
 package com.chinazhouwy.miniharness.springai.study;
 
+import com.chinazhouwy.miniharness.model.ModelCreator;
 import com.chinazhouwy.miniharness.agentscope.study.ContextPolicyTest;
 import io.agentscope.extensions.model.openai.OpenAIChatModel;
 import org.junit.jupiter.api.BeforeAll;
@@ -30,18 +31,8 @@ public class SpringAiStudyTest {
 
     @BeforeAll
     static void before() throws IOException {
-        Properties props = new Properties();
-        try (InputStream in = ContextPolicyTest.class.getClassLoader()
-                .getResourceAsStream("openrouter.local.properties")) {
-            props.load(in);
-        }
-        model = OpenAiChatModel.builder()
-                .options(OpenAiChatOptions.builder()
-                        .apiKey(props.getProperty("openrouter.api.key"))
-                        .baseUrl(props.getProperty("openrouter.base.url"))
-                        .model(props.getProperty("openrouter.model"))
-                        .build())
-                .build();
+        // 复用现有配置与 HTTP 请求日志，能够核对实际发给模型的历史消息。
+        model = new ModelCreator().getModel();
     }
 
     @Test
@@ -182,8 +173,17 @@ public class SpringAiStudyTest {
 
         System.out.println("第二轮：" + second);
 
-        // 查看当前存储的消息
-        System.out.println("保存的消息：" + memory.get(conversationId));
+        // 同一个 client 和 memory，换一个 conversationId，不应带入 A 的历史。
+        String other = client.prompt()
+                .user("我刚才说的任务是什么？如果没有相关记录，请明确说不知道。")
+                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, "study-002"))
+                .call()
+                .content();
+        System.out.println("新会话：" + other);
+
+        // 对照 HTTP 请求体和存储；不要仅凭模型是否回答正确判断会话隔离。
+        System.out.println("会话 A 保存的消息：" + memory.get(conversationId));
+        System.out.println("会话 B 保存的消息：" + memory.get("study-002"));
     }
 
     record TaskInfo(String name, String status) {}

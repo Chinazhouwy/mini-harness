@@ -1,9 +1,10 @@
-package com.chinazhouwy.miniharness;
+package com.chinazhouwy.miniharness.interceptor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import okhttp3.Interceptor;
 import okhttp3.Request;
 import okhttp3.Response;
+import okhttp3.ResponseBody;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.io.IOException;
@@ -49,11 +50,22 @@ public class ModelHttpTraceInterceptor implements Interceptor {
         // 2. 发送请求，拿到响应头和可供后续读取的响应体。
         Response response = chain.proceed(request);
 
-        log.info("[HTTP 响应] status={} contentType={}",
+        log.info("[HTTP 响应] code={} message={} path={}",
                 response.code(),
-                response.header("Content-Type"));
+                response.message(),
+                response.request().url().encodedPath());
 
-        // 响应体仍由 SDK 流式消费；聚合后的模型响应由 TraceStreamAdvisor 记录。
+        ResponseBody responseBody = response.body();
+        if (responseBody != null) {
+            String body = response.peekBody(Long.MAX_VALUE).string();
+            try {
+                log.info("[HTTP 响应体]\n{}", JSON.writerWithDefaultPrettyPrinter()
+                        .writeValueAsString(JSON.readTree(body)));
+            } catch (IOException exception) {
+                log.info("[HTTP 响应体] {}", body);
+            }
+        }
+
         return response;
     }
 }

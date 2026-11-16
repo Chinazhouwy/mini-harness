@@ -1,4 +1,4 @@
-package com.chinazhouwy.miniharness;
+package com.chinazhouwy.miniharness.model;
 
 import java.io.IOException;
 import java.io.InputStream;
