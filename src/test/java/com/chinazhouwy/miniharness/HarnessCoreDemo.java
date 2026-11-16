@@ -29,6 +29,7 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.IntStream;
 
 class HarnessCoreDemo {
 
@@ -70,16 +71,20 @@ class HarnessCoreDemo {
 
             @Override
             public EmbeddingResponse call(EmbeddingRequest request) {
-                return new EmbeddingResponse(java.util.stream.IntStream.range(0, request.getInstructions().size())
-                        .mapToObj(i -> new Embedding(new float[]{1, 0}, i)).toList());
+                return new EmbeddingResponse(
+                        IntStream.range(0, request.getInstructions().size())
+                                .mapToObj(i -> new Embedding(new float[]{1, 0}, i))
+                                .toList());
             }
         };
         SimpleVectorStore store = SimpleVectorStore.builder(embedding).build();
         store.add(List.of(
                 new Document("Java 学习组每周一晚上七点开会。", Map.of("type", "Java")),
                 new Document("Python 学习组每周五晚上八点开会。", Map.of("type", "Python"))));
+
         ChatClient client = ChatClient.builder(new ModelCreator().getModel())
-                .defaultAdvisors(QuestionAnswerAdvisor.builder(store).build()).build();
+                .defaultAdvisors(QuestionAnswerAdvisor.builder(store).build())
+                .build();
 
         // 相同问题只改变过滤参数；HTTP 日志可以核对实际加入提示词的文档。
         for (String type : List.of("Java", "Python")) {
@@ -107,7 +112,9 @@ class HarnessCoreDemo {
         ChatClient client = ChatClient.builder(new ModelCreator().getModel()).defaultAdvisors(trace).build();
         System.out.println(client.prompt().user("请用一句话打招呼。")
                 .advisors(a -> a.param("userId", "user-001")
-                        .param("tenantId", "tenant-001").param("traceId", "demo-trace-001"))
+                                            .param("tenantId", "tenant-001")
+                                            .param("traceId", "demo-trace-001")
+                )
                 .call().content());
     }
 
@@ -117,7 +124,8 @@ class HarnessCoreDemo {
         ChatMemory memory = MessageWindowChatMemory.builder().maxMessages(2).build();
         memory.add("A", List.of(new UserMessage("第一问"), new AssistantMessage("第一答")));
         memory.add("A", List.of(new UserMessage("第二问"), new AssistantMessage("第二答")));
-        System.out.println("窗口最多两条，当前消息：" + memory.get("A"));
+        memory.add("B", List.of(new UserMessage("第二问"), new AssistantMessage("第二答")));
+        System.out.println("窗口最多两条，当前消息：\n" + memory.get("A"));
     }
 
     @Test
