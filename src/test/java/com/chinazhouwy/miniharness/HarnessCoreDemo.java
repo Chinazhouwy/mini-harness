@@ -33,6 +33,25 @@ import java.util.stream.IntStream;
 
 class HarnessCoreDemo {
 
+    record StudyTask(String name, int minutes, String priority) {}
+
+    @Test
+    void chatWithStructuredOutput() throws Exception {
+        ChatClient client = ChatClient.create(new ModelCreator().getModel());
+
+        // entity() 根据目标 Java 类型生成格式要求，并将模型响应转换为对象。
+        // 本例只提取任务信息，没有实际创建或执行任务。
+        StudyTask task = client.prompt()
+                .system("提取学习任务，priority 使用 HIGH、MEDIUM 或 LOW。")
+                .user("我要复习 Java 并发，预计用 30 分钟，优先级高。")
+                .call()
+                .entity(StudyTask.class);
+
+        System.out.println("任务名：" + task.name());
+        System.out.println("分钟数：" + task.minutes());
+        System.out.println("优先级：" + task.priority());
+    }
+
     public static class CounterTool {
         private int calls;
 
@@ -54,8 +73,8 @@ class HarnessCoreDemo {
                 .call().chatResponse();
         System.out.println("关闭自动循环，模型工具请求：" + response.getResult().getOutput().getToolCalls());
         System.out.println("工具实际执行次数：" + tool.calls);
-
-        String answer = client.prompt().user("请调用 ping 工具，然后报告检查结果。")
+        System.out.println("=========================================================================================");
+        String answer = client.prompt().user("中文回答，请调用 ping 工具，然后报告检查结果。")
                 .tools(tool).advisors(AdvisorParams.toolCallingAdvisorAutoRegister(true))
                 .call().content();
         System.out.println("开启自动循环，最终回答：" + answer);
