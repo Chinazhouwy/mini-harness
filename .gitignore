@@ -24,3 +24,9 @@ Thumbs.db
 data/
 /.playwright-cli/
 .agentscope/
+
+# Studio 前端构建产物与依赖
+studio/node_modules/
+studio/dist/
+# 前端构建产物拷贝进应用的静态目录（构建脚本生成，不入库）
+examples/task-assistant/src/main/resources/static/

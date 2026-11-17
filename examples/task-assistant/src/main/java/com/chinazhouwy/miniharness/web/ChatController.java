@@ -49,6 +49,7 @@ public class ChatController {
         response.put("reply", result.reply());
         response.put("reason", result.decision().reason());
         response.put("needsUserConfirmation", result.decision().needsUserConfirmation());
+        response.put("question", result.decision().question());
         response.put("clarificationCandidates", result.decision().clarificationCandidates().stream()
                 .map(TaskId::value).toList());
         if (result.task() != null) {

@@ -1,0 +1,150 @@
+:root {
+  --bg: #0f1115;
+  --panel: #171a21;
+  --panel-2: #1e222b;
+  --border: #2a2f3a;
+  --text: #e6e9ef;
+  --text-dim: #9aa3b2;
+  --accent: #4f8cff;
+  --ok: #34d399;
+  --warn: #f59e0b;
+  --err: #f87171;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "PingFang SC", "Microsoft YaHei", -apple-system, sans-serif;
+  font-size: 14px;
+}
+
+#app { min-height: 100vh; }
+
+.layout { display: flex; min-height: 100vh; }
+
+.sidebar {
+  width: 200px;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  padding: 16px 12px;
+  flex-shrink: 0;
+}
+
+.sidebar .brand { font-weight: 700; font-size: 16px; margin-bottom: 4px; }
+.sidebar .brand-sub { color: var(--text-dim); font-size: 11px; margin-bottom: 20px; }
+
+.sidebar a {
+  display: block;
+  padding: 9px 12px;
+  border-radius: 8px;
+  color: var(--text-dim);
+  text-decoration: none;
+  margin-bottom: 4px;
+}
+
+.sidebar a.router-link-active { background: var(--panel-2); color: var(--text); }
+
+.main { flex: 1; padding: 20px 24px; min-width: 0; }
+
+.page-title { font-size: 18px; font-weight: 700; margin: 0 0 4px; }
+.page-sub { color: var(--text-dim); margin-bottom: 18px; font-size: 12px; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+
+.panel h3 { margin: 0 0 10px; font-size: 14px; }
+
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+th { color: var(--text-dim); font-weight: 500; font-size: 12px; }
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+}
+
+.badge.SUCCEEDED, .badge.APPROVED, .badge.ACTIVE, .badge.COMPLETED, .badge.EVALUATED_PASS { color: var(--ok); border-color: var(--ok); }
+.badge.FAILED, .badge.REJECTED, .badge.EVALUATED_FAIL { color: var(--err); border-color: var(--err); }
+.badge.RUNNING, .badge.QUEUED, .badge.PENDING_EVAL, .badge.AWAITING_INPUT { color: var(--warn); border-color: var(--warn); }
+.badge.SKIPPED, .badge.CANCELLED, .badge.OPEN, .badge.PENDING { color: var(--text-dim); }
+
+button {
+  background: var(--accent);
+  border: none;
+  color: #fff;
+  padding: 7px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+button.secondary { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+button.danger { background: transparent; color: var(--err); border: 1px solid var(--err); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+input[type="text"], textarea, select {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+textarea { width: 100%; resize: vertical; }
+
+.mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 12px; }
+.dim { color: var(--text-dim); }
+.error-text { color: var(--err); }
+.ok-text { color: var(--ok); }
+
+.chat-box { display: flex; flex-direction: column; gap: 10px; max-height: 55vh; overflow-y: auto; }
+.chat-msg { padding: 10px 12px; border-radius: 10px; max-width: 85%; }
+.chat-msg.user { background: #24406e; align-self: flex-end; }
+.chat-msg.harness { background: var(--panel-2); align-self: flex-start; }
+.chat-msg .meta { color: var(--text-dim); font-size: 11px; margin-top: 4px; }
+
+.event-line { padding: 4px 0; border-bottom: 1px dashed var(--border); font-size: 12px; }
+.event-line .type { color: var(--accent); }
+
+pre.json {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  overflow: auto;
+  max-height: 320px;
+  font-size: 12px;
+}
+
+.row { display: flex; gap: 12px; align-items: center; }
+.col { display: flex; flex-direction: column; gap: 8px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+.canvas-wrap { height: 480px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2); }
+
+.vue-flow__node { width: 170px; }
+.flow-node {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+.flow-node .n-id { font-weight: 700; }
+.flow-node .n-type { color: var(--text-dim); font-size: 11px; }
+.flow-node.status-SUCCEEDED { border-color: var(--ok); }
+.flow-node.status-FAILED { border-color: var(--err); }
+.flow-node.status-RUNNING { border-color: var(--warn); }
+.flow-node.status-SKIPPED { opacity: 0.5; }

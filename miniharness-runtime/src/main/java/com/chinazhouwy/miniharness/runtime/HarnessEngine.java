@@ -99,6 +99,7 @@ public class HarnessEngine {
 
     private final EngineConfig config;
     private final EventBus events = new EventBus();
+    private final com.chinazhouwy.miniharness.runtime.event.EventLog eventLog;
     private final TaskStore taskStore = new InMemoryTaskStore();
     private final RunStore runStore = new InMemoryRunStore();
     private final SkillStore skillStore = new SkillStore();
@@ -132,6 +133,8 @@ public class HarnessEngine {
 
     public HarnessEngine(EngineConfig config, AnalyzerPolicy analyzerPolicy, EvalGatePolicy gatePolicy) {
         this.config = config;
+        this.eventLog = new com.chinazhouwy.miniharness.runtime.event.EventLog();
+        this.events.subscribe(eventLog);
         this.router = new IntentRouter(taskStore, workflowRegistry, skillStore, config.decisionModel());
         this.caseRunner = new CaseRunner(nodeRegistry, toolRegistry, config.modelPort(), events, compiler);
         this.traceAnalyzer = new TraceAnalyzer(analyzerPolicy, compiler);
@@ -499,6 +502,10 @@ public class HarnessEngine {
 
     public EventBus events() {
         return events;
+    }
+
+    public com.chinazhouwy.miniharness.runtime.event.EventLog eventLog() {
+        return eventLog;
     }
 
     public TaskStore tasks() {

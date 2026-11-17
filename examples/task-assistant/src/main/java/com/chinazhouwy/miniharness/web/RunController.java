@@ -71,6 +71,15 @@ public class RunController {
                              @RequestParam(required = false) String taskId,
                              @RequestParam(defaultValue = "0") long since) {
         SseEmitter emitter = new SseEmitter(0L);
+        // 立即发送握手事件：冲刷响应头，让浏览器 EventSource 尽快进入 OPEN 状态。
+        // 注意：不使用具名事件（.name()），否则前端 onmessage 收不到，需按类型逐一 addEventListener。
+        try {
+            emitter.send(SseEmitter.event()
+                    .data(Map.of("connected", true, "since", since)));
+        } catch (IOException e) {
+            emitter.completeWithError(e);
+            return emitter;
+        }
         Runnable unsubscribe = engine.events().subscribe(event -> {
             if (runId != null && !runId.isBlank()
                     && (event.runId() == null || !event.runId().value().equals(runId))) {
@@ -86,7 +95,6 @@ public class RunController {
             try {
                 emitter.send(SseEmitter.event()
                         .id(String.valueOf(event.seq()))
-                        .name(event.type().name())
                         .data(ApiMappers.event(event)));
             } catch (IOException | IllegalStateException e) {
                 // 客户端断开等发送失败：结束本次连接。

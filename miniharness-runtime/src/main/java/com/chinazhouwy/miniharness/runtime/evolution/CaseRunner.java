@@ -143,7 +143,10 @@ public class CaseRunner {
                         "评测案例 " + result.evalCase().caseId() + " 失败: " + result.passDetail()));
             }
         }
-        return new ExperienceRecord(null, null, definition.ref(), "EVALUATION", result.outcome(),
+        // 评测经验用 eval-case 任务标识充当证据引用（无真实 Task/Run），保证候选来源可追溯。
+        return new ExperienceRecord(null,
+                new com.chinazhouwy.miniharness.runtime.core.TaskId("eval-case-" + result.evalCase().caseId()),
+                definition.ref(), "EVALUATION", result.outcome(),
                 result.errorCode(), result.passDetail(), nodes, result.output(), annotations,
                 Instant.now());
     }

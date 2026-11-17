@@ -1,0 +1,24 @@
+{
+  "name": "miniharness-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MiniHarness Studio：自进化 Agent Runtime 的可视化工作台（Vue3 + TS + Vue Flow）",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@vue-flow/core": "^1.42.1",
+    "pinia": "^3.0.2",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "typescript": "~5.7.2",
+    "vite": "^6.2.0",
+    "vue-tsc": "^2.2.4"
+  }
+}
