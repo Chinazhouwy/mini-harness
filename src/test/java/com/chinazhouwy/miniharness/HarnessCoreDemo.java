@@ -5,6 +5,7 @@ import com.chinazhouwy.miniharness.tool.FileSearchTool;
 import com.chinazhouwy.miniharness.tool.ToolCofig;
 import org.json.JSONML;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.DisplayName;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.AdvisorParams;
 import org.springframework.ai.chat.client.ChatClientRequest;
@@ -27,6 +28,7 @@ import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.model.tool.ToolCallingManager;
+import org.springframework.ai.model.tool.ToolCallLimitBehavior;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.execution.DefaultToolExecutionExceptionProcessor;
 import org.springframework.ai.tool.execution.ToolExecutionException;
@@ -53,6 +55,7 @@ class HarnessCoreDemo {
     }
 
     @Test
+    @DisplayName("工具异常策略：回填模型或抛给调用方")
     void chatWithToolFailure() throws Exception {
         OpenAiChatModel model = new ModelCreator().getModel();
         for (boolean alwaysThrow : List.of(false, true)) {
@@ -83,6 +86,7 @@ class HarnessCoreDemo {
     }
 
     @Test
+    @DisplayName("自定义输出转换器：生成范围约束并解析对象")
     void chatWithCustomOutputConverter() throws Exception {
         var converter = new CustomOutputExamples.TaskConverter();
         System.out.println("[自定义转换器生成的 Schema]\n" + converter.getJsonSchema());
@@ -96,6 +100,7 @@ class HarnessCoreDemo {
     }
 
     @Test
+    @DisplayName("自定义范围注解：生成 Schema 并校验输出")
     void chatWithCustomSchemaGenerator() throws Exception {
         String schema = CustomOutputExamples.generateSchema(CustomOutputExamples.AnnotatedTask.class);
         System.out.println("[自定义注解生成的 Schema]\n" + schema);
@@ -119,6 +124,7 @@ class HarnessCoreDemo {
     record StudyTask(String name, int minutes, String priority) {}
 
     @Test
+    @DisplayName("对照提示词与原生 Schema 输出（当前服务不支持原生格式）")
     void chatWithNativeStructuredOutput() throws Exception {
         // 当前配置的服务实测不支持 json_schema，第二次请求会返回 HTTP 400。
         // 保留错误用于观察能力边界；换成支持原生 Schema 的服务后可再次运行。
@@ -141,6 +147,7 @@ class HarnessCoreDemo {
     }
 
     @Test
+    @DisplayName("结构化输出校验失败后，反馈错误并重新生成")
     void chatWithStructuredOutputValidation() throws Exception {
         // 从类型和 @Schema 注解生成规则，不分析构造方法中的 if。
         var validation = StructuredOutputValidationAdvisor.builder()
@@ -187,6 +194,7 @@ class HarnessCoreDemo {
     }
 
     @Test
+    @DisplayName("Java 对象类型正确，仍需业务字段校验")
     void structuredOutputNeedsBusinessValidation() {
         // 用固定非法数据展示边界，避免依赖模型恰好生成错误结果；本例不请求模型。
         StudyTask raw = new StudyTask("复习 Java", -30, "HIGH");
@@ -197,6 +205,7 @@ class HarnessCoreDemo {
     }
 
     @Test
+    @DisplayName("将模型响应转换为学习任务 record")
     void chatWithStructuredOutput() throws Exception {
         ChatClient client = ChatClient.create(new ModelCreator().getModel());
 
@@ -224,6 +233,7 @@ class HarnessCoreDemo {
     }
 
     @Test
+    @DisplayName("工具循环参数：关闭与开启自动注册")
     void chatWithToolAutoRegisterParam() throws Exception {
         ChatClient client = ChatClient.create(new ModelCreator().getModel());
         CounterTool tool = new CounterTool();
@@ -243,6 +253,7 @@ class HarnessCoreDemo {
     }
 
     @Test
+    @DisplayName("检索过滤参数：按文档元数据选择上下文")
     void chatWithFilterParam() throws Exception {
         // 固定向量仅用于演示元数据过滤，不代表语义 Embedding 模型。
         EmbeddingModel embedding = new EmbeddingModel() {
@@ -276,6 +287,7 @@ class HarnessCoreDemo {
     }
 
     @Test
+    @DisplayName("自定义 Advisor 参数：读取用户、租户和追踪编号")
     void chatWithCustomAdvisorParams() throws Exception {
         CallAdvisor trace = new CallAdvisor() {
             public String getName() { return "custom-params-demo"; }
@@ -299,6 +311,7 @@ class HarnessCoreDemo {
     }
 
     @Test
+    @DisplayName("记忆窗口配置：只保留最近消息")
     void memoryWindowIsBuilderOption() {
         // maxMessages 是组件配置，不是 .advisors(a -> a.param(...)) 的参数。
         ChatMemory memory = MessageWindowChatMemory.builder().maxMessages(2).build();
@@ -309,6 +322,7 @@ class HarnessCoreDemo {
     }
 
     @Test
+    @DisplayName("会话记忆：同会话读取历史，不同会话隔离")
     void chatWithMemory() throws Exception {
 
         ChatMemory memory = MessageWindowChatMemory.builder().maxMessages(10).build();
@@ -333,6 +347,7 @@ class HarnessCoreDemo {
     }
 
     @Test
+    @DisplayName("真实模型：基础流式对话")
     void chatWithRealModel() throws Exception {
         System.out.println("模型回答：");
         new HarnessCore(new ModelCreator().getModel()).run("你是 Java 学习助手，请用中文简短回答。",
@@ -344,6 +359,7 @@ class HarnessCoreDemo {
         System.out.println();
     }
     @Test
+    @DisplayName("真实模型：调用原始 Glob 工具查找文件")
     void chatWithRealModelWithPath() throws Exception {
         ModelCreator modelCreator = new ModelCreator();
         // 手动创建对象时，需要自己调用初始化方法。
@@ -361,6 +377,7 @@ class HarnessCoreDemo {
 
 
     @Test
+    @DisplayName("真实模型：调用自定义名称的文件搜索工具")
     void chatWithRealModelWithMyPathTool() throws Exception {
         ModelCreator modelCreator = new ModelCreator();
         // 手动创建对象时，需要自己调用初始化方法。
@@ -377,6 +394,7 @@ class HarnessCoreDemo {
     }
 
     @Test
+    @DisplayName("真实模型：工具结果回填后继续下一轮调用")
     void chatWithMultipleToolRounds() throws Exception {
         ModelCreator modelCreator = new ModelCreator();
         OpenAiChatModel model = modelCreator.getModel();
