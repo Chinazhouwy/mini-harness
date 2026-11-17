@@ -149,7 +149,7 @@ public class WorkflowExecutor {
                                NodeContext context) {
         NodeSpec spec = definition.node(nodeId).orElseThrow();
         NodeHandler handler = registry.require(spec.type());
-        NodeInput input = new NodeInput(nodeId, workflowInput, outputs, context);
+        NodeInput input = new NodeInput(nodeId, workflowInput, spec.params(), outputs, context);
         int maxAttempts = spec.maxAttempts();
         Instant firstStart = Instant.now();
 

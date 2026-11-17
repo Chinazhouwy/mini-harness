@@ -14,7 +14,8 @@ public record AnalyzerPolicy(
         String validationNodeId
 ) {
     public static AnalyzerPolicy financeDefaults() {
-        return new AnalyzerPolicy(2, 3, 3, "data-quality-validation", "data-quality-validation");
+        // 节点类型必须与 DataQualityValidationHandler.TYPE 一致；节点 ID 用于版本 diff 展示。
+        return new AnalyzerPolicy(2, 3, 3, "finance-validate-quality", "data-quality-validation");
     }
 
     public AnalyzerPolicy {

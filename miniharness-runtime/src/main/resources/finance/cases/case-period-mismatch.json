@@ -1,0 +1,25 @@
+{
+  "caseId": "case-period-mismatch",
+  "company": "华夏制造",
+  "ticker": "SYN-HXZZ",
+  "injectedDefect": "PERIOD_MISMATCH",
+  "notes": "年报与单季报混用：直接相加会把 12 个月与 3 个月的口径混在一起。",
+  "statements": [
+    {
+      "period": "2023-FY",
+      "unit": "yuan",
+      "source": "synthetic-annual-report-2023",
+      "sourceDate": "2024-04-15",
+      "revenue": 1000000.0,
+      "netProfit": 100000.0
+    },
+    {
+      "period": "2025-Q1",
+      "unit": "yuan",
+      "source": "synthetic-quarterly-report-2025Q1",
+      "sourceDate": "2025-04-28",
+      "revenue": 300000.0,
+      "netProfit": 24000.0
+    }
+  ]
+}

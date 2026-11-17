@@ -1,0 +1,33 @@
+{
+  "caseId": "case-contradictory",
+  "company": "华夏制造",
+  "ticker": "SYN-HXZZ",
+  "injectedDefect": "CONTRADICTORY_DATA",
+  "notes": "同一报告期存在两个互相矛盾的来源（netProfit 相差 20%+），必须交叉验证而不是直接汇总。",
+  "statements": [
+    {
+      "period": "2023-FY",
+      "unit": "yuan",
+      "source": "synthetic-annual-report-2023",
+      "sourceDate": "2024-04-15",
+      "revenue": 1000000.0,
+      "netProfit": 100000.0
+    },
+    {
+      "period": "2024-FY",
+      "unit": "yuan",
+      "source": "synthetic-annual-report-2024",
+      "sourceDate": "2025-04-15",
+      "revenue": 1000000.0,
+      "netProfit": 120000.0
+    },
+    {
+      "period": "2024-FY",
+      "unit": "yuan",
+      "source": "synthetic-third-party-feed",
+      "sourceDate": "2025-04-20",
+      "revenue": 1000000.0,
+      "netProfit": 95000.0
+    }
+  ]
+}

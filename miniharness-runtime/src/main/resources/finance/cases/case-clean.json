@@ -1,0 +1,25 @@
+{
+  "caseId": "case-clean",
+  "company": "华夏制造",
+  "ticker": "SYN-HXZZ",
+  "injectedDefect": null,
+  "notes": "合成正常数据：两期年报，单位一致（元），来源可靠。用于验证基础计算路径。",
+  "statements": [
+    {
+      "period": "2023-FY",
+      "unit": "yuan",
+      "source": "synthetic-annual-report-2023",
+      "sourceDate": "2024-04-15",
+      "revenue": 1000000.0,
+      "netProfit": 100000.0
+    },
+    {
+      "period": "2024-FY",
+      "unit": "yuan",
+      "source": "synthetic-annual-report-2024",
+      "sourceDate": "2025-04-15",
+      "revenue": 1000000.0,
+      "netProfit": 120000.0
+    }
+  ]
+}

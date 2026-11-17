@@ -1,0 +1,25 @@
+{
+  "caseId": "case-unverifiable-source",
+  "company": "华夏制造",
+  "ticker": "SYN-HXZZ",
+  "injectedDefect": "UNVERIFIABLE_SOURCE",
+  "notes": "2024-FY 数据来源无法核实（社交媒体截图，无发布日期）。研究结论不得建立在不可确认来源上。",
+  "statements": [
+    {
+      "period": "2023-FY",
+      "unit": "yuan",
+      "source": "synthetic-annual-report-2023",
+      "sourceDate": "2024-04-15",
+      "revenue": 1000000.0,
+      "netProfit": 100000.0
+    },
+    {
+      "period": "2024-FY",
+      "unit": "yuan",
+      "source": "social-media-screenshot",
+      "sourceDate": null,
+      "revenue": 1000000.0,
+      "netProfit": 500000.0
+    }
+  ]
+}

@@ -79,8 +79,9 @@ public class CaseRunner {
                     .task(evalTaskId).run(runId).workflow(definition.ref())
                     .message("评测案例执行 " + evalCase.caseId() + " @ " + definition.ref())
                     .payload(Map.of("caseId", evalCase.caseId(), "split", evalCase.split())));
-            NodeContext context = new NodeContext(events, toolRegistry, modelPort, budget,
-                    () -> false, nodePool, new HashMap<>());
+            NodeContext context = new NodeContext(events, evalTaskId, runId, toolRegistry,
+                    new com.chinazhouwy.miniharness.runtime.tool.ToolInvoker(toolRegistry, events, nodePool),
+                    modelPort, budget, () -> false, nodePool, new HashMap<>());
             WorkflowExecutionResult result = new WorkflowExecutor(registry)
                     .execute(compiled, definition.ref(), evalTaskId, runId,
                             evalCase.workflowInput(), context);

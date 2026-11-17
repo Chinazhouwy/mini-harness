@@ -1,0 +1,25 @@
+{
+  "caseId": "case-clean-2",
+  "company": "华夏制造",
+  "ticker": "SYN-HXZZ",
+  "injectedDefect": null,
+  "notes": "留出集专用正常案例：数值与训练集不同，防止记忆答案。期望利润率 = (200000+260000)/(2000000+2000000) = 0.115。",
+  "statements": [
+    {
+      "period": "2023-FY",
+      "unit": "yuan",
+      "source": "synthetic-annual-report-2023",
+      "sourceDate": "2024-04-15",
+      "revenue": 2000000.0,
+      "netProfit": 200000.0
+    },
+    {
+      "period": "2024-FY",
+      "unit": "yuan",
+      "source": "synthetic-annual-report-2024",
+      "sourceDate": "2025-04-15",
+      "revenue": 2000000.0,
+      "netProfit": 260000.0
+    }
+  ]
+}

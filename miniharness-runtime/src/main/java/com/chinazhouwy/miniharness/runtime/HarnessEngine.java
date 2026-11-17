@@ -117,6 +117,8 @@ public class HarnessEngine {
         t.setDaemon(true);
         return t;
     });
+    private final com.chinazhouwy.miniharness.runtime.tool.ToolInvoker toolInvoker =
+            new com.chinazhouwy.miniharness.runtime.tool.ToolInvoker(toolRegistry, events, nodePool);
     private final Map<String, AtomicBoolean> cancelFlags = new ConcurrentHashMap<>();
     private final Map<String, CompletableFuture<Run>> inflight = new ConcurrentHashMap<>();
 
@@ -285,9 +287,15 @@ public class HarnessEngine {
 
             RunBudget budget = new RunBudget(config.maxModelCallsPerRun(),
                     config.maxToolCallsPerRun(), config.maxRunDurationMs());
-            NodeContext context = new NodeContext(events, toolRegistry, config.modelPort(), budget,
-                    cancelled::get, nodePool, new LinkedHashMap<>());
+            NodeContext context = new NodeContext(events, task.id(), run.id(), toolRegistry, toolInvoker,
+                    config.modelPort(), budget, cancelled::get, nodePool, new LinkedHashMap<>());
             Map<String, Object> workflowInput = new LinkedHashMap<>(run.input());
+            // 任务元数据（如演示用的 caseId）并入执行输入；路由内部键不参与。
+            for (Map.Entry<String, Object> entry : task.metadata().entrySet()) {
+                if (!entry.getKey().startsWith("routing") && !"workflow".equals(entry.getKey())) {
+                    workflowInput.putIfAbsent(entry.getKey(), entry.getValue());
+                }
+            }
             if (workflowInput.get("company") == null || String.valueOf(workflowInput.get("company")).isBlank()) {
                 workflowInput.put("company", task.company() == null ? "" : task.company());
             }

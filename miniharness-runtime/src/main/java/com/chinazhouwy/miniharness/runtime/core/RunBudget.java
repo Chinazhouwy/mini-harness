@@ -3,8 +3,9 @@ package com.chinazhouwy.miniharness.runtime.core;
 /**
  * 运行预算：模型调用次数、工具调用次数、总时长上限 + 实际用量计数。
  * 预算扣减是 Harness 行为，不由模型或工具自觉遵守；超限抛 BudgetExceededException。
+ * 直接实现工具层的 BudgetHandle，供节点处理器透传。
  */
-public final class RunBudget {
+public final class RunBudget implements com.chinazhouwy.miniharness.runtime.tool.ToolContext.BudgetHandle {
 
     private final int maxModelCalls;
     private final int maxToolCalls;
@@ -23,6 +24,7 @@ public final class RunBudget {
         return new RunBudget(Integer.MAX_VALUE, Integer.MAX_VALUE, Long.MAX_VALUE);
     }
 
+    @Override
     public synchronized void chargeModelCall() {
         if (modelCalls >= maxModelCalls) {
             throw new BudgetExceededException(
@@ -31,6 +33,7 @@ public final class RunBudget {
         modelCalls++;
     }
 
+    @Override
     public synchronized void chargeToolCall(String toolName) {
         if (toolCalls >= maxToolCalls) {
             throw new BudgetExceededException(

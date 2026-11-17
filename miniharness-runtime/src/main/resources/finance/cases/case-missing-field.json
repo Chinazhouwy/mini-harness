@@ -1,0 +1,25 @@
+{
+  "caseId": "case-missing-field",
+  "company": "华夏制造",
+  "ticker": "SYN-HXZZ",
+  "injectedDefect": "MISSING_FIELD",
+  "notes": "2024-FY 缺失 netProfit 字段；计算前必须拦截，而不是得到空值或异常。",
+  "statements": [
+    {
+      "period": "2023-FY",
+      "unit": "yuan",
+      "source": "synthetic-annual-report-2023",
+      "sourceDate": "2024-04-15",
+      "revenue": 1000000.0,
+      "netProfit": 100000.0
+    },
+    {
+      "period": "2024-FY",
+      "unit": "yuan",
+      "source": "synthetic-annual-report-2024",
+      "sourceDate": "2025-04-15",
+      "revenue": 1000000.0,
+      "netProfit": null
+    }
+  ]
+}

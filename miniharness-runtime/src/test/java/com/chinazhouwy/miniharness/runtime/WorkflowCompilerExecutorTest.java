@@ -127,7 +127,10 @@ class WorkflowCompilerExecutorTest {
     }
 
     NodeContext context(NodeTypeRegistry registry, RunBudget budget, AtomicBoolean cancelled) {
-        return new NodeContext(events, new ToolRegistry(), new NoopModelPort(), budget,
+        ToolRegistry tools = new ToolRegistry();
+        return new NodeContext(events, taskId, runId, tools,
+                new com.chinazhouwy.miniharness.runtime.tool.ToolInvoker(tools, events, executor),
+                new NoopModelPort(), budget,
                 cancelled == null ? () -> false : cancelled::get, executor, new HashMap<>());
     }
 

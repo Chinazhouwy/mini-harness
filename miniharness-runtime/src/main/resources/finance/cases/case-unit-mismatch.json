@@ -1,0 +1,25 @@
+{
+  "caseId": "case-unit-mismatch",
+  "company": "华夏制造",
+  "ticker": "SYN-HXZZ",
+  "injectedDefect": "UNIT_MISMATCH",
+  "notes": "2024-FY 两行数值单位为万元，2023-FY 为元；不换算直接汇总将产生错误利润率。",
+  "statements": [
+    {
+      "period": "2023-FY",
+      "unit": "yuan",
+      "source": "synthetic-annual-report-2023",
+      "sourceDate": "2024-04-15",
+      "revenue": 1000000.0,
+      "netProfit": 100000.0
+    },
+    {
+      "period": "2024-FY",
+      "unit": "wan-yuan",
+      "source": "synthetic-annual-report-2024",
+      "sourceDate": "2025-04-15",
+      "revenue": 100.0,
+      "netProfit": 10.0
+    }
+  ]
+}
