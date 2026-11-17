@@ -137,3 +137,30 @@ MCP 示例统一放在独立的 [`McpStudyTest`](study-spring-ai/src/test/java/c
 原 README 的长程任务与股票研究说明对应旧分支，当前源码没有这些后端实现，已移除失效的入口和文档链接。公众号待发布稿与每日总结继续放在仓库外的 `/Users/chinazhouwy/Documents/公众号文章`。
 
 参考：[Maven 多模块构建](https://maven.apache.org/guides/mini/guide-multiple-modules.html)、[Spring AI](https://docs.spring.io/spring-ai/reference/)、[Spring AI Alibaba](https://www.java2ai.com/docs/quick-start/)、[AgentScope Java](https://github.com/agentscope-ai/agentscope-java)。
+
+## MiniHarness v0.1：自进化 Agent Runtime & Studio（2026-11-18）
+
+在本分支（`codex/miniharness-self-evolving-v01`）上完成了第一个自进化闭环原型，**学习模块保持不动**。详见 [docs/DESIGN-v0.1.md](docs/DESIGN-v0.1.md)（方案）与 [docs/TECH-REPORT-v0.1.md](docs/TECH-REPORT-v0.1.md)（复盘报告，含已实现/仍是概念的边界说明）。
+
+```text
+miniharness-runtime/        # 新增：框架无关 Harness 内核（状态机/事件/DAG编译执行/路由/进化引擎），只依赖 JDK+Jackson
+studio/                     # 新增：Vue3+TS+Pinia+Vue Flow 前端，全部消费真实 API（无 Mock）
+examples/task-assistant/    # 扩展：HarnessEngine 装配 + REST/SSE API，UI+API 单 jar 提供
+miniharness-spring-ai/      # 扩展：SpringAiModelPort 适配器（依赖方向：适配层→内核）
+```
+
+可运行闭环：用户输入 → 规则路由匹配任务/Workflow → 执行 v1 → 事件与轨迹落账 → 失败经验产生 v2 候选（插入口径验证节点）→ 训练/留出双集对比评测 → 人工批准/拒绝 → 发布新版本 → 再次执行（行为真实不同）→ 回滚。金融数据全部为标注的合成数据，不接入真实行情与交易。
+
+```bash
+# 后端 + 前端单 jar（离线确定性模式；auto 模式且配置了模型时自动接真实模型）
+mvn clean package -DskipTests -pl examples/task-assistant -am
+MINIHARNESS_MODEL_MODE=offline java -jar examples/task-assistant/target/task-assistant-0.1.0.jar
+# 浏览器打开 http://127.0.0.1:8080/
+
+# 前端开发模式（/api 代理到 8080）
+cd studio && npm install && npm run dev
+
+# 全部离线测试（56 个，live/manual 默认排除；端到端闭环在 EndToEndClosedLoopTest）
+mvn test
+```
+
