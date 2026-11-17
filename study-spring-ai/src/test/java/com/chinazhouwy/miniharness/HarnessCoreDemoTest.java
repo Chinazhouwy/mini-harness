@@ -4,24 +4,35 @@ import com.chinazhouwy.miniharness.model.ModelCreator;
 import com.chinazhouwy.miniharness.model.ModelConfig;
 import com.chinazhouwy.miniharness.interceptor.ModelHttpTraceInterceptor;
 import com.openai.errors.OpenAIIoException;
+import net.minidev.json.JSONArray;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.MessageWindowChatMemory;
+import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
 import org.springframework.ai.model.tool.ToolCallLimitBehavior;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.support.ToolCallbacks;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 
+import javax.sql.DataSource;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalTime;
 import java.util.ArrayList;
@@ -32,6 +43,55 @@ import java.util.concurrent.TimeoutException;
 
 @org.junit.jupiter.api.Tag("live")
 public class HarnessCoreDemoTest {
+
+    @Test
+    @DisplayName("会话持久化：重建客户端和记忆组件后，从数据库接续聊天")
+    void chatWithPersistentMemory(@TempDir Path directory) throws Exception {
+        // 文件数据库，不是 jdbc:h2:mem；不需要安装数据库，测试结束后自动清理临时文件。
+        String jdbcUrl = "jdbc:h2:file:" + directory.resolve("chat-memory").toAbsolutePath();
+        String conversationId = "study-session-001";
+        var dataSource = new DriverManagerDataSource(jdbcUrl, "sa", "");
+        // 这里手动组装组件，所以也手动执行 Spring AI 随包提供的建表 SQL。
+        new ResourceDatabasePopulator(new ClassPathResource(
+                "org/springframework/ai/chat/memory/repository/jdbc/schema-h2.sql")).execute(dataSource);
+
+        ChatMemory firstMemory = jdbcMemory(dataSource);
+
+        ChatClient firstClient = ChatClient.builder(new ModelCreator().getModel())
+                .defaultAdvisors(MessageChatMemoryAdvisor.builder(firstMemory).build()).build();
+
+        System.out.println("[第一次聊天] " + firstClient.prompt()
+                .user("今天的学习任务是阅读 ToolCallingAdvisor 源码。请记住，只回复已记住。")
+                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
+                .call().content());
+
+        // 新建数据源、Repository、ChatMemory、ChatClient；只复用文件地址和会话 ID。
+        // 这是重建组件后的读取实验，没有实际重启 JVM，也没有恢复执行到一半的工具任务。
+        ChatMemory restoredMemory = jdbcMemory(new DriverManagerDataSource(jdbcUrl, "sa", ""));
+
+        System.out.println("[重建后从数据库读取的消息数] " + restoredMemory.get(conversationId).size());
+
+        System.out.println("[重建后从数据库读取的消息] " + restoredMemory.get(conversationId));
+
+        ChatClient restoredClient = ChatClient.builder(new ModelCreator().getModel())
+                .defaultAdvisors(MessageChatMemoryAdvisor.builder(restoredMemory).build()).build();
+
+        System.out.println("[第二次聊天] " + restoredClient.prompt()
+                .user("我刚才说的学习任务是什么？请简短回答。")
+                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
+                .call().content());
+
+        restoredMemory.get(conversationId).forEach(message ->
+                System.out.println("[持久化消息 " + message.getMessageType() + "] " + message.getText()));
+    }
+
+    private static ChatMemory jdbcMemory(DataSource dataSource) {
+        // Repository 决定存在哪里；MessageWindowChatMemory 决定保留多少消息。
+        // 当前 JDBC 仓库会过滤工具调用消息；本例只验证普通问答的持久化，不是完整执行检查点。
+        return MessageWindowChatMemory.builder()
+                .chatMemoryRepository(JdbcChatMemoryRepository.builder().dataSource(dataSource).build())
+                .maxMessages(10).build();
+    }
 
     // 应用自己维护的一趟执行状态；不是 Spring AI 的内置状态，也不是会话记忆或检查点。
     static class RunState {

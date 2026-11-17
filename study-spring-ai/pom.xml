@@ -40,6 +40,17 @@
                 <artifactId>spring-ai-vector-store-advisor</artifactId>
                 <scope>test</scope>
             </dependency>
+            <!-- 聊天记忆持久化示例：手动组装 JDBC 存储，不启动 Spring Boot。 -->
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-model-chat-memory-repository-jdbc</artifactId>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.h2database</groupId>
+                <artifactId>h2</artifactId>
+                <scope>test</scope>
+            </dependency>
             <dependency>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-starter-test</artifactId>

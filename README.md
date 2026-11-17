@@ -81,6 +81,9 @@ mvn -pl study-spring-ai-alibaba -am -Dtest=AlibabaReactAgentTest#scriptedToolLoo
 # Spring AI：观察一趟任务结束后的执行状态
 mvn -pl study-spring-ai -am -Dtest=HarnessCoreDemoTest#chatWithRunState -DexcludedGroups= test
 
+# Spring AI：重建客户端与记忆组件，从本地文件数据库接续聊天
+mvn -pl study-spring-ai -am -Dtest=HarnessCoreDemoTest#chatWithPersistentMemory -DexcludedGroups= test
+
 # AgentScope：真实模型调用文件工具
 mvn -pl study-agentscope -am -Dtest=AgentScopeFileDemo -DexcludedGroups= test
 
