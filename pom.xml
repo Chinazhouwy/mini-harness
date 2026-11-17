@@ -11,6 +11,7 @@
 
     <modules>
         <module>miniharness-core</module>
+        <module>miniharness-runtime</module>
         <module>miniharness-spring-ai</module>
         <module>study-spring-ai</module>
         <module>study-agentscope</module>
