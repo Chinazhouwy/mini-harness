@@ -3,12 +3,16 @@ package com.chinazhouwy.miniharness;
 import com.chinazhouwy.miniharness.model.ModelCreator;
 import com.chinazhouwy.miniharness.tool.FileSearchTool;
 import com.chinazhouwy.miniharness.tool.ToolCofig;
+import org.json.JSONML;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.AdvisorParams;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
+import org.springframework.ai.chat.client.advisor.StructuredOutputValidationAdvisor;
+import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
@@ -22,8 +26,12 @@ import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
 import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.execution.DefaultToolExecutionExceptionProcessor;
+import org.springframework.ai.tool.execution.ToolExecutionException;
 import org.springframework.ai.vectorstore.SimpleVectorStore;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -33,7 +41,160 @@ import java.util.stream.IntStream;
 
 class HarnessCoreDemo {
 
+    public static class FailingReportTool {
+        private int calls;
+
+        @Tool(name = "load_report", description = "读取学习报告，报告未生成时会失败")
+        public String loadReport() {
+            calls++;
+            System.out.println("[工具实际执行] load_report 即将抛异常");
+            throw new IllegalStateException("演示：报告尚未生成");
+        }
+    }
+
+    @Test
+    void chatWithToolFailure() throws Exception {
+        OpenAiChatModel model = new ModelCreator().getModel();
+        for (boolean alwaysThrow : List.of(false, true)) {
+            System.out.println("\n[工具异常策略] alwaysThrow=" + alwaysThrow);
+            var manager = ToolCallingManager.builder()
+                    .toolExecutionExceptionProcessor(new DefaultToolExecutionExceptionProcessor(alwaysThrow))
+                    .build();
+            ChatClient client = ChatClient.builder(model)
+                    .defaultAdvisors(ToolCallingAdvisor.builder().toolCallingManager(manager).build())
+                    .build();
+            FailingReportTool tool = new FailingReportTool();
+            try {
+                String answer = client.prompt()
+                        .system("请调用工具；若工具返回失败信息，简短如实解释，不要再次调用或编造报告。")
+                        .user("请调用 load_report 读取我的学习报告。")
+                        .tools(tool)
+                        .call()
+                        .content();
+                System.out.println("[模型最终回答] " + answer);
+            } catch (ToolExecutionException exception) {
+                if (!alwaysThrow) {
+                    throw exception;
+                }
+                System.out.println("[Java 调用方收到异常] " + exception.getClass().getSimpleName());
+            }
+            System.out.println("[工具执行次数] " + tool.calls);
+        }
+    }
+
+    @Test
+    void chatWithCustomOutputConverter() throws Exception {
+        var converter = new CustomOutputExamples.TaskConverter();
+        System.out.println("[自定义转换器生成的 Schema]\n" + converter.getJsonSchema());
+        // validateSchema 使用同一个转换器提供的 Schema 校验；不能只依赖 convert()。
+        var task = ChatClient.create(new ModelCreator().getModel()).prompt()
+                .user("提取任务：复习 Java，30 分钟。")
+                .call()
+                .entity(converter, spec -> spec.validateSchema())
+                ;
+        System.out.println("[自定义转换器结果] " + task);
+    }
+
+    @Test
+    void chatWithCustomSchemaGenerator() throws Exception {
+        String schema = CustomOutputExamples.generateSchema(CustomOutputExamples.AnnotatedTask.class);
+        System.out.println("[自定义注解生成的 Schema]\n" + schema);
+        var validation = StructuredOutputValidationAdvisor.builder()
+                                                        .outputJsonSchema(schema)
+                                                        .maxRepeatAttempts(2)
+                                                        .build();
+        String json = ChatClient.builder(new ModelCreator().getModel())
+                                    .defaultAdvisors(validation)
+                                    .build()
+                                    .prompt()
+                                    // outputJsonSchema 负责校验；这里显式把这份自定义规则发给模型。
+                                    .system("只输出符合以下 Schema 的 JSON 对象，不要代码围栏：\n" + schema)
+                                    .user("提取任务：复习 Java，30 分钟。")
+                                    .call()
+                                    .content();
+        var task = new BeanOutputConverter<>(CustomOutputExamples.AnnotatedTask.class).convert(json);
+        System.out.println("[自定义注解结果] " + task);
+    }
+
     record StudyTask(String name, int minutes, String priority) {}
+
+    @Test
+    void chatWithNativeStructuredOutput() throws Exception {
+        // 当前配置的服务实测不支持 json_schema，第二次请求会返回 HTTP 400。
+        // 保留错误用于观察能力边界；换成支持原生 Schema 的服务后可再次运行。
+        ChatClient client = ChatClient.create(new ModelCreator().getModel());
+        for (boolean nativeOutput : List.of(false, true)) {
+            System.out.println("\n[结构化输出模式] " + (nativeOutput ? "模型接口 Schema" : "提示词 Schema"));
+            StudyTask task = client.prompt()
+                    .system("提取学习任务，priority 使用 HIGH、MEDIUM 或 LOW。")
+                    .user("复习 Java 并发，30 分钟，优先级高。")
+                    .call()
+                    .entity(StudyTask.class, spec -> {
+                        // 对照 HTTP 请求：默认把 Schema 放入提示词；原生方式使用 response_format。
+                        // 原生方式需要模型服务支持；成功返回本身不等于验证了所有 Schema 约束。
+                        if (nativeOutput) {
+                            spec.useProviderStructuredOutput();
+                        }
+                    });
+            System.out.println("[解析结果] " + task);
+        }
+    }
+
+    @Test
+    void chatWithStructuredOutputValidation() throws Exception {
+        // 从类型和 @Schema 注解生成规则，不分析构造方法中的 if。
+        var validation = StructuredOutputValidationAdvisor.builder()
+                .outputType(ValidatedStudyTask.class)
+                .maxRepeatAttempts(2) // 首次请求 + 最多两次修正请求
+                .build();
+        ChatClient client = ChatClient.builder(new ModelCreator().getModel())
+                .defaultAdvisors(validation).build();
+
+        // 教学用：主动要求首次返回非法值，便于观察真实模型收到校验错误后修正。
+        // 具体重试次数以 HTTP 请求日志为准，模型不保证每次都按首次要求输出。
+        String json = client.prompt()
+                .system("只输出 JSON 对象，不要 Markdown 代码围栏或解释。")
+                .user("""
+                        首次请原样输出：{"name":"复习 Java","minutes":-30,"priority":"HIGH"}
+                        如果请求中出现 Output JSON validation failed，请根据错误修正 JSON，
+                        将负数时长改成对应的正数，其他字段保持不变。
+                        """)
+                .call().content();
+        System.out.println("[校验流程返回的 JSON] " + json);
+
+        // 2.0.2 中重试耗尽仍可能返回不合规文本，因此保留最终业务校验。
+        // 构造失败会抛给调用方，这一步不会再触发模型重试。
+        ValidatedStudyTask task = new BeanOutputConverter<>(ValidatedStudyTask.class).convert(json);
+        System.out.println("[最终业务对象] " + task);
+    }
+
+    record ValidatedStudyTask(
+            @Schema(description = "任务名", minLength = 1) String name,
+            @Schema(description = "学习时长（分钟）", minimum = "1", maximum = "180") int minutes,
+            @Schema(allowableValues = {"HIGH", "MEDIUM", "LOW"}) String priority) {
+        // JSON 类型正确，不代表业务数据有效；构造对象时明确校验边界。
+        ValidatedStudyTask {
+            if (name == null || name.isBlank()) {
+                throw new IllegalArgumentException("任务名不能为空");
+            }
+            if (minutes < 1 || minutes > 180) {
+                throw new IllegalArgumentException("学习时长必须在 1～180 分钟之间");
+            }
+            if (priority == null || !List.of("HIGH", "MEDIUM", "LOW").contains(priority)) {
+                throw new IllegalArgumentException("优先级必须为 HIGH、MEDIUM 或 LOW");
+            }
+        }
+    }
+
+    @Test
+    void structuredOutputNeedsBusinessValidation() {
+        // 用固定非法数据展示边界，避免依赖模型恰好生成错误结果；本例不请求模型。
+        StudyTask raw = new StudyTask("复习 Java", -30, "HIGH");
+        System.out.println("类型正确的对象，仍可能包含非法值：" + raw);
+        var error = org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> new ValidatedStudyTask(raw.name(), raw.minutes(), raw.priority()));
+        System.out.println("业务校验拦截：" + error.getMessage());
+    }
 
     @Test
     void chatWithStructuredOutput() throws Exception {
