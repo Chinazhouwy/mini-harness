@@ -43,11 +43,13 @@ import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 
 
+/** AgentScope 构建参数与事件学习入口。共享 Builder 和固定会话会累积配置或历史，建议逐方法运行；问题中的天气只用于观察调用，不承诺实时数据。 */
 @org.junit.jupiter.api.Tag("live")
 public class BuilderTest {
 
         public static HarnessAgent.Builder agentBuilder;
 
+        // JUnit 在本类测试开始前执行一次初始化；沿用根 config 的本地配置，不把密钥写到代码或日志。
         @BeforeAll
        public  static void before() throws IOException {
           Properties props = loadLocalProperties();
@@ -62,7 +64,8 @@ public class BuilderTest {
                   .apiKey(apiKey)
                   .modelName(modelName)              // OpenRouter 上的模型全名
                   .baseUrl(baseUrl)          // 自定义 url
-                  .nativeStructuredOutput(true) // !! // 强制合成工具路径，不再尝试 response_format
+                  .nativeStructuredOutput(true) // 尝试提供商原生结构化输出；是否可用取决于当前模型服务。
+                  // 这里控制模型响应的流式接收；外层 agent.call 仍可聚合为一个最终 Msg，事件流用 streamEvents 观察。
                   .stream(true)
                   .build();
 
@@ -72,10 +75,16 @@ public class BuilderTest {
                   .sysPrompt("you are a helper")
                   .model(model)
                   .workspace(Path.of("./data/workspace"))
+                  // 文件 Store 按调用的 userId/sessionId 保存和读取状态；新 Java 对象不等于新会话。
                   .stateStore(new JsonFileAgentStateStore(Path.of("./data/.agentscope-state")));
        }
 
 
+       /**
+        * 从最小 call 认识返回的 Msg。
+        * <p>关键点：AgentScope call 返回 Mono，block 订阅并等待；Msg 包含块列表、文字提取结果与使用量元数据。
+        * <p>观察：getTextContent 只便于读文字，完整工具/思考等信息应从对应内容块或事件查看。
+        */
        @Test
        @DisplayName("call 基本问答：getTextContent / getContent / ChatUsage / getFirstContentBlock")
        public void test01(){
@@ -87,6 +96,11 @@ public class BuilderTest {
            System.out.println(ret.getFirstContentBlock());
        }
 
+        /**
+         * 观察 RuntimeContext 中固定字段与自由元数据的区别。
+         * <p>关键点：userId/sessionId 参与会话定位；put 写入应用元数据，不会自动把地点追加到提示词。
+         * <p>观察：本例仅打印模型回答；若要证明地点被使用，需在工具或 Middleware 中显式读取并注入。
+         */
         @Test
         @DisplayName("RuntimeContext 携带 userId/sessionId/put 传入调用")
         public void test02() throws IOException {
@@ -97,7 +111,12 @@ public class BuilderTest {
             System.out.println(ret.getContent());
         }
 
-        /** 演示 Msg = 块列表：真实调用后逐块打印类型与内容。 */
+        /**
+         * 演示 Msg = 块列表：真实调用后逐块打印类型与内容。
+         *
+         * <p>关键点：TextBlock、ThinkingBlock、ToolUseBlock 含义不同；getTextContent 不能替代按类型读取。
+         * <p>观察：看每块类型与文字拼接结果；实际出现哪些块由提供商与框架处理路径决定。
+         */
         @Test
         @DisplayName("Msg 是块列表：逐块打印类型与内容")
         public void test03Blocks() {
@@ -123,6 +142,7 @@ public class BuilderTest {
         /** 演示 RuntimeContext.put 的真实用法：put 是元数据袋，工具方法参数注入来读。 */
         public static class EchoTools {
             @Tool(name = "hhatest", description = "返回这次调用的信息")
+            // RuntimeContext 参数由框架注入；模型只提供工具定义中的业务参数，不能自行伪造这个 Java 上下文对象。
             public String whoami(RuntimeContext ctx) {
                 return "userId=" + ctx.getUserId()
                         + ", sessionId=" + ctx.getSessionId()
@@ -130,6 +150,11 @@ public class BuilderTest {
             }
         }
 
+        /**
+         * 把请求级元数据传给 Java 工具。
+         * <p>关键点：RuntimeContext 类型参数由框架注入，不是模型生成的 JSON 参数；工具显式读取 request_id。
+         * <p>观察：核对工具返回的 userId/sessionId/request_id，模型只有消费工具结果后才能看到这些信息。
+         */
         @Test
         @DisplayName("RuntimeContext.put 是元数据袋，工具方法参数注入来读")
         public void test04RuntimeContextPut() {
@@ -138,6 +163,7 @@ public class BuilderTest {
             RuntimeContext ctx = RuntimeContext.builder()
                     .userId("zhouwy")
                     .sessionId("s1")
+                    // put 保存调用元数据，只有工具/Middleware 显式读取后才产生作用；不会自动进入模型提示词或日志 MDC。
                     .put("request_id", "req-abc-123")
                     .build();
             try (HarnessAgent agent = agentBuilder.toolkit(toolkit).build()) {
@@ -148,6 +174,11 @@ public class BuilderTest {
             }
         }
 
+    /**
+     * 验证同一 Agent 可按 sessionId 区分历史。
+     * <p>关键点：A 的输入写入 A 的状态槽；B 复用 Agent 对象但使用不同会话标识。
+     * <p>观察：观察 B 的输入历史是否含 A 的暗号；持久目录已有旧会话时也会影响实验。
+     */
     @Test
     @DisplayName("多会话隔离：不同 sessionId 互不串扰")
     public void test05Sessions() {
@@ -172,6 +203,11 @@ public class BuilderTest {
             @com.fasterxml.jackson.annotation.JsonPropertyDescription("地点，文昌门地址") String temperature,
             @com.fasterxml.jackson.annotation.JsonPropertyDescription("天气状况，如：多云") String condition) {}
 
+    /**
+     * 观察结构化字段名与描述冲突的影响。
+     * <p>关键点：注解描述用于生成 Schema，而 Java 取值仍按 location/temperature 字段；本例故意把描述写反。
+     * <p>观察：比较键名与内容是否错位；这是模型行为实验，不保证每次产生相同错误。
+     */
     @Test
     @DisplayName("结构化输出演示：字段名错位会让内容跟着填错")
     public void test07StructuredOutputSwappedNames() {
@@ -196,6 +232,11 @@ public class BuilderTest {
 
 
 //    @Test
+    /**
+     * 重复观察目标类型的结构化输出。
+     * <p>关键点：call(msgs, WeatherResponse.class, ctx) 返回带结构化数据的 Msg；getStructuredData 再按类型提取。
+     * <p>观察：这是 RepeatedTest，共运行五次且复用固定会话；输出策略与服务是否支持原生格式有关。
+     */
     @RepeatedTest(value = 5)
     @DisplayName("结构化输出：call(msgs, SomeClass.class) 返回 record")
     public void test06StructuredOutput() {
@@ -213,6 +254,11 @@ public class BuilderTest {
         }
     }
 
+    /**
+     * 观察强制合成工具如何帮助提取结构化输出。
+     * <p>关键点：nativeStructuredOutput=false 走合成工具路径；Specific(generate_response) 要求选择该工具，服务需支持该参数。
+     * <p>观察：同会话连续三次检查 _structured_output；thinking 参数是提供商扩展，不能认为所有模型都通用。
+     */
     @Test
     @DisplayName("强制 tool_choice：复用同一会话 3 次，仍能稳定拿到结构化输出")
     public void test08ForceToolChoice() throws IOException {
@@ -221,11 +267,13 @@ public class BuilderTest {
                 .apiKey(props.getProperty("openrouter.api.key"))
                 .modelName(props.getProperty("openrouter.model"))
                 .baseUrl(props.getProperty("openrouter.base.url"))
+                // false 选择框架的非原生结构化输出路径；普通问答仍正常使用该模型配置。
                 .nativeStructuredOutput(false)
                 .generateOptions(GenerateOptions.builder()
                         // 这一轮必须调用 generate_response 这个工具，模型说不出纯文本
+                        // toolChoice 请求提供商强制选择指定工具；这不是执行权限策略，服务可能因不支持该选项而拒绝请求。
                         .toolChoice(new ToolChoice.Specific("generate_response"))
-                        // DeepSeek 的 thinking 模式不支持 tool_choice，不关就 400
+                        // 针对该示例服务禁用 thinking 以配合强制工具选择；支持情况需按具体模型与接口版本核对。
                         .additionalBodyParam("thinking", java.util.Map.of("type", "disabled"))
                         .build())
                 .stream(true)
@@ -244,6 +292,11 @@ public class BuilderTest {
         }
     }
 
+    /**
+     * 在类型转换前观察模型文本和工具参数。
+     * <p>关键点：onModelCall 收集 TextBlockDeltaEvent 与 ToolCallDeltaEvent，到完成后汇总；这些是 SDK 事件，不是 HTTP 原始字节。
+     * <p>观察：比较聚合的原始参数和 _structured_output 对象，定位问题发生在生成还是解析阶段。
+     */
     @Test
     @DisplayName("Middleware 抓结构化前的原始输出：模型吐的 tool_call 参数 vs 框架解析后的对象")
     public void test09TapRawBeforeStructured() throws IOException {
@@ -293,6 +346,11 @@ public class BuilderTest {
         }
     }
 
+    /**
+     * 观察一次调用内部的推理与工具循环。
+     * <p>关键点：onModelCall 累计模型请求，onActing 按 toolCallId 归并工具结果；同一批可能含多个工具。
+     * <p>观察：按轮次和调用 ID 对应请求与执行；模型未选工具时不会出现工具阶段。
+     */
     @Test
     @DisplayName("ReAct 内循环：逐轮打印模型决策与工具结果，看清一次 call 内部跑了几轮")
     public void test10LoopTrace() {
@@ -317,6 +375,7 @@ public class BuilderTest {
                         args.put(s.getToolCallId(), new StringBuilder());
                     }
                     if (ev instanceof ToolCallDeltaEvent d && d.getDelta() != null) {
+                        // 参数是分段事件，要按 toolCallId 分别累积；同一模型响应中的多个工具可能交错到达。
                         args.computeIfAbsent(d.getToolCallId(), k -> new StringBuilder()).append(d.getDelta());
                     }
                 }).doOnComplete(() -> {
@@ -360,6 +419,11 @@ public class BuilderTest {
         }
     }
 
+    /**
+     * 把流式事件整理成可读的阶段日志。
+     * <p>关键点：开始事件记录名称与 ID，增量事件累计片段，结束事件才输出完整内容。
+     * <p>观察：区分模型请求工具与工具执行完成；不同工具参数不能混在同一个 StringBuilder。
+     */
     @Test
     @DisplayName("消息与事件：按“每次调用”汇总展示，不逐 token 打印")
     public void test11Events() {
@@ -415,6 +479,11 @@ public class BuilderTest {
         System.out.println("\n总模型调用次数: " + round.get());
     }
 
+    /**
+     * 观察提示词限制工具批次的实际效果。
+     * <p>关键点：提示词请求每次最多一个工具，但没有配置执行器的硬并发上限，也没有移除其他工具。
+     * <p>观察：看每轮工具数量；不能把模型一次遵守提示词当成强制串行保证。
+     */
     @Test
     @DisplayName("提示词约束：一次只调一个工具（对比默认的并行工具调用）")
     public void test12SingleToolPerRound() {

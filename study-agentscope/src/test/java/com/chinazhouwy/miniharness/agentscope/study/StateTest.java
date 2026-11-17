@@ -9,6 +9,7 @@ import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.UserMessage;
 import io.agentscope.core.state.AgentStateStore;
+import io.agentscope.core.state.AgentState;
 import io.agentscope.core.state.JsonFileAgentStateStore;
 import io.agentscope.core.state.State;
 import io.agentscope.core.util.JsonCodec;
@@ -17,11 +18,13 @@ import io.agentscope.extensions.model.openai.OpenAIChatModel;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import redis.clients.jedis.Jedis;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -42,6 +45,7 @@ public class StateTest {
     /** 固定 sessionId，方便去磁盘上找对应的文件 */
     private static final String SESSION = "sStateDemo01";
 
+    // JUnit 在本类测试开始前执行一次初始化；沿用根 config 的本地配置，不把密钥写到代码或日志。
     @BeforeAll
     static void before() throws IOException {
         Properties props = ModelConfig.loadLocalProperties();
@@ -49,11 +53,18 @@ public class StateTest {
                 .apiKey(props.getProperty("openrouter.api.key"))
                 .modelName(props.getProperty("openrouter.model"))
                 .baseUrl(props.getProperty("openrouter.base.url"))
+                // false 选择框架的非原生结构化输出路径；普通问答仍正常使用该模型配置。
                 .nativeStructuredOutput(false)
+                // 这里控制模型响应的流式接收；外层 agent.call 仍可聚合为一个最终 Msg，事件流用 streamEvents 观察。
                 .stream(true)
                 .build();
     }
 
+    /**
+     * 把会话状态落盘后逐字段查看。
+     * <p>关键点：stateStore 指定 JsonFileAgentStateStore，userId/sessionId 决定目录；AgentState 不只有聊天文字。
+     * <p>观察：查看 context、summary、权限与执行字段；方法会清理本例固定会话目录后重建。
+     */
     @Test
     @DisplayName("State 1：跑一次对话，打开磁盘上的 state 文件看里面存了什么")
     public void test01WhatIsStored() throws Exception {
@@ -70,6 +81,7 @@ public class StateTest {
                 .name("state-demo")
                 .sysPrompt("you are a helper")
                 .model(model)
+                // 文件 Store 按调用的 userId/sessionId 保存和读取状态；新 Java 对象不等于新会话。
                 .stateStore(new JsonFileAgentStateStore(STORE))
                 .build()) {
 
@@ -129,6 +141,7 @@ public class StateTest {
             this.jedis = new Jedis("localhost", 6379);
         }
 
+        // Redis 键由 userId/sessionId/状态键组成；这些标识来自应用，示例用冒号拼接只为说明存储映射。
         private String k(String userId, String sessionId, String key) {
             return PREFIX + userId + ":" + sessionId + ":" + key;
         }
@@ -183,6 +196,11 @@ public class StateTest {
         }
     }
 
+    /**
+     * 观察替换 AgentStateStore 对会话接续的影响。
+     * <p>关键点：自定义 Store 把状态序列化到 Redis；重建 Agent 后仍按用户、会话、状态键读取。
+     * <p>观察：需本机 Redis；示例使用 KEYS 和直接连接，未演示跨进程重启或生产连接管理。
+     */
     @Test
     @DisplayName("State 5：自定义 Redis 存储——换掉 JsonFile，业务代码零改动（需本机 Redis localhost:6379）")
     public void test05RedisStore() {
@@ -199,7 +217,7 @@ public class StateTest {
             agent.call(List.of(new UserMessage("我叫周伟，我最喜欢的数字是 7")), ctx).block();
         }
 
-        // 重新 new agent（等价于进程重启，内存全丢）——记忆应该从 Redis 里捡回来
+        // 重建 Agent 实例，从 Redis 恢复；这里没有实际重启进程。
         try (ReActAgent agent = ReActAgent.builder()
                 .name("redis-demo-2")
                 .sysPrompt("you are a helper")
@@ -220,38 +238,57 @@ public class StateTest {
         }
     }
 
-    // ================= State 2：跨进程恢复 =================
+    // ================= State 2：重建实例后恢复会话 =================
 
+    /**
+     * 独立验证关闭旧实例后从文件恢复会话。
+     * <p>关键点：先存后读，不依赖其他测试；新 Store/RuntimeContext/Agent 只沿用目录及用户、会话标识。
+     * <p>观察：落盘两条消息，新实例答出原任务后变四条；临时目录自动清理，没有重启 JVM。
+     */
     @Test
-    @DisplayName("State 2：跨进程恢复——新 agent 实例从磁盘捡回上一个进程的记忆")
-    public void test02SessionRecovery() throws Exception {
+    @DisplayName("State 2：关闭旧 Agent 后，新实例从文件恢复同一会话")
+    public void test02SessionRecovery(@TempDir Path stateRoot) throws Exception {
         RuntimeContext ctx = RuntimeContext.builder()
-                .userId("zhouwy").sessionId(SESSION).build();   // 复用 State 1 的会话
+                .userId("study-user").sessionId("study-session-001").build();
 
-        // 这个实例没经历过 State 1 的对话（新 new 的对象，内存里一片空白），
-        // 它能答出来，唯一的途径是启动时从磁盘上的 agent_state.json 读回 context
+        // 单独运行即可：先保存，关闭旧实例，不依赖另一个测试留下的文件。
         try (ReActAgent agent = ReActAgent.builder()
-                .name("recovery-demo")
-                .sysPrompt("you are a helper")
-                .model(model)
-                .stateStore(new JsonFileAgentStateStore(STORE))
-                .build()) {
-
-            Msg ret = agent.call(List.of(new UserMessage(
-                    "不查任何资料，直接凭我们之前的记忆回答：我最喜欢的数字是几？")), ctx).block();
-            System.out.println("新实例回答: " + ret.getTextContent());
+                .name("session-study").sysPrompt("请用中文简短回答。")
+                .model(model).stateStore(new JsonFileAgentStateStore(stateRoot)).build()) {
+            Msg answer = agent.call(List.of(new UserMessage(
+                    "今天的学习任务是阅读 ToolCallingAdvisor 源码。请记住，只回复已记住。")), ctx)
+                    .block(Duration.ofSeconds(60));
+            System.out.println("[AgentScope 首次回答] " + answer.getTextContent());
         }
 
-        // 铁证：context 里第一条消息的时间戳 + 文件修改时间，都是上一个进程留下的
-        Path stateFile = STORE.resolve("zhouwy").resolve(SESSION).resolve("agent_state.json");
-        ObjectMapper om = new ObjectMapper();
-        JsonNode root = om.readTree(stateFile.toFile());
-        System.out.println("context 第 1 条消息的写入时间: " + root.path("context").get(0).path("timestamp").asText());
-        System.out.println("state 文件最后修改时间:       " + Files.getLastModifiedTime(stateFile));
+        // 重新创建 Store 但沿用同一磁盘目录；下方直接读 State 是确认落盘内容，不依赖模型是否碰巧答对。
+        var restoredStore = new JsonFileAgentStateStore(stateRoot);
+        AgentState saved = restoredStore.get("study-user", "study-session-001", "agent_state", AgentState.class)
+                .orElseThrow();
+        System.out.println("[文件中的会话] userId=" + saved.getUserId() + "，sessionId=" + saved.getSessionId());
+        System.out.println("[重建存储后读取的消息数] " + saved.getContext().size());
+
+        // 新实例只复用文件目录和 userId/sessionId；本例没有实际重启 JVM。
+        // 连调用上下文也重新创建，避免把旧对象中框架注入的瞬时状态误当成文件恢复。
+        RuntimeContext restoredContext = RuntimeContext.builder()
+                .userId("study-user").sessionId("study-session-001").build();
+        try (ReActAgent agent = ReActAgent.builder()
+                .name("session-study").sysPrompt("请用中文简短回答。")
+                .model(model).stateStore(restoredStore).build()) {
+            Msg answer = agent.call(List.of(new UserMessage("我刚才说的学习任务是什么？")), restoredContext)
+                    .block(Duration.ofSeconds(60));
+            System.out.println("[AgentScope 重建后回答] " + answer.getTextContent());
+            System.out.println("[接续后的消息数] " + agent.getAgentState("study-user", "study-session-001").getContext().size());
+        }
     }
 
     // ================= State 3：userId / sessionId 的隔离 =================
 
+    /**
+     * 观察用户与会话两个维度如何组成状态槽。
+     * <p>关键点：同用户不同 session、不同用户相同 session 都应隔离；Agent 对象名不是本例状态槽的唯一标识。
+     * <p>观察：对照目录和再次提问的代号；固定目录可能含上次演示的数据。
+     */
     @Test
     @DisplayName("State 3：三个会话目录互不相干——test06 坑的存储层解释")
     public void test03Isolation() throws Exception {
@@ -303,6 +340,11 @@ public class StateTest {
     /** 结构化输出用的 record（test06 同款场景） */
     public record WeatherResponse(String location, String temperature, String condition) {}
 
+    /**
+     * 观察结构化输出过程中持久化状态的变化。
+     * <p>关键点：nativeStructuredOutput=false 使用框架的合成工具路径，目标 record 决定结构化字段。
+     * <p>观察：检查当前状态 JSON 的 summary/context；该字段的变化不等于所有对话都启用了长期记忆摘要。
+     */
     @Test
     @DisplayName("State 4：summary 字段——结构化兜底调用前，框架清残留并写摘要")
     public void test04SummaryField() throws Exception {

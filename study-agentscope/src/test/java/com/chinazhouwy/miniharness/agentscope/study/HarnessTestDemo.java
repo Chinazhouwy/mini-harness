@@ -55,24 +55,32 @@ public class HarnessTestDemo {
 
     private static OpenAIChatModel model;
 
+    // JUnit 在本类测试开始前执行一次初始化；沿用根 config 的本地配置，不把密钥写到代码或日志。
     @BeforeAll
     static void before() throws IOException {
-        // 模型配置放在测试资源里，跟 HarnessTest 用的是同一份
+        // 模型配置由公共 ModelConfig 读取根 config 目录，和 HarnessTest 使用同一入口。
         Properties props = ModelConfig.loadLocalProperties();
         model = OpenAIChatModel.builder()
                 .apiKey(props.getProperty("openrouter.api.key"))
                 .modelName(props.getProperty("openrouter.model"))
                 .baseUrl(props.getProperty("openrouter.base.url"))
+                // false 选择框架的非原生结构化输出路径；普通问答仍正常使用该模型配置。
                 .nativeStructuredOutput(false)
+                // 这里控制模型响应的流式接收；外层 agent.call 仍可聚合为一个最终 Msg，事件流用 streamEvents 观察。
                 .stream(true)
                 .build();
     }
 
+    /**
+     * 观察一趟调用中每次模型请求使用的上下文。
+     * <p>关键点：RoundLog 位于模型调用边界；文件探针放进用户工作区，用工具结果推动下一轮。
+     * <p>观察：看消息、工具、系统片段随轮次变化；不应把聊天历史和本轮临时上下文混为一份数据。
+     */
     @Test
     @DisplayName("上下文管理 1：每轮请求前重新组织上下文")
     public void test01EveryRoundRebuildsContext() throws IOException {
 
-        // workspace 一定用绝对路径。相对路径会踩 2.0.4 的 startsWith 守卫缺陷（PR #4079）
+        // 使用绝对规范路径统一读取基准；2.0.4 的 startsWith 守卫缺陷是历史背景，当前版本以实验为准。
         Path ws = Path.of("./data/context-demo").toAbsolutePath().normalize();
         Files.createDirectories(ws);
         // 探针文件要放在按用户分出来的那一层 {ws}/zhouwy/。
@@ -104,6 +112,9 @@ public class HarnessTestDemo {
     /**
      * 第二步里的一个小点：工作区的规则文件在「一次调用开始时」读进来。
      * 同一个 agent、同一个会话，中间把 AGENTS.md 改掉，看两次调用各读到哪份。
+     *
+     * <p>关键点：同 Agent/同会话下改 AGENTS.md；RuleProbe 只提取规则片段，减少其他记忆标记干扰。
+     * <p>观察：比较两次请求中的 RULE_V1/RULE_V2，核对读取时机而非只判断模型是否服从。
      */
     @Test
     @DisplayName("上下文管理 2：规则文件在调用开始时加载")
@@ -141,6 +152,9 @@ public class HarnessTestDemo {
     /**
      * 补上一步没验的那半句：同一趟里、第 1 轮问完之后把 AGENTS.md 换掉，
      * 看第 2 轮请求会不会实时读到新内容。
+     *
+     * <p>关键点：MidCallProbe 在模型请求间修改演示规则文件，后续轮次是否更新要从实际请求判断。
+     * <p>观察：需要模型确实进入下一轮；文件改动发生了不等于本轮提示词已重建规则内容。
      */
     @Test
     @DisplayName("上下文管理 2 补验：同一趟中改规则文件")
@@ -174,6 +188,9 @@ public class HarnessTestDemo {
      * 第三节「接入会变化的业务信息」：用文档原样的 builder.contextSource(...) 注册动态来源。
      * 每轮现取现发的信息会变，和上一节的 AGENTS.md（每趟读一次）正好相反。
      * 文档示例返回固定值；这里让内容带上读取次数，才能看出每轮拿的是不是新值。
+     *
+     * <p>关键点：contextSource 返回带读取序号的 ContextBlock.runtime，每次读取增加计数而非复用固定文本。
+     * <p>观察：对照业务读取次数和模型请求次数；这里演示读取新值，没有调用真实构建服务。
      */
     @Test
     @DisplayName("上下文管理 3：动态来源每轮重新读取")
@@ -192,6 +209,7 @@ public class HarnessTestDemo {
                 .sysPrompt("你是一个助手。需要文件内容时必须调用 read_file 工具，不要凭空猜。")
                 .model(model)
                 .workspace(ws)
+                // 本例每次读取都增加序号，用请求中的标记验证刷新时机；不等于后台轮询或缓存自动失效。
                 .contextSource("build-status", request -> {
                     int n = loads.incrementAndGet();
                     return Mono.just(List.of(ContextBlock.runtime("latest",

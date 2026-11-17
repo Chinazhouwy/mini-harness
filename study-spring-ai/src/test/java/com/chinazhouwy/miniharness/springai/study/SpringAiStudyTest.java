@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/** Spring AI 基础调用学习入口。BeforeAll 创建模型连接配置，方法分别演示同步、流式、工具、记忆和输出转换；本类依赖真实模型，默认由 live 标签排除。 */
 @org.junit.jupiter.api.Tag("live")
 public class SpringAiStudyTest {
 
@@ -33,6 +34,11 @@ public class SpringAiStudyTest {
         model = new ModelCreator().getModel();
     }
 
+    /**
+     * 认识 ChatClient 的最小同步调用。
+     * <p>关键点：system/user 组成模型消息；call 选择同步响应，content 提取最终文本。
+     * <p>观察：看发出的消息角色与返回文字；没有注册工具时只是普通问答。
+     */
     @Test
     void firstChat() {
         // 1. 创建模型连接配置
@@ -49,6 +55,11 @@ public class SpringAiStudyTest {
         System.out.println(answer);
     }
 
+    /**
+     * 认识流式响应的订阅与完成。
+     * <p>关键点：stream().content() 返回 Flux；blockLast 订阅并等待，doOnNext 观察每次发出的文本片段。
+     * <p>观察：对照订阅前后的输出，片段不保证是完整单词或一句话。
+     */
     @Test
     void streamChat() {
         ChatClient client = ChatClient.create(model);
@@ -65,6 +76,11 @@ public class SpringAiStudyTest {
                 .blockLast();
     }
 
+    /**
+     * 通过 @Tool 注册 Java 方法供模型选择。
+     * <p>关键点：tools 将对象的工具定义交给请求；自动工具循环会执行工具并携带结果再次请求模型。
+     * <p>观察：看 Java 方法的执行日志和最终回答；工具返回的是本例固定任务状态。
+     */
     @Test
     void toolChat() {
         ChatClient client = ChatClient.create(model);
@@ -79,6 +95,11 @@ public class SpringAiStudyTest {
         System.out.println("最终回答：" + answer);
     }
 
+    /**
+     * 统计一趟用户请求中的模型调用轮次。
+     * <p>关键点：较大的 Advisor order 让 trace 位于默认工具循环内部；每次 nextCall 经过一次该观察器。
+     * <p>观察：按模型调用次数和 hasToolCalls 日志识别中间轮与最终轮，不等于统计网络层 SDK 重试。
+     */
     @Test
     void observeToolLoop() {
         ChatClient client = ChatClient.create(model);
@@ -120,6 +141,11 @@ public class SpringAiStudyTest {
 
 
 
+    /**
+     * 使用 SimpleLoggerAdvisor 观察 ChatClient 请求和响应。
+     * <p>关键点：日志是否可见同时取决于 Advisor 配置和日志级别；日志对象不是原始 HTTP 字节。
+     * <p>观察：对照本模块的 HTTP 拦截器输出，理解客户端层与网络层各自观察什么。
+     */
     @Test
     void advisorChat() {
         ChatClient client = ChatClient.create(model);
@@ -134,6 +160,11 @@ public class SpringAiStudyTest {
     }
 
 
+    /**
+     * 观察聊天记忆的存取、窗口和会话隔离。
+     * <p>关键点：Repository 保存消息，MessageWindowChatMemory 管窗口，Advisor 按 CONVERSATION_ID 读取和写回。
+     * <p>观察：同时查看 A/B 的 HTTP 历史和 memory.get，不能只凭模型回答对错判定隔离。
+     */
     @Test
     void memoryChat() {
         // 1. 创建存储和窗口管理
@@ -144,6 +175,7 @@ public class SpringAiStudyTest {
 
         // 2. 创建带记忆 Advisor 的客户端
         ChatClient client = ChatClient.builder(model)
+                // 把记忆 Advisor 挂到客户端后，后续请求才能按会话参数自动读写历史；只 new ChatMemory 不会影响模型输入。
                 .defaultAdvisors(
                         MessageChatMemoryAdvisor.builder(memory).build()
                 )
@@ -186,6 +218,11 @@ public class SpringAiStudyTest {
 
     record TaskInfo(String name, String status) {}
 
+    /**
+     * 把模型响应转换为目标 record。
+     * <p>关键点：entity 依据类型组织格式并反序列化；TaskInfo 字段只是数据结构，没有业务校验逻辑。
+     * <p>观察：核对生成的任务名和状态；本例不执行或保存任务。
+     */
     @Test
     void structuredOutput() {
         ChatClient client = ChatClient.create(model);
@@ -199,6 +236,11 @@ public class SpringAiStudyTest {
         System.out.println(task.status());
     }
 
+    /**
+     * 观察应用查到的资料如何进入模型上下文。
+     * <p>关键点：这里显式把固定资料拼到用户消息，不包含向量检索，也不会自动保存长期记忆。
+     * <p>观察：从请求体确认资料已发送；回答应以这段资料为依据。
+     */
     @Test
     void contextChat() {
         ChatClient client = ChatClient.create(model);

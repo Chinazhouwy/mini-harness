@@ -32,6 +32,7 @@ public class AgentSessionTest {
 
     private static OpenAIChatModel model;
 
+    // JUnit 在本类测试开始前执行一次初始化；沿用根 config 的本地配置，不把密钥写到代码或日志。
     @BeforeAll
     static void before() throws IOException {
         Properties props = ModelConfig.loadLocalProperties();
@@ -39,11 +40,18 @@ public class AgentSessionTest {
                 .apiKey(props.getProperty("openrouter.api.key"))
                 .modelName(props.getProperty("openrouter.model"))
                 .baseUrl(props.getProperty("openrouter.base.url"))
+                // false 选择框架的非原生结构化输出路径；普通问答仍正常使用该模型配置。
                 .nativeStructuredOutput(false)
+                // 这里控制模型响应的流式接收；外层 agent.call 仍可聚合为一个最终 Msg，事件流用 streamEvents 观察。
                 .stream(true)
                 .build();
     }
 
+    /**
+     * 观察后台提交、等待与对话记录读取。
+     * <p>关键点：session 是会话操作句柄；submit 返回任务回执，await 等完成，transcript 读取消息视图。
+     * <p>观察：比较提交耗时和等待耗时；submit 返回不代表模型任务完成，回执中的 runId/turnId 也不是工具调用 ID。
+     */
     @Test
     @DisplayName("session 模式：submit 交了就走，await 等结果，transcript 读回对话")
     public void testSubmitRunsInBackground() throws IOException {
@@ -62,12 +70,14 @@ public class AgentSessionTest {
             RuntimeContext ctx = RuntimeContext.builder()
                     .userId("zhouwy").sessionId("sSession-" + UUID.randomUUID()).build();
 
+            // 会话句柄绑定 RuntimeContext 标识；创建句柄不等于已启动模型任务，submit 才提交后台执行。
             try (var session = agent.session(ctx)) {
                 System.out.println("【拿句柄】sessionId=" + session.sessionId()
                         + " | 此刻 transcript 已有 " + session.transcript().messages().size()
                         + " 条（拿句柄不会启动模型）");
 
                 long t0 = System.currentTimeMillis();
+                // request-001 是应用提交标识；回执中的 turnId/runId 标识框架任务，不能用作模型返回的工具调用 ID。
                 var task = session.submit("request-001", "读一下 note.txt，告诉我里面写了什么。");
                 long submitMs = System.currentTimeMillis() - t0;
                 System.out.println("【提交回执】" + submitMs + " ms 就返回了"
@@ -76,12 +86,14 @@ public class AgentSessionTest {
                         + " | status=" + task.status()
                         + " | settled=" + task.settled());
 
+                // await 等任务结算，外层 block 的 180 秒只限制调用方等待；任务完成和业务目标完成还需看结果与状态。
                 var done = session.await(task).block(Duration.ofSeconds(180));
                 System.out.println("【等待结果】从提交算起共 "
                         + (System.currentTimeMillis() - t0) + " ms"
                         + " | status=" + (done == null ? "超时/空" : done.status())
                         + " | error=" + (done == null ? "-" : done.error()));
 
+                // transcript 是会话记录视图，asOfSeq 表示读取到的序列位置；消息文字与工具块分别解析。
                 var transcript = session.transcript();
                 List<Msg> msgs = transcript.messages();
                 System.out.println("【对话记录】transcript 共 " + msgs.size()

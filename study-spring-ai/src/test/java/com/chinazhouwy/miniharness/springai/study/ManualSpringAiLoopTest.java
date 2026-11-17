@@ -39,6 +39,7 @@ public class ManualSpringAiLoopTest {
 
     /** 返回最终回答；本例的 maxRounds 是本次最多允许调用模型的次数。 */
     static String runLoop(ChatModel model, TaskTools taskTools, int maxRounds) {
+        // ToolCallbacks.from 将 @Tool 方法、实例、参数 Schema 绑定为回调；工具注册本身不执行方法。
         ToolCallback[] tools = ToolCallbacks.from(taskTools);
         ToolCallingManager toolManager = ToolCallingManager.builder().build();
         ToolCallingChatOptions options = ToolCallingChatOptions.builder()
@@ -75,6 +76,7 @@ public class ManualSpringAiLoopTest {
             }
 
             // 4. 保存原消息、模型工具请求和工具结果，带入下一轮。
+            // Manager 返回的是包含原消息、模型工具请求与工具结果的完整历史，这里替换列表而不是重复追加整个历史。
             messages = result.conversationHistory();
             System.out.println("  工具结果已加入消息，准备下一轮");
         }
@@ -82,6 +84,11 @@ public class ManualSpringAiLoopTest {
         throw new IllegalStateException("模型调用次数上限必须大于 0");
     }
 
+    /**
+     * 用固定响应看清最小工具调用循环。
+     * <p>关键点：第一次模型响应请求工具，第二次检查工具结果后回答；runLoop 由应用控制每轮调用与历史。
+     * <p>观察：断言两轮模型、一次工具及最终答案；固定模型不代表验证了外部服务行为。
+     */
     @Test
     void scriptedModelShowsToolLoop() {
         TaskTools tools = new TaskTools();

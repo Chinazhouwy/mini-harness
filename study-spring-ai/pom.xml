@@ -46,6 +46,12 @@
                 <artifactId>spring-ai-model-chat-memory-repository-jdbc</artifactId>
                 <scope>test</scope>
             </dependency>
+            <!-- MCP 客户端与 Spring AI ToolCallback 的桥接，示例手动组装。 -->
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-mcp</artifactId>
+                <scope>test</scope>
+            </dependency>
             <dependency>
                 <groupId>com.h2database</groupId>
                 <artifactId>h2</artifactId>

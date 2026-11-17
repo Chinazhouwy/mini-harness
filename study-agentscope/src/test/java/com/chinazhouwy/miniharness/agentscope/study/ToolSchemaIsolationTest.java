@@ -17,6 +17,11 @@ class ToolSchemaIsolationTest {
         }
     }
 
+    /**
+     * 离线回归带参数工具注册时的 Schema 生成。
+     * <p>关键点：Toolkit.registerTool 解析 @Tool/@ToolParam，实际走 AgentScope 所需的 victools 依赖。
+     * <p>观察：注册成功且能按名字取得工具；该入口曾因混用 Schema 4.x/5.x 发生二进制方法缺失。
+     */
     @Test
     @DisplayName("AgentScope 独立依赖：带参数工具可正常生成 Schema")
     void registersParameterizedTool() {

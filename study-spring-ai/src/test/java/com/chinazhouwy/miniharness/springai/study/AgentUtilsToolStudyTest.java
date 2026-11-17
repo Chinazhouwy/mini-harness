@@ -24,8 +24,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class AgentUtilsToolStudyTest {
 
     @TempDir
+    // JUnit 为本方法隔离文件目录，Glob 的 workingDirectory/allowedDirectory 均限制在这个测试范围。
     Path workspace;
 
+    /**
+     * 离线验证社区 Glob 工具可被 Spring AI Manager 执行。
+     * <p>关键点：固定模型工具请求只替代 LLM，参数 Schema、工具查找和目录内文件匹配均走真实实现。
+     * <p>观察：临时目录里的 Java 文件应匹配，其他文件不匹配；本方法不访问外部模型。
+     */
     @Test
     void executeGlobThroughSpringAiManager() throws Exception {
         Path source = Files.createDirectories(workspace.resolve("src"));

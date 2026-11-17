@@ -82,6 +82,7 @@ public class RegisterSchemaScenarios {
      * 初始化模型。JUnit 的 @BeforeAll 只有跑测试时才执行，所以自己写 main 必须调这个，
      * 否则 .model(null) 会让 getModel(ctx) 返回 null 并抛 NPE。
      */
+    // JUnit 的 BeforeAll 不会在直接运行 main 时自动执行；因此 main 自己调用这个幂等初始化方法。
     private static void initModel() throws IOException {
         if (model != null) {
             return;
@@ -91,7 +92,9 @@ public class RegisterSchemaScenarios {
                 .apiKey(props.getProperty("openrouter.api.key"))
                 .modelName(props.getProperty("openrouter.model"))
                 .baseUrl(props.getProperty("openrouter.base.url"))
+                // false 选择框架的非原生结构化输出路径；普通问答仍正常使用该模型配置。
                 .nativeStructuredOutput(false)
+                // 这里控制模型响应的流式接收；外层 agent.call 仍可聚合为一个最终 Msg，事件流用 streamEvents 观察。
                 .stream(true)
                 .build();
     }

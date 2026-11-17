@@ -65,6 +65,7 @@ public class PermissionTest {
         }
     }
 
+    // JUnit 在本类测试开始前执行一次初始化；沿用根 config 的本地配置，不把密钥写到代码或日志。
     @BeforeAll
     static void before() throws IOException {
         Properties props = ModelConfig.loadLocalProperties();
@@ -72,11 +73,18 @@ public class PermissionTest {
                 .apiKey(props.getProperty("openrouter.api.key"))
                 .modelName(props.getProperty("openrouter.model"))
                 .baseUrl(props.getProperty("openrouter.base.url"))
+                // false 选择框架的非原生结构化输出路径；普通问答仍正常使用该模型配置。
                 .nativeStructuredOutput(false)
+                // 这里控制模型响应的流式接收；外层 agent.call 仍可聚合为一个最终 Msg，事件流用 streamEvents 观察。
                 .stream(true)
                 .build();
     }
 
+    /**
+     * 同时配置允许与拒绝规则，观察执行前拦截。
+     * <p>关键点：DONT_ASK 不交互询问；规则按工具名匹配，允许公开工具、拒绝机密工具。
+     * <p>观察：区分模型发出调用和 Java 方法实际执行；模型解释不是权限生效的唯一证据。
+     */
     @Test
     @DisplayName("Permission 2：deny get_secret + allow get_public，只拦机密放行公开")
     public void test02AllowRule() {
@@ -118,7 +126,9 @@ public class PermissionTest {
                     }
                 })
                 .workspace(Path.of("./data/workspace"))
+                // 文件 Store 按调用的 userId/sessionId 保存和读取状态；新 Java 对象不等于新会话。
                 .stateStore(new JsonFileAgentStateStore(Path.of("./data/.agentscope-state")))
+                // 仅关闭这两类预置能力以减少干扰；聊天历史、文件工具等其他能力仍看各自配置。
                 .disableMemoryTools().disableSubagents()
                 .build()) {
 
@@ -149,6 +159,7 @@ public class PermissionTest {
 
         /** ruleContent 语义（本工具自定义）：逗号分隔关键字，SQL 大写后包含任一即匹配；null = 全部匹配。 */
         @Override
+        // 此扩展解释规则内容与工具参数怎样匹配；判断发生在工具执行前，和模型是否服从提示词分开。
         public boolean matchRule(String ruleContent, Map<String, Object> toolInput) {
             if (ruleContent == null || ruleContent.isEmpty()) {
                 return true;
@@ -161,12 +172,18 @@ public class PermissionTest {
         }
 
         @Override
+        // 这是模拟执行体，只生成工具结果；没有连接数据库，不会真的执行传入 SQL。
         public Mono<ToolResultBlock> callAsync(ToolCallParam param) {
             String sql = String.valueOf(param.getInput().getOrDefault("sql", ""));
             return Mono.just(ToolResultBlock.text("SQL 执行成功：" + sql));
         }
     }
 
+    /**
+     * 观察参数级规则匹配如何参与权限判断。
+     * <p>关键点：SqlTool.matchRule 解释 ruleContent 中的关键词；本例只返回模拟 SQL 结果，没有数据库连接。
+     * <p>观察：SELECT 与破坏性语句应走不同权限结果；字符串关键词实验不是完整 SQL 安全解析器。
+     */
     @Test
     @DisplayName("Permission 3：自定义 matchRule——run_sql 放行 SELECT，拦 DROP/DELETE")
     public void test03CustomMatchRule() {
@@ -224,6 +241,11 @@ public class PermissionTest {
         }
     }
 
+    /**
+     * 观察同一 Agent 内不同状态槽的权限隔离。
+     * <p>关键点：权限按 userId/sessionId 定位；本例给另一个槽设 EXPLORE，而不是改全局 Agent 配置。
+     * <p>观察：同一工具在两个用户会话下可能不同；只读标签同样影响 EXPLORE 的判断。
+     */
     @Test
     @DisplayName("Permission 4：权限跟着用户走——同一 agent，zhouwy 放行，wang 全拒")
     public void test04UserIsolation() {
@@ -268,6 +290,7 @@ public class PermissionTest {
 
             // 给用户 wang 单独切模式（只影响 wang 的 slot，zhouwy 的账本不动）
             String sidB = "sUserB-" + UUID.randomUUID();
+            // 针对指定 userId/sessionId 的状态槽切模式；不是给整个 Agent 或所有用户永久切换。
             agent.setPermissionMode("wang", sidB, PermissionMode.EXPLORE);
 
             RuntimeContext ctxB = RuntimeContext.builder().userId("wang").sessionId(sidB).build();
@@ -276,6 +299,11 @@ public class PermissionTest {
         }
     }
 
+    /**
+     * 在 DEFAULT 下显式配置一组允许与拒绝规则。
+     * <p>关键点：给预期读取工具添加 allow，给其他演示工具加 deny，以免测试进入无人响应的确认流程。
+     * <p>观察：看被调用工具及实际结果；这组规则不等价于完整的生产权限系统。
+     */
     @Test
     @DisplayName("Permission 5：DEFAULT+只读放行组合——mode DEFAULT，逐个给工具加 allow")
     public void test05DefaultWithReadOnlyAllow() {
@@ -330,6 +358,11 @@ public class PermissionTest {
         }
     }
 
+    /**
+     * 观察工具 readOnly 元数据如何参与探索模式判断。
+     * <p>关键点：EXPLORE 根据工具定义中的只读标志处理；方法名像读取并不会自动成为只读。
+     * <p>观察：比较两个工具的执行情况；只读声明应由工具实现的真实行为保证。
+     */
     @Test
     @DisplayName("Permission 7：@Tool readOnly——EXPLORE 模式下只读的放行，非只读的直接拒")
     public void test07ReadOnlyFlag() {
@@ -366,6 +399,11 @@ public class PermissionTest {
         }
     }
 
+    /**
+     * 观察需要人工确认的工具调用如何交出控制权。
+     * <p>关键点：此入口委托交互 helper；控制台读 y/n，再回填决策继续调用，不是给模型一句口头授权。
+     * <p>观察：建议运行 main 进行键盘交互；JUnit/IDE 对标准输入的支持不同，可能等待输入。
+     */
     @Test
     @DisplayName("Permission 6：ask 规则+真人确认（交互入口在本类的 main 方法，JUnit 窗口收不了键盘）")
     public void test06AskApproval() {
@@ -443,6 +481,7 @@ public class PermissionTest {
                             + "（清理僵尸数据，直接执行）。把每条的结果告诉我。"));
             Msg ret = null;
             for (int round = 1; round <= 6; round++) {
+                // 一趟事件结束也可能意味着挂起等待确认；先检查确认事件，再判断是否拿到最终业务回答。
                 List<AgentEvent> events = agent.streamEvents(msgs, ctx).collectList().block();
 
                 // 注意顺序：先看有没有"等你批准"的请求，再看有没有跑完。
@@ -504,6 +543,11 @@ public class PermissionTest {
         }
     }
 
+    /**
+     * 用 deny 规则阻止机密工具执行。
+     * <p>关键点：权限在执行侧检查，不能只靠 system 提示词约束；拒绝信息可作为后续模型输入。
+     * <p>观察：观察工具事件与公开工具的后续选择；模型是否自我纠正由当次响应决定。
+     */
     @Test
     @DisplayName("Permission 1：deny 规则拦截 get_secret，模型自我纠正改用 get_public")
     public void test01DenyRule() {

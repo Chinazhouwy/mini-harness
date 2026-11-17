@@ -95,6 +95,7 @@ public class ToolTest {
     public static class MyTools {
 
         @Tool(name = "query_fund_nav", description = "查询基金最新净值（估值）。当用户问某个基金的净值/涨跌时必须调用此工具。")
+        // 工具名虽然叫最新净值，返回值其实是固定演示 JSON；这里没有访问行情服务。
         public String queryFundNav(
                 @ToolParam(name = "fund_code", description = "基金六位代码，例如 005827") String fundCode) {
             // 真实场景这里是调基金 API；demo 返回写死数据
@@ -109,6 +110,7 @@ public class ToolTest {
         }
 
         @Tool(name = "create_ticket", description = "创建一个工单，返回新工单号")
+        // 这里只模拟返回工单号，不创建真实工单；后续查询是否带上这个号是本用例的观察点。
         public String createTicket(
                 @ToolParam(name = "title", description = "工单标题") String title) {
             String id = "TK-" + System.currentTimeMillis() % 100000;
@@ -124,6 +126,7 @@ public class ToolTest {
         }
     }
 
+    // JUnit 在本类测试开始前执行一次初始化；沿用根 config 的本地配置，不把密钥写到代码或日志。
     @BeforeAll
     static void before() throws IOException {
         Properties props = ModelConfig.loadLocalProperties();
@@ -131,11 +134,18 @@ public class ToolTest {
                 .apiKey(props.getProperty("openrouter.api.key"))
                 .modelName(props.getProperty("openrouter.model"))
                 .baseUrl(props.getProperty("openrouter.base.url"))
+                // false 选择框架的非原生结构化输出路径；普通问答仍正常使用该模型配置。
                 .nativeStructuredOutput(false)
+                // 这里控制模型响应的流式接收；外层 agent.call 仍可聚合为一个最终 Msg，事件流用 streamEvents 观察。
                 .stream(true)
                 .build();
     }
 
+    /**
+     * 观察有先后依赖的多个工具如何被模型串联。
+     * <p>关键点：模型先取得模拟工单号，再把它作为查询参数；一次 call 内由框架继续组织后续轮次。
+     * <p>观察：按参数与结果日志确认使用了刚返回的工单号；工单是本地固定演示数据。
+     */
     @Test
     @DisplayName("工具 2：有先后依赖的两个工具（先建工单 → 再用工单号查状态）")
     public void test02DependentTools() {
@@ -149,7 +159,9 @@ public class ToolTest {
                 .toolkit(toolkit)
                 .middleware(GLOBAL)
                 .workspace(Path.of("./data/workspace"))
+                // 文件 Store 按调用的 userId/sessionId 保存和读取状态；新 Java 对象不等于新会话。
                 .stateStore(new JsonFileAgentStateStore(Path.of("./data/.agentscope-state")))
+                // 仅关闭这两类预置能力以减少干扰；聊天历史、文件工具等其他能力仍看各自配置。
                 .disableMemoryTools().disableSubagents()
                 .build()) {
 
@@ -162,6 +174,11 @@ public class ToolTest {
         }
     }
 
+    /**
+     * 观察同一批自定义工具如何暴露给模型。
+     * <p>关键点：Toolkit 注册工具与 Schema，模型自行选择净值查询、加法等方法；注册不等于执行。
+     * <p>观察：核对工具事件和最终回答；净值是固定样例值，加法由本地 Java 实际计算。
+     */
     @Test
     @DisplayName("工具 1：自定义 @Tool 工具，模型自动调用并消费返回值")
     public void test01CustomTool() {
@@ -200,6 +217,7 @@ public class ToolTest {
 
         @Tool(name = "get_file", description = "读取服务器上的文件内容。只允许访问 /data 目录。")
         public String getFile(@ToolParam(name = "path", description = "文件绝对路径") String path) {
+            // 这是受控示例的参数拦截；真实路径权限还应处理规范化、符号链接和目录边界，不能只照抄前缀判断。
             if (path.startsWith("/etc")) {
                 // 这就是 2.0.4 上的"拦截"：返回错误文本，模型会自我纠正
                 return "Error: PolicyGuard 禁止访问 /etc 下的文件，只允许访问 /data 目录。";
@@ -208,6 +226,11 @@ public class ToolTest {
         }
     }
 
+    /**
+     * 在工具方法中执行参数级校验。
+     * <p>关键点：@ToolParam 说明参数含义，路径限制则由 Java 代码检查；本例从内存 Map 返回模拟文件。
+     * <p>观察：拒绝的路径返回失败信息，模型可据此调整；字符串前缀判断不是完整文件系统隔离。
+     */
     @Test
     @DisplayName("参数级拦截（2.0.4 做法）：工具内部校验参数，模型收到拒绝后自我纠正")
     public void test03ParamValidation() {
@@ -237,6 +260,11 @@ public class ToolTest {
 
     // ================= MCP 接入：把外部 MCP server 的工具挂给 agent =================
 
+    /**
+     * 通过 AgentScope 客户端接入外部文件工具。
+     * <p>关键点：stdioTransport 指定子进程命令、参数和环境；initialize 后发现工具，再 registerMcpClient 适配进 Toolkit。
+     * <p>观察：工具应读取授权目录的探针文件；需 Node/npm，try-with-resources 负责关闭连接与 Agent。
+     */
     @Test
     @DisplayName("MCP 接入：stdio 拉起官方 filesystem server，它的工具直接挂进 toolkit")
     public void test04McpTools() throws Exception {
@@ -258,6 +286,7 @@ public class ToolTest {
                 "MCP 演示：这段内容只有通过 filesystem server 的 read_file 工具才能读到。");
 
         // 2. stdio 方式拉起 MCP server（一个 npx 子进程），初始化，列出它带来的工具
+        // 启动本地服务子进程并走 stdio，不是模型直接访问文件；此旧示例未固定服务包版本。
         try (McpClientWrapper mcp = McpClientBuilder.create("fs")
                 .stdioTransport(nvmBin.resolve("npx").toString(),
                         List.of("-y", "@modelcontextprotocol/server-filesystem", dir.toString()), env)
@@ -272,6 +301,7 @@ public class ToolTest {
 
             // 3. 注册进 toolkit：框架把 MCP 工具转成普通工具，模型用起来和自己写的 @Tool 没区别
             Toolkit toolkit = new Toolkit();
+            // 把 MCP 工具定义与远程调用适配为 AgentScope 工具；与 Spring AI 的 ToolCallbackProvider 是同一层职责。
             toolkit.registerMcpClient(mcp).block();
             System.out.println("== 已注册进 toolkit");
 

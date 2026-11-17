@@ -97,6 +97,7 @@ public class ModelTest {
         }
     };
 
+    // JUnit 在本类测试开始前执行一次初始化；沿用根 config 的本地配置，不把密钥写到代码或日志。
     @BeforeAll
     static void before() throws IOException {
         props = ModelConfig.loadLocalProperties();
@@ -104,7 +105,9 @@ public class ModelTest {
                 .apiKey(props.getProperty("openrouter.api.key"))
                 .modelName(props.getProperty("openrouter.model"))
                 .baseUrl(props.getProperty("openrouter.base.url"))
+                // false 选择框架的非原生结构化输出路径；普通问答仍正常使用该模型配置。
                 .nativeStructuredOutput(false)
+                // 这里控制模型响应的流式接收；外层 agent.call 仍可聚合为一个最终 Msg，事件流用 streamEvents 观察。
                 .stream(true)
                 .build();
     }
@@ -117,7 +120,9 @@ public class ModelTest {
                 .model(m)
                 .middleware(GLOBAL)
                 .workspace(Path.of("./data/workspace"))
+                // 文件 Store 按调用的 userId/sessionId 保存和读取状态；新 Java 对象不等于新会话。
                 .stateStore(new JsonFileAgentStateStore(Path.of("./data/.agentscope-state")))
+                // 仅关闭这两类预置能力以减少干扰；聊天历史、文件工具等其他能力仍看各自配置。
                 .disableMemoryTools().disableSubagents()
                 .build();
     }
@@ -131,6 +136,11 @@ public class ModelTest {
 
     // ================= 1. 字符串 id（ModelRegistry） =================
 
+    /**
+     * 观察字符串模型标识的解析与显式注册。
+     * <p>关键点：canResolve 说明有匹配的解析器，不等于凭据齐全；register 把已经配置好的模型绑定到名字。
+     * <p>观察：先看前缀解析是否成功，再看 my-model 的实际调用，区分模型 ID 与服务参数。
+     */
     @Test
     @DisplayName("模型 1：用字符串 id 指定模型（ModelRegistry）")
     public void test02ModelRegistry() {
@@ -162,6 +172,11 @@ public class ModelTest {
 
     // ================= 2. 给字符串 id 补 key 和 url =================
 
+    /**
+     * 比较模型标识如何获得密钥、地址与实例。
+     * <p>关键点：默认 Provider、带属性的 resolve 和 registerFactory 是不同配置入口；工厂按匹配的 ID 构造模型。
+     * <p>观察：核对实际选择的模型与请求结果；注册工厂影响进程级 Registry，建议单独运行。
+     */
     @Test
     @DisplayName("模型 2：字符串 id 的 key 和 url 从哪来")
     public void test03ResolveWithContext() {
@@ -207,10 +222,15 @@ public class ModelTest {
 
     // ================= 3. maxRetries 重试 + fallbackModel 备用模型 =================
 
+    /**
+     * 观察主模型失败后的重试与备用模型切换。
+     * <p>关键点：主模型故意使用无效凭据；maxRetries/fallbackModel 控制失败路径，listener 观察切换。
+     * <p>观察：401 是否可重试取决于当前策略，次数以事件/请求日志为准；这是模型失败，不是工具失败。
+     */
     @Test
     @DisplayName("模型 3：主模型挂了 → maxRetries 重试 → fallbackModel 接管")
     public void test04RetryAndFallback() {
-        // 主模型：故意配错 key，每次请求都会 401
+        // 主模型故意使用无效 key；错误码和是否重试由当前服务与框架策略决定。
         OpenAIChatModel broken = OpenAIChatModel.builder()
                 .apiKey("sk-invalid-key-on-purpose")
                 .modelName(props.getProperty("openrouter.model"))
@@ -241,6 +261,11 @@ public class ModelTest {
 
     // ================= ModelTest 演示 =================
 
+    /**
+     * 观察全局 Middleware 中不同钩子的作用顺序。
+     * <p>关键点：同一调用经过 Agent、提示词、推理、模型或工具边界；无工具分支不必出现 acting。
+     * <p>观察：用编号日志识别范围与先后，不把缺少工具事件视为框架漏执行。
+     */
     @Test
     @DisplayName("全局中间件：一次调用里 5 个钩子的触发顺序")
     public void test01HookOrder() {
@@ -252,6 +277,11 @@ public class ModelTest {
 
     // ================= 3. 清空预设提示词：看最干净的请求/返回 =================
 
+    /**
+     * 用直接构造的 ReActAgent 观察较少附加能力的问答。
+     * <p>关键点：不注册工具，Middleware 汇总模型文本；同一会话的第二次调用应带入上次问答。
+     * <p>观察：请求层日志能看到历史，但不是原始 HTTP 字节；流式增量到完成时才汇总展示。
+     */
     @Test
     @DisplayName("清空预设提示词：ReActAgent 零注入，每次请求/返回完整可见")
     public void test04CleanRequestResponse() {
@@ -315,6 +345,11 @@ public class ModelTest {
         }
     }
 
+    /**
+     * 观察一个工具如何改变模型交互消息。
+     * <p>关键点：Toolkit 暴露固定净值查询工具，ModelCallInput 中分别读取 ToolUseBlock 与 ToolResultBlock。
+     * <p>观察：第二轮模型输入应含工具结果；净值是示例固定数据，不是实时金融数据。
+     */
     @Test
     @DisplayName("干净 dump + 工具：模型要调工具 → 工具结果回填 → 第二次请求才出最终回答")
     public void test05CleanRequestResponseWithTool() {

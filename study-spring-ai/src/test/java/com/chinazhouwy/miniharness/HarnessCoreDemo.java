@@ -42,6 +42,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
 
+/** Spring AI 功能学习入口。每个方法独立观察一个能力；类级 live 标签使 Maven 默认跳过真实模型示例。部分方法故意演示失败，请按方法运行并对照 HTTP 日志。 */
 @org.junit.jupiter.api.Tag("live")
 class HarnessCoreDemo {
 
@@ -56,6 +57,11 @@ class HarnessCoreDemo {
         }
     }
 
+    /**
+     * 对照工具异常交给模型解释和抛给 Java 调用方两条路径。
+     * <p>关键点：alwaysThrow=false 将受处理的工具异常变成工具结果；true 则传播 ToolExecutionException。
+     * <p>观察：对照两次请求日志、最终回答和 catch 输出；这里的报告工具始终模拟失败。
+     */
     @Test
     @DisplayName("工具异常策略：回填模型或抛给调用方")
     void chatWithToolFailure() throws Exception {
@@ -63,6 +69,7 @@ class HarnessCoreDemo {
         for (boolean alwaysThrow : List.of(false, true)) {
             System.out.println("\n[工具异常策略] alwaysThrow=" + alwaysThrow);
             var manager = ToolCallingManager.builder()
+                    // 这里替换的是工具执行异常策略；模型请求本身的网络异常不经过这个处理器。
                     .toolExecutionExceptionProcessor(new DefaultToolExecutionExceptionProcessor(alwaysThrow))
                     .build();
             ChatClient client = ChatClient.builder(model)
@@ -87,6 +94,11 @@ class HarnessCoreDemo {
         }
     }
 
+    /**
+     * 用自定义转换器扩展模型输出契约。
+     * <p>关键点：转换器提供提示格式、Schema 和 Java 转换；validateSchema 增加独立的 Schema 校验。
+     * <p>观察：先看 minutes 的范围规则，再看模型返回值；Java 解析成功不等于业务值都合法。
+     */
     @Test
     @DisplayName("自定义输出转换器：生成范围约束并解析对象")
     void chatWithCustomOutputConverter() throws Exception {
@@ -96,11 +108,17 @@ class HarnessCoreDemo {
         var task = ChatClient.create(new ModelCreator().getModel()).prompt()
                 .user("提取任务：复习 Java，30 分钟。")
                 .call()
+                // converter 的 Schema 用于格式提示与校验，convert 用于转 Java；validateSchema 不是调用所有 Java 校验注解。
                 .entity(converter, spec -> spec.validateSchema())
                 ;
         System.out.println("[自定义转换器结果] " + task);
     }
 
+    /**
+     * 把自定义 Java 注解翻译成 JSON Schema。
+     * <p>关键点：自定义规则由本例的 victools resolver 读取；outputJsonSchema 负责校验，system 显式把规则发给模型。
+     * <p>观察：核对 Schema 的 minimum/maximum 和最终对象；不要把自定义注解当成框架自动支持。
+     */
     @Test
     @DisplayName("自定义范围注解：生成 Schema 并校验输出")
     void chatWithCustomSchemaGenerator() throws Exception {
@@ -125,6 +143,11 @@ class HarnessCoreDemo {
 
     record StudyTask(String name, int minutes, String priority) {}
 
+    /**
+     * 对照提示词约束与模型服务原生结构化输出。
+     * <p>关键点：useProviderStructuredOutput 改变请求协议；能否使用 json_schema 由实际模型服务决定。
+     * <p>观察：对照 HTTP 请求体；本例保留过不支持原生格式的失败路径，服务能力应以当次结果为准。
+     */
     @Test
     @DisplayName("对照提示词与原生 Schema 输出（当前服务不支持原生格式）")
     void chatWithNativeStructuredOutput() throws Exception {
@@ -148,11 +171,17 @@ class HarnessCoreDemo {
         }
     }
 
+    /**
+     * 观察 Schema 校验失败后如何请求模型修正。
+     * <p>关键点：outputType 根据类型与受支持的注解生成规则；maxRepeatAttempts=2 表示最多追加两次修正请求。
+     * <p>观察：数 HTTP 请求并查看错误反馈；最终还会调用 record 构造校验，其异常不会自动再请求模型。
+     */
     @Test
     @DisplayName("结构化输出校验失败后，反馈错误并重新生成")
     void chatWithStructuredOutputValidation() throws Exception {
         // 从类型和 @Schema 注解生成规则，不分析构造方法中的 if。
         var validation = StructuredOutputValidationAdvisor.builder()
+                // outputType 从类型生成校验 Schema；校验失败反馈给模型的内容来自 Advisor，不来自 record 构造异常。
                 .outputType(ValidatedStudyTask.class)
                 .maxRepeatAttempts(2) // 首次请求 + 最多两次修正请求
                 .build();
@@ -177,6 +206,7 @@ class HarnessCoreDemo {
         System.out.println("[最终业务对象] " + task);
     }
 
+    // @Schema 属于 OpenAPI 注解；当前 Schema 生成器读取它形成描述和约束，构造器中的 if 是另一层 Java 业务校验。
     record ValidatedStudyTask(
             @Schema(description = "任务名", minLength = 1) String name,
             @Schema(description = "学习时长（分钟）", minimum = "1", maximum = "180") int minutes,
@@ -195,6 +225,11 @@ class HarnessCoreDemo {
         }
     }
 
+    /**
+     * 离线区分类型正确与业务值正确。
+     * <p>关键点：普通 record 可以接收负时长；ValidatedStudyTask 的紧凑构造器显式检查范围与枚举值。
+     * <p>观察：非法对象可创建，但受校验的对象构造失败；本方法不请求模型。
+     */
     @Test
     @DisplayName("Java 对象类型正确，仍需业务字段校验")
     void structuredOutputNeedsBusinessValidation() {
@@ -206,6 +241,11 @@ class HarnessCoreDemo {
         System.out.println("业务校验拦截：" + error.getMessage());
     }
 
+    /**
+     * 把模型文本结果映射为 Java record。
+     * <p>关键点：entity(StudyTask.class) 组织格式要求并完成反序列化；此处没有创建真实学习任务。
+     * <p>观察：查看 HTTP 提示词和三个字段；模型给出的值仍需由业务自行核验。
+     */
     @Test
     @DisplayName("将模型响应转换为学习任务 record")
     void chatWithStructuredOutput() throws Exception {
@@ -234,6 +274,11 @@ class HarnessCoreDemo {
         }
     }
 
+    /**
+     * 对照是否由 ChatClient 自动组织工具循环。
+     * <p>关键点：关闭 toolCallingAdvisorAutoRegister 仍可发送工具定义，但要自行处理模型返回的工具请求。
+     * <p>观察：先看工具请求存在但执行次数为零，再看开启后的执行与最终回答。
+     */
     @Test
     @DisplayName("工具循环参数：关闭与开启自动注册")
     void chatWithToolAutoRegisterParam() throws Exception {
@@ -254,10 +299,16 @@ class HarnessCoreDemo {
         System.out.println("工具实际执行次数：" + tool.calls);
     }
 
+    /**
+     * 观察 Advisor 参数如何筛选检索上下文。
+     * <p>关键点：文档 metadata.type 是标签；FILTER_EXPRESSION 指定筛选条件，固定向量只为演示过滤。
+     * <p>观察：两次问题相同但标签不同；核对 HTTP 中加入的资料，不能用本例评价语义检索效果。
+     */
     @Test
     @DisplayName("检索过滤参数：按文档元数据选择上下文")
     void chatWithFilterParam() throws Exception {
         // 固定向量仅用于演示元数据过滤，不代表语义 Embedding 模型。
+        // 这里没有调用真实 Embedding 服务；所有向量固定相同，因此实验只说明 metadata 过滤的效果。
         EmbeddingModel embedding = new EmbeddingModel() {
             @Override
             public float[] embed(Document document) { return new float[]{1, 0}; }
@@ -288,6 +339,11 @@ class HarnessCoreDemo {
         }
     }
 
+    /**
+     * 观察应用自定义参数传递到哪里。
+     * <p>关键点：param 写入 Advisor 请求上下文，由自定义 Advisor 显式读取；不会自动进入提示词、工具或 MDC。
+     * <p>观察：对照日志中的 userId/tenantId/traceId 与 HTTP 消息，确认参数和模型上下文的边界。
+     */
     @Test
     @DisplayName("自定义 Advisor 参数：读取用户、租户和追踪编号")
     void chatWithCustomAdvisorParams() throws Exception {
@@ -306,12 +362,18 @@ class HarnessCoreDemo {
         ChatClient client = ChatClient.builder(new ModelCreator().getModel()).defaultAdvisors(trace).build();
         System.out.println(client.prompt().user("请用一句话打招呼。")
                 .advisors(a -> a.param("userId", "user-001")
+                                            // 这些值由自定义 Advisor 从 request.context 读取；身份认证、租户权限与日志上下文都需要应用另外接入。
                                             .param("tenantId", "tenant-001")
                                             .param("traceId", "demo-trace-001")
                 )
                 .call().content());
     }
 
+    /**
+     * 离线观察会话记忆的消息窗口。
+     * <p>关键点：maxMessages 在记忆组件构建时设置；它限制消息数量，不是 token 数，也不是单次 Advisor 参数。
+     * <p>观察：查看 A 的旧消息被淘汰，B 仍按自己的会话 ID 存储。
+     */
     @Test
     @DisplayName("记忆窗口配置：只保留最近消息")
     void memoryWindowIsBuilderOption() {
@@ -323,6 +385,11 @@ class HarnessCoreDemo {
         System.out.println("窗口最多两条，当前消息：\n" + memory.get("A"));
     }
 
+    /**
+     * 用同一个客户端观察会话接续与隔离。
+     * <p>关键点：MessageChatMemoryAdvisor 请求前按 CONVERSATION_ID 取历史，回答后写回记忆。
+     * <p>观察：A 的第二次请求应包含之前问答；B 的请求不应带入 A 的历史。
+     */
     @Test
     @DisplayName("会话记忆：同会话读取历史，不同会话隔离")
     void chatWithMemory() throws Exception {
@@ -335,6 +402,7 @@ class HarnessCoreDemo {
                 .build();
 
         System.out.println("A 记录：" + client.prompt().user("我叫小王，请记住。")
+                // 同一个 ID 才会读取同一组历史；应用需根据真实用户/会话分配 ID，固定 A/B 只用于演示。
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, "A"))
                 .call().content());
 
@@ -348,6 +416,11 @@ class HarnessCoreDemo {
 
     }
 
+    /**
+     * 观察 HarnessCore 的流式聊天入口。
+     * <p>关键点：stream=true 使用流式内容接口；doOnNext 收到片段，blockLast 等待完成并限制等待时长。
+     * <p>观察：观察片段输出；片段边界由流处理决定，不等于一句话或一个完整业务对象。
+     */
     @Test
     @DisplayName("真实模型：基础流式对话")
     void chatWithRealModel() throws Exception {
@@ -360,6 +433,11 @@ class HarnessCoreDemo {
                 .blockLast(Duration.ofSeconds(90));
         System.out.println();
     }
+    /**
+     * 把社区 Glob 工具交给模型调用。
+     * <p>关键点：ToolCofig 为 Glob 配置工作目录和允许目录；findProjectFile 兼容从根目录或模块目录启动。
+     * <p>观察：观察模型工具请求、真实文件结果和后续回答；Glob 搜索范围受目录与深度配置影响。
+     */
     @Test
     @DisplayName("真实模型：调用原始 Glob 工具查找文件")
     void chatWithRealModelWithPath() throws Exception {
@@ -368,6 +446,7 @@ class HarnessCoreDemo {
         OpenAiChatModel model = modelCreator.getModel();
 
         System.out.println("===============模型回答：==================");
+        // run 的最后一个 true 选择流式分支；工具请求及参数可先由底层聚合，再交给工具循环执行。
         new HarnessCore(model).run("请用中文简短回答。",
                         "请调用 Glob 工具，查找工作目录中的 Java 文件，列出文件名。",
                         Arrays.asList(ToolCofig.getGlobTool(ModelConfig.findProjectFile(
@@ -379,6 +458,11 @@ class HarnessCoreDemo {
     }
 
 
+    /**
+     * 观察自定义工具名称与 Java 实现的绑定。
+     * <p>关键点：FileSearchTool 用 @Tool 暴露 find_files，内部委托 GlobTool；模型看到的名字来自工具定义。
+     * <p>观察：核对工具请求名和 FileSearchTool 的执行日志；提示词提到名称不会自动重命名工具。
+     */
     @Test
     @DisplayName("真实模型：调用自定义名称的文件搜索工具")
     void chatWithRealModelWithMyPathTool() throws Exception {
@@ -397,6 +481,11 @@ class HarnessCoreDemo {
         System.out.println();
     }
 
+    /**
+     * 观察一趟 call 中多次工具调用的消息累积。
+     * <p>关键点：模型根据工具结果决定下一步；ToolCallingAdvisor 负责执行工具并继续请求模型。
+     * <p>观察：按调用 ID 配对请求与结果，数模型轮次；提示词表达多步要求不保证每次都产生同样的批次。
+     */
     @Test
     @DisplayName("真实模型：工具结果回填后继续下一轮调用")
     void chatWithMultipleToolRounds() throws Exception {

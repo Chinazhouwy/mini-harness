@@ -73,6 +73,9 @@ mvn -pl study-agentscope -am -Dtest=ToolSchemaIsolationTest test
 
 # 验证 Alibaba Graph 的模型/工具循环与消息状态，不调用外部模型
 mvn -pl study-spring-ai-alibaba -am -Dtest=AlibabaReactAgentTest#scriptedToolLoopReturnsState test
+
+# 手动搭建最小执行图，观察 initGraph、条件路由和状态追加
+mvn -pl study-spring-ai-alibaba -am -Dtest=AlibabaReactAgentTest#initGraphDefinesToolLoop test
 ```
 
 需要真实模型/外部服务的示例标记为 `@Tag("live")`；耗时与并发观察练习标记为 `@Tag("manual")`，默认均不执行。显式选定一个 demo，并清空排除标签：
@@ -84,11 +87,21 @@ mvn -pl study-spring-ai -am -Dtest=HarnessCoreDemoTest#chatWithRunState -Dexclud
 # Spring AI：重建客户端与记忆组件，从本地文件数据库接续聊天
 mvn -pl study-spring-ai -am -Dtest=HarnessCoreDemoTest#chatWithPersistentMemory -DexcludedGroups= test
 
+# Spring AI：通过 stdio 连接 filesystem MCP server，由模型读取临时文件
+# 需要 Node.js/npm；首次运行 npx 可能下载固定版本的服务包。
+mvn -pl study-spring-ai -am -Dtest=McpStudyTest#chatWithMcpFileTool -DexcludedGroups= test
+
 # AgentScope：真实模型调用文件工具
 mvn -pl study-agentscope -am -Dtest=AgentScopeFileDemo -DexcludedGroups= test
 
+# AgentScope：关闭旧实例后，从文件恢复同一用户、同一会话
+mvn -pl study-agentscope -am -Dtest=StateTest#test02SessionRecovery -DexcludedGroups= test
+
 # Alibaba：真实模型调用工具后读取 OverAllState
 mvn -pl study-spring-ai-alibaba -am -Dtest=AlibabaReactAgentTest#realModelReturnsState -DexcludedGroups= test
+
+# Alibaba：共享内存 Saver，重建 Agent 后按会话 ID 接续并检查工具消息
+mvn -pl study-spring-ai-alibaba -am -Dtest=AlibabaReactAgentTest#chatWithSessionCheckpoint -DexcludedGroups= test
 
 # Java/Reactor 基础练习按方法单独运行
 mvn -pl study-agentscope -am -Dtest=ReactorStudyTest#creation -DexcludedGroups= test
@@ -104,6 +117,18 @@ java -jar examples/task-assistant/target/task-assistant-0.1.0.jar
 ```
 
 ## 学习方向
+
+会话与状态的同题对照使用“记录学习任务，再重建组件询问任务”的案例：
+
+| 框架 / 示例 | 保存机制 | 会话定位 | 当前实验的边界 |
+| --- | --- | --- | --- |
+| Spring AI：`chatWithPersistentMemory` | `MessageWindowChatMemory` + JDBC 仓库 + H2 文件 | `ChatMemory.CONVERSATION_ID` | 保存聊天记忆；当前 JDBC 仓库过滤工具调用消息。 |
+| Alibaba：`chatWithSessionCheckpoint` | Graph 检查点 + `MemorySaver` | `RunnableConfig.threadId` | 保存图状态，观察到工具结果；重建 Agent 时共享同一个内存 Saver。 |
+| AgentScope：`StateTest#test02SessionRecovery` | `AgentState` + `JsonFileAgentStateStore` | `RuntimeContext.userId` + `sessionId` | 关闭旧 Agent，重新创建存储和 Agent 后从文件读回会话；测试使用临时目录。 |
+
+这些实验验证调用完成后的状态接续，没有演示实际重启 JVM 或在任意工具执行位置恢复。
+
+MCP 示例统一放在独立的 [`McpStudyTest`](study-spring-ai/src/test/java/com/chinazhouwy/miniharness/McpStudyTest.java)。已先验证 Spring AI 的 `chatWithMcpFileTool`：通过 stdio 启动固定版本 filesystem server，发现工具，只暴露 `read_text_file`，模型读取临时文件并返回随机校验码，最后关闭客户端及子进程。Alibaba、AgentScope 的同服务对照与工具失败实验待继续。
 
 主线保持：工具循环观察 → 三框架对照与隔离环境 → 模型/消息/工具/输出契约 → 扩展点与执行边界 → 运行时/并发/流式 → 会话/状态/MCP → 上下文/记忆/RAG/Skills → 权限/检查点/恢复 → 工作流/多 Agent/完成验证 → 综合实践。
 

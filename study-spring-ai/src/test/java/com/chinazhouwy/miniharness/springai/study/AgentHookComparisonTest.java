@@ -34,6 +34,7 @@ public class AgentHookComparisonTest {
     private static final String SYSTEM = "你是任务助手，请查询工具后，根据工具结果回答。";
     private static Properties properties;
 
+    // JUnit 在本类测试开始前执行一次初始化；沿用根 config 的本地配置，不把密钥写到代码或日志。
     @BeforeAll
     static void loadConfig() throws IOException {
         properties = ModelConfig.loadLocalProperties();
@@ -48,6 +49,11 @@ public class AgentHookComparisonTest {
         }
     }
 
+    /**
+     * 观察 Spring AI 三个不同层次的扩展入口。
+     * <p>关键点：ToolCallingAdvisor 组织循环，内层 CallAdvisor 包住模型调用，ToolCallback 装饰单个工具执行。
+     * <p>观察：按前后日志对照作用范围；AgentScope 对照入口已在独立模块，不能混用两套工具注解。
+     */
     @Test
     @org.junit.jupiter.api.DisplayName("Spring AI：观察工具循环、模型调用与工具回调扩展点")
     void springAiHooks() {
@@ -92,6 +98,7 @@ public class AgentHookComparisonTest {
 
             @Override
             public int getOrder() {
+                // 本例 order=0 大于 ToolCallingAdvisor 的负数默认值，因此位于其内部；响应回程顺序相反。
                 return 0;
             }
 
@@ -111,6 +118,7 @@ public class AgentHookComparisonTest {
 
         ToolCallback original = ToolCallbacks.from(new TaskTools())[0];
 
+        // 装饰原回调可观察工具执行；同时委托定义和元数据，避免日志包装改变模型看到的工具契约。
         ToolCallback tracedTool = new ToolCallback() {
             @Override
             public ToolDefinition getToolDefinition() {

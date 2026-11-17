@@ -44,6 +44,7 @@ class AgentScopeFileDemo {
         FilteredFileTools(Path directory) { this.directory = directory; }
 
         @Tool(name = "find_files", description = "按文件名中包含的文本查找预设学习目录中的 Java 文件")
+        // keyword 是模型生成并按 @ToolParam 映射的业务参数；目录由应用构造工具时固定，不由模型选择。
         public String findFiles(@ToolParam(name = "keyword", description = "文件名包含的文本，例如 Loop") String keyword)
                 throws Exception {
             System.out.println("[工具入参] keyword=" + keyword);
@@ -59,6 +60,11 @@ class AgentScopeFileDemo {
     }
 
 
+    /**
+     * 用真实模型观察 AgentScope 工具调用。
+     * <p>关键点：Toolkit 注册带 @Tool 的对象；模型通过工具 Schema 选择方法，框架执行后把结果带回下一轮。
+     * <p>观察：看实际文件清单与执行次数；目录指向本模块源码，模型没有直接访问 Java 文件系统。
+     */
     @Test
     @org.junit.jupiter.api.DisplayName("AgentScope：使用真实模型调用文件查询工具")
     void agentUsesFileTool() throws Exception {
@@ -67,10 +73,12 @@ class AgentScopeFileDemo {
                 .apiKey(properties.getProperty("miniharness.api.key"))
                 .baseUrl(properties.getProperty("miniharness.base.url"))
                 .modelName(properties.getProperty("miniharness.model"))
+                // 这里控制模型响应的流式接收；外层 agent.call 仍可聚合为一个最终 Msg，事件流用 streamEvents 观察。
                 .stream(true)
                 .build();
         FileTools files = new FileTools(ModelConfig.findProjectFile("study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study"));
         Toolkit toolkit = new Toolkit();
+        // 注册把方法和参数说明加入 Toolkit，真正执行发生在模型选择该工具之后。
         toolkit.registerTool(files);
         try (ReActAgent agent = ReActAgent.builder().name("file-agent")
                 .sysPrompt("请使用工具并根据结果用中文简短回答。")

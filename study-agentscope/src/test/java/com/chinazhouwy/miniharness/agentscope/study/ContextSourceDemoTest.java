@@ -56,6 +56,11 @@ public class ContextSourceDemoTest {
     /** 从注入文本里抠出「余票数=N」的 N。 */
     static final Pattern STOCK = Pattern.compile("余票数=(\\d+)");
 
+    /**
+     * 离线观察动态业务状态如何逐轮进入模型上下文。
+     * <p>关键点：contextSource 每次构建请求重新读取余票；固定模型首轮请求买票，Java 工具更新本地计数。
+     * <p>观察：读取日志应先是两张再是一张；动态上下文不应作为普通问答永久追加到会话历史。
+     */
     @Test
     @DisplayName("contextSource：每步重新查一次，临时贴上去，不写进历史")
     void demo() {
@@ -130,6 +135,7 @@ public class ContextSourceDemoTest {
                 .sysPrompt("你是售票助手，用中文回答。")
                 .model(假模型)
                 .toolkit(toolkit)
+                // source 名用于区分业务来源；返回的 ContextBlock.runtime 每轮临时注入，不是写入一条永久聊天消息。
                 .contextSource("ticket-stock", 余票来源)   // ← 就是这一行
                 // 下面这些只是把本 demo 用不到的预装功能关掉，减少噪音
                 .disableFilesystemTools()

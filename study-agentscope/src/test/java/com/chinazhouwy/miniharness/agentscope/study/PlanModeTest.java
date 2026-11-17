@@ -39,6 +39,7 @@ public class PlanModeTest {
 
     private static OpenAIChatModel model;
 
+    // JUnit 在本类测试开始前执行一次初始化；沿用根 config 的本地配置，不把密钥写到代码或日志。
     @BeforeAll
     static void before() throws IOException {
         Properties props = ModelConfig.loadLocalProperties();
@@ -46,11 +47,18 @@ public class PlanModeTest {
                 .apiKey(props.getProperty("openrouter.api.key"))
                 .modelName(props.getProperty("openrouter.model"))
                 .baseUrl(props.getProperty("openrouter.base.url"))
+                // false 选择框架的非原生结构化输出路径；普通问答仍正常使用该模型配置。
                 .nativeStructuredOutput(false)
+                // 这里控制模型响应的流式接收；外层 agent.call 仍可聚合为一个最终 Msg，事件流用 streamEvents 观察。
                 .stream(true)
                 .build();
     }
 
+    /**
+     * 观察计划模式中的只读约束与计划文件。
+     * <p>关键点：enablePlanMode 注册相关能力，enterPlanMode 切当前会话；planFileDirectory 指定计划产物目录。
+     * <p>观察：比较 note.txt 实际内容、PLAN.md 和最终模式；模型提出修改不代表实际获准写入。
+     */
     @Test
     @DisplayName("计划模式：写文件被拦，plan_write 能写计划文件")
     public void testPlanModeReadOnly() throws IOException {
@@ -84,6 +92,7 @@ public class PlanModeTest {
                         + (agent.getToolkit().getTool(name) != null));
             }
 
+            // 程序化切换当前会话的计划模式；只注册 plan 工具并不等于已经进入模式。
             agent.enterPlanMode(ctx);
             System.out.println("【程序化进入】isPlanModeActive=" + agent.isPlanModeActive(ctx));
 

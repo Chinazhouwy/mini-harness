@@ -41,23 +41,33 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+/** Spring AI 执行边界与状态学习入口。按方法观察记录、预算、异常和持久化；这些计数器与状态只用于各自 demo，不能直接当作共享生产组件。 */
 @org.junit.jupiter.api.Tag("live")
 public class HarnessCoreDemoTest {
 
+    /**
+     * 验证聊天记忆保存到文件数据库后能由新组件读回。
+     * <p>关键点：建表 SQL 来自 Spring AI；同一数据库地址与会话 ID 让新 Repository/ChatMemory/ChatClient 接续历史。
+     * <p>观察：新组件先读回两条消息，再回答原任务；临时库测试后清理，本例没有重启 JVM。
+     */
     @Test
     @DisplayName("会话持久化：重建客户端和记忆组件后，从数据库接续聊天")
     void chatWithPersistentMemory(@TempDir Path directory) throws Exception {
         // 文件数据库，不是 jdbc:h2:mem；不需要安装数据库，测试结束后自动清理临时文件。
         String jdbcUrl = "jdbc:h2:file:" + directory.resolve("chat-memory").toAbsolutePath();
         String conversationId = "study-session-001";
+        // DriverManagerDataSource 提供 JDBC 连接；jdbc:h2:file 指向磁盘库，与仅在内存存在的 jdbc:h2:mem 不同。
         var dataSource = new DriverManagerDataSource(jdbcUrl, "sa", "");
         // 这里手动组装组件，所以也手动执行 Spring AI 随包提供的建表 SQL。
+        // ResourceDatabasePopulator 读取 SQL 资源并执行建表；没有使用 Boot 自动配置，所以这里显式初始化。
         new ResourceDatabasePopulator(new ClassPathResource(
                 "org/springframework/ai/chat/memory/repository/jdbc/schema-h2.sql")).execute(dataSource);
 
+        // ChatMemory 管理给模型使用的记忆窗口；本例 Repository 是底层存储，不等于完整审计历史。
         ChatMemory firstMemory = jdbcMemory(dataSource);
 
         ChatClient firstClient = ChatClient.builder(new ModelCreator().getModel())
+                // Advisor 在模型请求前按会话 ID 加入历史、请求后保存问答；注册它才把记忆接进 ChatClient。
                 .defaultAdvisors(MessageChatMemoryAdvisor.builder(firstMemory).build()).build();
 
         System.out.println("[第一次聊天] " + firstClient.prompt()
@@ -105,19 +115,28 @@ public class HarnessCoreDemoTest {
         }
     }
 
+    /**
+     * 在一趟工具循环结束后，由应用读取执行状态。
+     * <p>关键点：Recorder 排在 ToolCallingAdvisor 内层，每次模型调用覆盖请求快照并追加本轮响应。
+     * <p>观察：观察两次模型调用与四条消息；RunState 仅是本次调用的内存观察结果，不自动持久化。
+     */
     @Test
     @DisplayName("执行状态：工具循环结束后读取完整消息与最终答案")
     void chatWithRunState() throws Exception {
         RunState state = new RunState();
         CallAdvisor recorder = new CallAdvisor() {
             public String getName() { return "run-state-recorder"; }
+            // order 较小的请求处理先进入；比工具循环大一位，使本 Advisor 在循环内部观察每轮模型请求。
             public int getOrder() { return ToolCallingAdvisor.DEFAULT_ORDER + 1; }
 
             public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
+                // 这个 Advisor 位于工具循环内层，因此一趟请求可能进入多次；只统计框架层模型调用，不含 SDK 网络重试。
                 state.modelCalls++;
                 // 下一轮请求已包含上一轮工具请求与结果，因此覆盖快照，避免重复累加历史。
+                // 这里是替换观察用的完整快照，不是清空框架真正的记忆；新一轮 Prompt 已携带之前的工具交互。
                 state.messages.clear();
                 state.messages.addAll(request.prompt().getInstructions());
+                // nextCall 继续后续 Advisor/模型链；同步返回本轮响应后，再把模型输出加入观察状态。
                 ChatClientResponse response = chain.nextCall(request);
                 state.messages.add(response.chatResponse().getResult().getOutput());
                 return response;
@@ -125,6 +144,7 @@ public class HarnessCoreDemoTest {
         };
         ChatClient client = ChatClient.builder(new ModelCreator().getModel())
                 .defaultAdvisors(ToolCallingAdvisor.builder().build(), recorder).build();
+        // 只有整趟自动循环结束后 content 才返回最终文字；中间工具请求已在 Recorder 中观察到。
         state.answer = client.prompt()
                 .user("请调用一次 ping 工具，根据返回结果用中文简短回答。")
                 .tools(new CounterTool()).call().content();
@@ -140,6 +160,11 @@ public class HarnessCoreDemoTest {
         System.out.println("[状态中的最终答案] " + state.answer);
     }
 
+    /**
+     * 区分模型网络请求失败和工具执行失败。
+     * <p>关键点：timeout=1ms 故意制造网络超时，maxRetries=0 关闭 SDK 网络重试；它们在模型实例上配置。
+     * <p>观察：观察 OpenAIIoException 与工具次数；极短超时是演示值，不是实际业务建议。
+     */
     @Test
     @DisplayName("模型请求超时：网络异常抛给调用方，不生成工具结果")
     void chatWithModelRequestTimeout() throws Exception {
@@ -175,14 +200,21 @@ public class HarnessCoreDemoTest {
                     return task.get(1, TimeUnit.SECONDS);
                 } catch (TimeoutException exception) {
                     // 本例的 Thread.sleep 响应中断；真实数据库/HTTP 调用需核对取消行为。
+                    // true 表示尝试中断正在运行的任务；本例 sleep 响应中断，真实外部 I/O 未必能立即停止。
                     task.cancel(true);
                     System.out.println("[工具超时] 将错误交给 Spring AI 工具异常处理器");
+                    // 抛运行时异常是把失败交回工具执行框架；最终是否回填给模型由所配置的异常处理器决定。
                     throw new IllegalStateException("报告查询超过一秒，查询失败，未取得报告内容");
                 }
             }
         }
     }
 
+    /**
+     * 观察工具超时如何通过工具结果交给模型解释。
+     * <p>关键点：TimedReportTool 在应用内部限制等待并抛运行时异常，框架的默认工具异常处理器将其回填。
+     * <p>观察：核对第二次模型请求中的失败结果；这不是模型请求超时，也不是框架内置的一秒工具时限。
+     */
     @Test
     @DisplayName("Agent 工具超时：错误回填给模型，由模型解释失败")
     void chatWithToolTimeout() throws Exception {
@@ -204,6 +236,11 @@ public class HarnessCoreDemoTest {
         }
     }
 
+    /**
+     * 离线观察等待超时与后台任务生命周期的区别。
+     * <p>关键点：Future.get(timeout) 结束本次等待，但没有 cancel；Java 工具仍在虚拟线程中运行。
+     * <p>观察：先出现一秒超时，再出现三秒后的工具结果；此处不调用模型。
+     */
     @Test
     @DisplayName("等待工具超时：调用方超时后，工具仍继续执行")
     void toolWaitTimeoutDoesNotStopExecution() throws Exception {
@@ -251,9 +288,15 @@ public class HarnessCoreDemoTest {
         }
     }
 
+    /**
+     * 观察模型收到临时故障后决定重新调用工具。
+     * <p>关键点：maxCallsPerTool=2 限制工具预算；再次调用来自模型的新工具请求，不是 Java 自动重试。
+     * <p>观察：日志应先失败后成功；核对工具执行次数与两次工具请求的调用 ID。
+     */
     @Test
     @DisplayName("工具临时失败后，模型决定重试一次")
     void chatWithModelDecidedToolRetry() throws Exception {
+        // 此处的次数上限是工具执行预算，模型是否再次请求工具仍由它收到的失败信息与提示词决定。
         var manager = ToolCallingManager.builder().maxCallsPerTool("load_report", 2).build();
         ChatClient client = ChatClient.builder(new ModelCreator().getModel())
                 .defaultAdvisors(ToolCallingAdvisor.builder().toolCallingManager(manager).build())
@@ -267,6 +310,11 @@ public class HarnessCoreDemoTest {
         System.out.println("[工具执行次数] " + tool.calls);
     }
 
+    /**
+     * 在第二轮模型请求发出前检查本趟预算。
+     * <p>关键点：内层 CallAdvisor 统计模型层调用；匿名计数器只供本趟使用，不适合共享单例。
+     * <p>观察：第一次模型返回工具请求后工具仍可执行，下一次请求前才终止；不是工具权限限制。
+     */
     @Test
     @DisplayName("模型请求预算：第二轮请求发出前终止")
     void chatWithModelCallLimit() throws Exception {
@@ -299,12 +347,18 @@ public class HarnessCoreDemoTest {
         System.out.println("[工具实际执行次数] " + tool.calls);
     }
 
+    /**
+     * 观察工具调用预算如何终止自动循环。
+     * <p>关键点：maxTotalToolCalls 限制本趟工具次数；Manager 的限额异常会被 ToolCallingAdvisor 转成终止响应。
+     * <p>观察：核对工具次数与 toolCallLimitExceeded 结束原因，不能只看是否抛异常。
+     */
     @Test
     @DisplayName("工具执行预算：达到总次数上限后终止")
     void chatWithToolCallLimit() throws Exception {
         // 限制本趟用户请求的工具总次数，不是模型请求次数，也不是对象终生调用次数。
         var manager = ToolCallingManager.builder()
                 .maxTotalToolCalls(1)
+                // THROW 是 Manager 的限额处理方式；外层 ToolCallingAdvisor 会捕获这类限额异常并生成结束响应。
                 .onLimitExceeded(ToolCallLimitBehavior.THROW)
                 .build();
         ChatClient client = ChatClient.builder(new ModelCreator().getModel())

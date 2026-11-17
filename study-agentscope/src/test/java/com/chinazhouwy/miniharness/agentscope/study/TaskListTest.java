@@ -47,6 +47,7 @@ public class TaskListTest {
 
     private static OpenAIChatModel model;
 
+    // JUnit 在本类测试开始前执行一次初始化；沿用根 config 的本地配置，不把密钥写到代码或日志。
     @BeforeAll
     static void before() throws IOException {
         Properties props = ModelConfig.loadLocalProperties();
@@ -54,11 +55,18 @@ public class TaskListTest {
                 .apiKey(props.getProperty("openrouter.api.key"))
                 .modelName(props.getProperty("openrouter.model"))
                 .baseUrl(props.getProperty("openrouter.base.url"))
+                // false 选择框架的非原生结构化输出路径；普通问答仍正常使用该模型配置。
                 .nativeStructuredOutput(false)
+                // 这里控制模型响应的流式接收；外层 agent.call 仍可聚合为一个最终 Msg，事件流用 streamEvents 观察。
                 .stream(true)
                 .build();
     }
 
+    /**
+     * 观察任务清单能力的开关、工具和运行时状态。
+     * <p>关键点：enableTaskList 增加任务管理能力；todo_write 更新 TasksContext，模型需实际调用才能改变清单。
+     * <p>观察：对照工具是否注册、调用前后任务列表与模型输入；任务被标记完成不等于业务结果已验收。
+     */
     @Test
     @DisplayName("enableTaskList：待办清单开关与用法")
     public void testTaskList() throws IOException {
@@ -102,6 +110,7 @@ public class TaskListTest {
                             + "先把这三步用 todo_write 记下来，再一步步做完。")), rc).block();
 
             // 工具只是入口，真正的工作列表存在 AgentState.tasksContext 里，看的是同一个对象
+            // 读取框架状态中的任务清单而非模型口头总结；模型声称做完仍需要实际工具结果或业务验收。
             printTaskList("调用后", agent.getDelegate().getAgentState(rc).getTasksContext().getTasks());
         }
 

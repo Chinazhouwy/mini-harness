@@ -53,6 +53,7 @@ public class HarnessTest {
 
     private static OpenAIChatModel model;
 
+    // JUnit 在本类测试开始前执行一次初始化；沿用根 config 的本地配置，不把密钥写到代码或日志。
     @BeforeAll
     static void before() throws IOException {
         Properties props = ModelConfig.loadLocalProperties();
@@ -60,11 +61,18 @@ public class HarnessTest {
                 .apiKey(props.getProperty("openrouter.api.key"))
                 .modelName(props.getProperty("openrouter.model"))
                 .baseUrl(props.getProperty("openrouter.base.url"))
+                // false 选择框架的非原生结构化输出路径；普通问答仍正常使用该模型配置。
                 .nativeStructuredOutput(false)
+                // 这里控制模型响应的流式接收；外层 agent.call 仍可聚合为一个最终 Msg，事件流用 streamEvents 观察。
                 .stream(true)
                 .build();
     }
 
+    /**
+     * 把长期记忆检索问题拆成文件清单与内容读取两步定位。
+     * <p>关键点：直接调用 WorkspaceManager 和 Filesystem，区分逻辑路径、用户目录与根目录回退。
+     * <p>观察：对照实际路径与内容；固定日期的探针依赖已有演示数据，方法本身不请求模型。
+     */
     @Test
     @DisplayName("Harness 3：memory_search 失效定位——绕过模型直接调 WorkspaceManager")
     public void test03MemorySearchProbe() throws IOException {
@@ -74,6 +82,7 @@ public class HarnessTest {
                 .name("mem-demo").agentId("mem-demo").sysPrompt("you are a helper")
                 .model(model)
                 .workspace(ws)
+                // 文件 Store 按调用的 userId/sessionId 保存和读取状态；新 Java 对象不等于新会话。
                 .stateStore(new JsonFileAgentStateStore(Path.of("./data/.agentscope-state")))
                 .build()) {
 
@@ -111,6 +120,11 @@ public class HarnessTest {
         }
     }
 
+    /**
+     * 观察不同会话如何通过工作区文件共享长期信息。
+     * <p>关键点：第一会话请求保存，第二会话换 sessionId 但保留 workspace/userId；并追踪工具调用及提示词注入。
+     * <p>观察：区分 memory_search 检索命中与系统提示已注入索引；目录探针用于定位历史路径问题。
+     */
     @Test
     @DisplayName("Harness 2：Memory——save 落盘成文件，全新会话靠 search 捞回来")
     public void test02MemoryCycle() throws IOException {
@@ -143,7 +157,7 @@ public class HarnessTest {
                     "请把这句话存进你的长期记忆：我最喜欢的数字是 42。")), ctx1).block();
             System.out.println("会话1 回答: " + ret1.getTextContent());
 
-            // agent 关闭时才把 memory 异步落盘，所以磁盘检查和第二个会话都在 try 外
+            // 先关闭 Agent，再观察磁盘和开启下一会话，等待本例的异步清理完成；不据此断言只在 close 时写盘。
         }
 
         // ---- 磁盘：memory 落成了什么文件 ----
@@ -235,6 +249,11 @@ public class HarnessTest {
         }
     }
 
+    /**
+     * 盘点 HarnessAgent 实际装配的能力。
+     * <p>关键点：工具注册表、模型看到的工具定义和磁盘产物是三个不同观察面，配置和模型决定实际启用情况。
+     * <p>观察：模型自报仅供对照，是否注册与能否执行应以 Toolkit、工具事件和实际结果为准。
+     */
     @Test
     @DisplayName("Harness 1：成品车盘点——预装工具清单 + 模型自报 + 磁盘产物")
     public void test01Inventory() throws IOException {
@@ -263,7 +282,7 @@ public class HarnessTest {
             System.out.println("===== 模型自报 =====");
             System.out.println(ret.getTextContent());
 
-            // agent 关闭后 memory 等异步写入才会落盘，所以磁盘盘点放在 try 外面
+            // 关闭 Agent 后再盘点磁盘，减少异步写入/清理尚未结束带来的观察干扰。
         }
 
         // ---- 视角 3：磁盘产物——跑完之后 workspace 里长出了什么 ----
@@ -275,11 +294,16 @@ public class HarnessTest {
         }
     }
 
+    /**
+     * 直接观察两层文件系统的读写规则。
+     * <p>关键点：上层是工作区，下层是项目层；本例用相同文件名验证回退读取、写上层和上层覆盖。
+     * <p>观察：核对 ReadResult/WriteResult 及两层物理文件；读取成功与模型回答无关，此例不调用模型。
+     */
     @Test
     @DisplayName("Harness 4：Overlay 两层文件系统——上层优先读，写永远落上层")
     public void test04OverlayLayers() throws IOException {
         // 两个目录都放在 data/ 下，不碰项目根目录里的真实文件。
-        // workspace 用绝对路径：相对路径会触发 WorkspaceManager 那个 startsWith 守卫缺陷。
+        // workspace 用绝对路径避免路径基准歧义；startsWith 守卫问题是旧版实验背景，不据此推断当前版本仍有缺陷。
         Path ws = Path.of("./data/harness-overlay").toAbsolutePath().normalize();
         Path project = Path.of("./data/harness-overlay-project").toAbsolutePath().normalize();
         Files.createDirectories(ws);

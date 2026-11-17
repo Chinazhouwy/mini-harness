@@ -44,6 +44,7 @@ public class RegisterSchemaTest {
 
     private static OpenAIChatModel model;
 
+    // JUnit 在本类测试开始前执行一次初始化；沿用根 config 的本地配置，不把密钥写到代码或日志。
     @BeforeAll
     static void before() throws IOException {
         initModel();
@@ -62,7 +63,9 @@ public class RegisterSchemaTest {
                 .apiKey(props.getProperty("openrouter.api.key"))
                 .modelName(props.getProperty("openrouter.model"))
                 .baseUrl(props.getProperty("openrouter.base.url"))
+                // false 选择框架的非原生结构化输出路径；普通问答仍正常使用该模型配置。
                 .nativeStructuredOutput(false)
+                // 这里控制模型响应的流式接收；外层 agent.call 仍可聚合为一个最终 Msg，事件流用 streamEvents 观察。
                 .stream(true)
                 .build();
     }
@@ -72,6 +75,11 @@ public class RegisterSchemaTest {
         new RegisterSchemaTest().testExternalSchemaSuspends();
     }
 
+    /**
+     * 观察只注册说明书而没有本地执行体的工具如何挂起。
+     * <p>关键点：registerExternalSchemas 声明工具契约；外部结果需保留原调用 ID/工具名，并以新执行上下文回填同一会话。
+     * <p>观察：第一次返回的占位/挂起状态与第二次最终回答应区分；人工输入入口优先使用 main。
+     */
     @Test
     @DisplayName("registerSchema：说明书工具调用时挂起，外部回填后继续")
     public void testExternalSchemaSuspends() throws IOException {
@@ -141,10 +149,12 @@ public class RegisterSchemaTest {
             System.out.println("  【外部系统执行】" + call.getName() + "(" + call.getInput()
                     + ") → " + externalResult);
 
+            // 工具结果必须沿用原调用的 id 和 name，才能与挂起请求配对；结果文字由外部执行方提供。
             Msg resume = ToolResultMessage.builder()
                     .result(call.getId(), call.getName(), externalResult)
                     .build();
             // 同一个 sessionId 接着聊，但必须换一个 runId，否则会撞上 "Run ID already used"
+            // 保留会话槽，清空 runId 让框架为新一趟执行分配标识；工具调用 ID 仍沿用原请求。
             RuntimeContext ctx2 = RuntimeContext.builder(ctx).runId(null).build();
             System.out.println("  【回填消息】role=" + resume.getRole()
                     + " | 结果挂回调用 id=" + call.getId());

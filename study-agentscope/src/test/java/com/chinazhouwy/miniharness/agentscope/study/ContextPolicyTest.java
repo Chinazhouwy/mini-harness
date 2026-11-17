@@ -35,6 +35,7 @@ public class ContextPolicyTest {
 
     private static OpenAIChatModel model;
 
+    // JUnit 在本类测试开始前执行一次初始化；沿用根 config 的本地配置，不把密钥写到代码或日志。
     @BeforeAll
     static void before() throws IOException {
         Properties props = ModelConfig.loadLocalProperties();
@@ -42,11 +43,18 @@ public class ContextPolicyTest {
                 .apiKey(props.getProperty("openrouter.api.key"))
                 .modelName(props.getProperty("openrouter.model"))
                 .baseUrl(props.getProperty("openrouter.base.url"))
+                // false 选择框架的非原生结构化输出路径；普通问答仍正常使用该模型配置。
                 .nativeStructuredOutput(false)
+                // 这里控制模型响应的流式接收；外层 agent.call 仍可聚合为一个最终 Msg，事件流用 streamEvents 观察。
                 .stream(true)
                 .build();
     }
 
+    /**
+     * 观察每次构建模型上下文时生成的预算清单。
+     * <p>关键点：ContextPolicy 的输入预算、输出预留、安全余量和估算器共同约束上下文；回调接收清单元数据。
+     * <p>观察：对照轮次、条目与裁剪记录；近似 token 估算不等于服务最终 usage，清单也不是完整提示词。
+     */
     @Test
     @DisplayName("contextPolicy：每轮请求各生成一份上下文构建清单")
     public void testContextPolicyObserver() throws IOException {
@@ -63,6 +71,7 @@ public class ContextPolicyTest {
                 .sysPrompt("你是一个助手。需要知道文件内容时必须调用 read_file 工具，不要凭空猜。")
                 .model(model)
                 .workspace(ws)
+                // 四个策略项依次是输入预算、输出预留、安全余量和 token 估算器；最后的回调接收构建清单。
                 .contextPolicy(new ContextPolicy(
                         24000,   // 最大输入预算
                         4096,    // 为模型输出预留
@@ -101,6 +110,7 @@ public class ContextPolicyTest {
         }
         System.out.println("  【按类别数】" + byType);
         for (int i = 0; i < Math.min(6, items.size()); i++) {
+            // 清单项记录材料来源、预算及处理结果；它用于解释上下文取舍，不提供服务端精确 token 计费。
             ContextManifest.Item it = items.get(i);
             System.out.println("    " + (i + 1) + ". type=" + it.sourceType()
                     + " | id=" + it.sourceId()

@@ -29,6 +29,7 @@ public class AgentScopeHookTest {
     private static final String SYSTEM = "你是任务助手，请查询工具后，根据工具结果回答。";
     private static Properties properties;
 
+    // JUnit 在本类测试开始前执行一次初始化；沿用根 config 的本地配置，不把密钥写到代码或日志。
     @BeforeAll
     static void loadConfig() throws IOException {
         properties = ModelConfig.loadLocalProperties();
@@ -42,6 +43,11 @@ public class AgentScopeHookTest {
         }
     }
 
+    /**
+     * 对照一趟调用、一次推理和一批工具的扩展边界。
+     * <p>关键点：onReasoning/onModelCall/onActing 包裹不同阶段；next.apply 交给后续链路，Flux.defer 延迟到订阅执行。
+     * <p>观察：工具请求出现后应进入 acting，再有后续模型请求；计数不是整个会话的轮数。
+     */
     @Test
     @DisplayName("AgentScope：观察推理、模型请求与工具执行扩展点")
     void agentScopeHooks() {
@@ -49,6 +55,7 @@ public class AgentScopeHookTest {
                 .apiKey(properties.getProperty("openrouter.api.key"))
                 .baseUrl(properties.getProperty("openrouter.base.url"))
                 .modelName(properties.getProperty("openrouter.model"))
+                // 这里控制模型响应的流式接收；外层 agent.call 仍可聚合为一个最终 Msg，事件流用 streamEvents 观察。
                 .stream(true)
                 .build();
 
@@ -57,6 +64,7 @@ public class AgentScopeHookTest {
             @Override
             public Flux<AgentEvent> onReasoning(Agent agent, RuntimeContext context, ReasoningInput input,
                                                 Function<ReasoningInput, Flux<AgentEvent>> next) {
+                // defer 把阶段开始日志与 next 调用放到订阅时，避免在仅组装响应式链时就记成已执行。
                 return Flux.defer(() -> {
                     System.out.println("[AgentScope onReasoning 前] 第 " + rounds.incrementAndGet() + " 轮");
                     return next.apply(input).doOnComplete(() -> System.out.println("[AgentScope onReasoning 后]"));

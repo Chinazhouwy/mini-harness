@@ -21,6 +21,11 @@ import java.util.List;
 @org.junit.jupiter.api.Tag("live")
 class ManualRealModelDemo {
 
+    /**
+     * 通过真实模型对照应用手动控制的工具循环。
+     * <p>关键点：每次 model.call 只完成当前轮；应用判断 hasToolCalls、执行 Manager 并替换会话历史。
+     * <p>观察：查看每轮消息数与工具结果；最后一轮没有预算继续请求时，不应先执行无法消费结果的工具。
+     */
     @Test
     void manualToolLoopWithRealModel() throws Exception {
         ModelConfig config = ModelConfig.loadProperties();
@@ -38,7 +43,9 @@ class ManualRealModelDemo {
         FileSearchTool fileTool = new FileSearchTool(
                 ModelConfig.findProjectFile(
                                 "study-spring-ai/src/test/java/com/chinazhouwy/miniharness/springai/study").toString());
+        // 回调同时包含给模型的定义和本地执行绑定；只有定义会进入 HTTP 请求，Java 对象不会发送到服务端。
         ToolCallback[] callbacks = ToolCallbacks.from(fileTool);
+        // mutate 复制模型默认选项后添加工具；本模块的 Spring AI 2.0.2 由应用显式组织这里的循环。
         OpenAiChatOptions options = model.getOptions().mutate()
                 .toolCallbacks(List.of(callbacks))
                 .build();

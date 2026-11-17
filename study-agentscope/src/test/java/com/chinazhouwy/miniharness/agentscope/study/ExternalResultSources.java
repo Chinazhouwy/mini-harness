@@ -41,6 +41,7 @@ public final class ExternalResultSources {
             "SKU-1001", 0,
             "SKU-8888", 7);
 
+    // 这里的数据库是固定 Map，用于学习外部结果回填，不连接真实数据库或更新库存。
     public static String fromDatabase(String sku) {
         Integer count = STOCK.get(sku);
         return count == null
@@ -49,6 +50,7 @@ public final class ExternalResultSources {
     }
 
     /** 场景三：调别人的 HTTP 接口。url 换成你自己的服务地址 */
+    // 这个分支会发出真实 HTTP GET；URL/参数和非 200 结果由调用方提供、处理，模型不会自动替你完成。
     public static String fromHttp(String url, String sku) {
         try {
             String query = URLEncoder.encode(sku, StandardCharsets.UTF_8);
@@ -69,6 +71,7 @@ public final class ExternalResultSources {
     }
 
     /** 场景四：审批流。这里用「等一个人敲 y/n」代表审批系统给的结论 */
+    // 这里只取得批准/拒绝结论并返回文字，没有在函数中真正执行出库动作。
     public static String fromApproval(String sku) {
         String decision = fromConsole("批准 " + sku + " 出库吗？(y/n)");
         return "y".equalsIgnoreCase(decision)
