@@ -100,19 +100,23 @@ public class TraceAnalyzer {
                     + " 条 < 阈值 " + policy.minOccurrencesForValidationNode());
         }
 
-        // 规则 B：从未成功过的节点 → 冗余删除提案。
+        // 规则 B：确实运行过且从未成功的节点 → 冗余/错误节点删除提案。
+        // 语义边界：只标记出现过 FAILED 的节点；因上游失败而 SKIPPED 的下游节点不算死节点。
         Set<String> everSucceeded = new HashSet<>();
-        Set<String> everSeen = new HashSet<>();
+        Set<String> everFailed = new HashSet<>();
         for (ExperienceRecord record : experiences) {
             for (ExperienceRecord.NodeSummary node : record.nodes()) {
-                everSeen.add(node.nodeId());
                 if (node.status() == com.chinazhouwy.miniharness.runtime.core.NodeStatus.SUCCEEDED) {
                     everSucceeded.add(node.nodeId());
                 }
+                if (node.status() == com.chinazhouwy.miniharness.runtime.core.NodeStatus.FAILED) {
+                    everFailed.add(node.nodeId());
+                }
             }
         }
-        List<String> deadNodes = everSeen.stream()
+        List<String> deadNodes = everFailed.stream()
                 .filter(n -> !everSucceeded.contains(n))
+                .sorted()
                 .toList();
         if (experiences.size() >= policy.minRunsForRemoval() && !deadNodes.isEmpty()) {
             boolean alreadyProposed = candidateStore.all().stream().anyMatch(c ->
@@ -120,7 +124,7 @@ public class TraceAnalyzer {
                             && c.rule() == WorkflowCandidate.ProposalRule.REMOVE_REDUNDANT_NODE);
             if (!alreadyProposed) {
                 proposals.add(buildRemoveRedundantCandidate(base, deadNodes, experiences.size()));
-                notes.add("规则B命中: 从未成功的节点 " + deadNodes);
+                notes.add("规则B命中: 运行过但从未成功的节点 " + deadNodes);
             } else {
                 notes.add("规则B命中但已有同规则候选，跳过重复提案");
             }
