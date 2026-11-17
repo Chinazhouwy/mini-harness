@@ -16,17 +16,11 @@ Thumbs.db
 
 # Environment
 .env
-.env.example
-src/main/resources/openrouter.local.properties
+**/openrouter.local.properties
 # Logs
 *.log
 
-# Local Harness and finance artifacts
+# 本地学习数据与工具缓存
 data/
-!src/main/java/com/chinazhouwy/miniharness/finance/research/data/
-!src/main/java/com/chinazhouwy/miniharness/finance/research/data/*.java
 /.playwright-cli/
 .agentscope/
-
-# 第三方参考文档（AgentScope 官方文档快照，28MB，不入库）
-docs/agentscope-java/

@@ -1,0 +1,4 @@
+# 测试日志的详细展示由同模块 logback-test.xml 控制。
+spring:
+  application:
+    name: study-spring-ai

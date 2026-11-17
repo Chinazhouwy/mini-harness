@@ -1,169 +1,86 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-
-    <parent>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.1.0</version>
-        <relativePath/>
-    </parent>
-
     <groupId>com.chinazhouwy</groupId>
     <artifactId>mini-harness</artifactId>
     <version>0.1.0</version>
+    <packaging>pom</packaging>
     <name>MiniHarness</name>
-    <description>从单题评测实验开始，逐步探索评测、追问、能力证据和 Agent Runtime 的 Java 项目</description>
+    <description>三个 Agent 框架的隔离学习环境与自研 Harness 实践</description>
 
+    <modules>
+        <module>miniharness-core</module>
+        <module>miniharness-spring-ai</module>
+        <module>study-spring-ai</module>
+        <module>study-agentscope</module>
+        <module>study-spring-ai-alibaba</module>
+        <module>examples/task-assistant</module>
+    </modules>
+
+    <!-- 父工程只统一 Java、测试与构建工具，不引入任一框架的 BOM 或运行时依赖。 -->
     <properties>
-        <java.version>21</java.version>
-        <agentscope.version>2.1.0-SNAPSHOT</agentscope.version>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <spring-boot.version>4.1.0</spring-boot.version>
         <spring-ai.version>2.0.2</spring-ai.version>
         <spring-ai-agent-utils.version>0.13.0</spring-ai-agent-utils.version>
+        <agentscope.version>2.1.0-SNAPSHOT</agentscope.version>
+        <spring-ai-alibaba.version>1.1.2.2</spring-ai-alibaba.version>
+        <alibaba-spring-ai.version>1.1.2</alibaba-spring-ai.version>
+        <junit.version>6.0.3</junit.version>
+        <!-- live 需要真实模型或外部服务；manual 是耗时/交互式学习示例。 -->
+        <excludedGroups>live,manual</excludedGroups>
     </properties>
 
     <dependencyManagement>
         <dependencies>
             <dependency>
-                <groupId>org.springframework.ai</groupId>
-                <artifactId>spring-ai-bom</artifactId>
-                <version>${spring-ai.version}</version>
+                <groupId>org.junit</groupId>
+                <artifactId>junit-bom</artifactId>
+                <version>${junit.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
         </dependencies>
     </dependencyManagement>
 
-    <dependencies>
-        <dependency>
-            <groupId>org.jline</groupId>
-            <artifactId>jline</artifactId>
-            <version>3.29.0</version> <!-- 或最新版本 -->
-        </dependency>
-        <!-- Spring Boot Starter -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter</artifactId>
-        </dependency>
-
-        <!-- 提供只读金融查询 API 和静态展示页 -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
-
-        <!-- 自研 Agent：Spring AI 客户端与 OpenAI 兼容模型 -->
-        <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-client-chat</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-openai</artifactId>
-        </dependency>
-
-        <!-- 通用 Agent 工具；由调用方显式选择并注册，不会自动启用。 -->
-        <dependency>
-            <groupId>org.springaicommunity</groupId>
-            <artifactId>spring-ai-agent-utils</artifactId>
-            <version>${spring-ai-agent-utils.version}</version>
-        </dependency>
-
-        <!-- AgentScope 学习依赖暂时保留。它需要 victools 4.38.0，而当前
-             Spring AI 依赖树选中 5.0.0；工具注册存在运行时冲突。
-             当前 agentscope-study profile 单独设置 demo 的测试运行类路径；
-             两套 Schema API 不能在同一类加载器中用一个版本同时满足。 -->
-        <dependency>
-            <groupId>io.agentscope</groupId>
-            <artifactId>agentscope-harness</artifactId>
-            <version>${agentscope.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.agentscope</groupId>
-            <artifactId>agentscope-extensions-model-dashscope</artifactId>
-            <version>${agentscope.version}</version>
-        </dependency>
-
-        <!-- OpenAI 兼容协议：OpenRouter / DeepSeek / GLM 等都走这个 -->
-        <dependency>
-            <groupId>io.agentscope</groupId>
-            <artifactId>agentscope-extensions-model-openai</artifactId>
-            <version>${agentscope.version}</version>
-        </dependency>
-
-        <!-- Spring Boot Test -->
-        <!-- 仅供 Advisor 参数 demo 的内存检索示例使用。 -->
-        <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-vector-store-advisor</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <!-- Redis 客户端：State 2 自定义 AgentStateStore 用 -->
-        <dependency>
-            <groupId>redis.clients</groupId>
-            <artifactId>jedis</artifactId>
-            <version>5.1.3</version>
-        </dependency>
-    </dependencies>
-
-    <profiles>
-        <!-- 只调整 AgentScope demo 的测试运行类路径；默认构建继续使用 Spring AI 的依赖。
-             请用 Maven 的 -Pagentscope-study 运行此类测试，IDE 直接 Run 不应用此配置。 -->
-        <profile>
-            <id>agentscope-study</id>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-surefire-plugin</artifactId>
-                        <configuration>
-                            <includes>
-                                <include>**/AgentScopeFileDemo.java</include>
-                            </includes>
-                            <classpathDependencyExcludes>
-                                <classpathDependencyExclude>com.github.victools:*</classpathDependencyExclude>
-                            </classpathDependencyExcludes>
-                            <additionalClasspathDependencies>
-                                <additionalClasspathDependency>
-                                    <groupId>com.github.victools</groupId>
-                                    <artifactId>jsonschema-generator</artifactId>
-                                    <version>4.38.0</version>
-                                    <exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
-                                </additionalClasspathDependency>
-                                <additionalClasspathDependency>
-                                    <groupId>com.github.victools</groupId>
-                                    <artifactId>jsonschema-module-jackson</artifactId>
-                                    <version>4.38.0</version>
-                                    <exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
-                                </additionalClasspathDependency>
-                                <additionalClasspathDependency>
-                                    <groupId>com.github.victools</groupId>
-                                    <artifactId>jsonschema-module-swagger-2</artifactId>
-                                    <version>4.38.0</version>
-                                    <exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
-                                </additionalClasspathDependency>
-                            </additionalClasspathDependencies>
-                        </configuration>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-    </profiles>
-
     <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.14.1</version>
+                    <configuration><parameters>true</parameters></configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.5.5</version>
+                    <configuration>
+                        <excludedGroups>${excludedGroups}</excludedGroups>
+                        <!-- -pl 模块 -am -Dtest=类名 时，上游模块不必也有同名测试。 -->
+                        <failIfNoSpecifiedTests>false</failIfNoSpecifiedTests>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>3.3.1</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>3.4.2</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-clean-plugin</artifactId>
+                    <version>3.4.1</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
     </build>
-
 </project>

@@ -1,0 +1,16 @@
+<!-- src/test/resources/logback-test.xml -->
+<configuration>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%-5level]【%class{0}】【%method】 %msg%n</pattern>
+        </encoder>
+    </appender>
+    <logger name="com.chinazhouwy.miniharness" level="ERROR"/>
+    <logger name="io.agentscope.harness.agent.workspace.WorkspaceManager" level="ERROR"/>
+    <logger name="io.agentscope.core.tool.Toolkit" level="ERROR"/>
+    <logger name="io.agentscope.harness.agent.HarnessAgent" level="ERROR"/>
+    <logger name="io.agentscope.harness.agent.middleware.AgentTraceMiddleware" level="WARN"/>
+    <root level="INFO">
+        <appender-ref ref="STDOUT"/>
+    </root>
+</configuration>

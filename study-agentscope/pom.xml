@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.chinazhouwy</groupId>
+        <artifactId>mini-harness</artifactId>
+        <version>0.1.0</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+    <artifactId>study-agentscope</artifactId>
+    <description>AgentScope 学习测试；独立解析 Schema 与 Reactor 依赖</description>
+
+    <dependencies>
+            <dependency>
+                <groupId>com.chinazhouwy</groupId>
+                <artifactId>miniharness-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.agentscope</groupId>
+                <artifactId>agentscope-harness</artifactId>
+                <version>${agentscope.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.agentscope</groupId>
+                <artifactId>agentscope-extensions-model-dashscope</artifactId>
+                <version>${agentscope.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.agentscope</groupId>
+                <artifactId>agentscope-extensions-model-openai</artifactId>
+                <version>${agentscope.version}</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>redis.clients</groupId>
+                <artifactId>jedis</artifactId>
+                <version>7.4.1</version>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter</artifactId>
+                <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>ch.qos.logback</groupId>
+                <artifactId>logback-classic</artifactId>
+                <version>1.5.32</version>
+                <scope>test</scope>
+            </dependency>
+    </dependencies>
+</project>
