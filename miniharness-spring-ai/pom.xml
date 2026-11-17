@@ -35,6 +35,12 @@
                 <artifactId>miniharness-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <!-- 依赖方向: Spring AI 适配层 → 框架无关 runtime 内核（通过 ModelPort 适配） -->
+            <dependency>
+                <groupId>com.chinazhouwy</groupId>
+                <artifactId>miniharness-runtime</artifactId>
+                <version>${project.version}</version>
+            </dependency>
             <dependency>
                 <groupId>org.springframework.ai</groupId>
                 <artifactId>spring-ai-client-chat</artifactId>

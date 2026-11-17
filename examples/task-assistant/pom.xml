@@ -9,7 +9,7 @@
         <relativePath>../../pom.xml</relativePath>
     </parent>
     <artifactId>task-assistant</artifactId>
-    <description>应用装配入口；当前只选择 Spring AI，不引入另外两套框架</description>
+    <description>MiniHarness 应用装配入口：HarnessEngine + REST/SSE API（仅选择 Spring AI 适配器，不引入另外两套框架）</description>
 
     <dependencyManagement>
         <dependencies>
@@ -30,15 +30,25 @@
         </dependencies>
     </dependencyManagement>
     <dependencies>
-            <dependency>
-                <groupId>com.chinazhouwy</groupId>
-                <artifactId>miniharness-spring-ai</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-starter-web</artifactId>
-            </dependency>
+        <dependency>
+            <groupId>com.chinazhouwy</groupId>
+            <artifactId>miniharness-runtime</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.chinazhouwy</groupId>
+            <artifactId>miniharness-spring-ai</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
     <build>
         <plugins>
