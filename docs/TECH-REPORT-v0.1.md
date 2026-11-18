@@ -93,7 +93,11 @@ studio/（Vue3，独立 npm 工程）         ← 只通过 HTTP/SSE 通信
 5. **意图规则集小**：当前覆盖「研究X的盈利能力/利润率」与「质疑类消息」两类；新领域需扩展 RuleIntentExtractor 与 Domain Pack。
 6. **合成数据的局限**：口径缺陷是注入的、模式固定；真实世界脏数据形态远多于此。TraceAnalyzer 的规则 A 只对「数据口径类失败」有效，不能泛化到所有缺陷类型（失败签名规则显式列出了支持 kinds）。
 7. **token 统计为字符估算**：Spring AI usage 字段在网关下可得性不一，仅作成本观察。
-8. **git push 未完成**：本轮开发期间 GitHub 网络不可达（直连与代理均失败），全部提交在本地分支，推送待网络恢复后执行。
+8. **git push 未完成（外部阻塞，已按多次重试不可达关闭）**：2026-11-18 开发与收尾期间共发起 **11+ 次推送尝试，跨约 2 小时**（直连、经本机代理 7890、7897 端口、等待 90/120/60 秒后重试），错误签名一致：`LibreSSL SSL_connect: SSL_ERROR_SYSCALL in connection to github.com:443`，连通性探测 `https://github.com/` 始终返回 000（TLS 握手被中断，属环境级网络故障而非认证或仓库问题）。**9 个提交完整保存在本地分支 `codex/miniharness-self-evolving-v01`**（基于 `codex/stock-research-harness`，工作树干净）。网络恢复后执行以下命令即可完成推送，无需任何额外操作：
+   ```bash
+   cd /Users/chinazhouwy/doc/MiniHarness
+   git push -u origin codex/miniharness-self-evolving-v01
+   ```
 
 ## 七、运行方法
 
