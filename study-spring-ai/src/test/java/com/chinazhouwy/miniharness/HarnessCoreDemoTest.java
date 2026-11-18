@@ -31,6 +31,7 @@ import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryReposito
 import org.springframework.ai.model.tool.ToolCallLimitBehavior;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.ai.support.ToolCallbacks;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
@@ -57,6 +58,81 @@ import java.util.stream.IntStream;
 /** Spring AI 执行边界与状态学习入口。按方法观察记录、预算、异常和持久化；这些计数器与状态只用于各自 demo，不能直接当作共享生产组件。 */
 @org.junit.jupiter.api.Tag("live")
 public class HarnessCoreDemoTest {
+
+    /** 三框架同题：使用两个工具形成数据依赖，再按工具事实核对最终回答；没有业务断言。 */
+    @Test
+    @DisplayName("三框架同题 · Spring AI：查工单、查规则，再核对建议与核验码")
+    void compareTicketTask() throws Exception {
+        var config = ModelConfig.loadProperties();
+        var model = OpenAiChatModel.builder().options(OpenAiChatOptions.builder()
+                .apiKey(config.apiKey()).baseUrl(config.baseUrl()).model(config.model()).build()).build();
+        for (String status : List.of("处理中", "已完成")) {
+            var tools = new ComparisonTicketTools(status);
+            var state = new RunState();
+            CallAdvisor recorder = new CallAdvisor() {
+                public String getName() { return "comparison-recorder"; }
+                public int getOrder() { return ToolCallingAdvisor.DEFAULT_ORDER + 1; }
+                public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
+                    state.messages.clear();
+                    state.messages.addAll(request.prompt().getInstructions());
+                    var response = chain.nextCall(request);
+                    state.messages.add(response.chatResponse().getResult().getOutput());
+                    return response;
+                }
+            };
+            // 2.0.2 的工具循环由 ToolCallingAdvisor 驱动；Recorder 只保存观察用消息。
+            var client = ChatClient.builder(model)
+                    .defaultAdvisors(ToolCallingAdvisor.builder().build(), recorder).build();
+            String answer = client.prompt().system("先调用 query_ticket 查询工单，再把查询返回的状态原样传给"
+                            + " query_handling_rule。收到两份结果后简短回答，原样保留工单号、状态、建议和核验码。不要猜测。")
+                    .user("请查询 DEMO-001，告诉我当前状态和下一步建议，并附核验码。")
+                    .tools(tools).call().content();
+            System.out.println("\n【Spring AI · 完整消息链 · " + status + "】");
+            for (Message message : state.messages) {
+                Object content = message instanceof ToolResponseMessage result ? result.getResponses()
+                        : message instanceof AssistantMessage assistant && assistant.hasToolCalls()
+                        ? assistant.getToolCalls() : message.getText();
+                System.out.println("[" + message.getMessageType() + "] " + content);
+            }
+            long replies = state.messages.stream().filter(AssistantMessage.class::isInstance).count();
+            System.out.println("【应用核对】助手消息=" + replies + "，查工单=" + tools.ticketCalls + "，查规则=" + tools.ruleCalls
+                    + "，规则参数匹配=" + status.equals(tools.ruleStatus) + "，核验码保留=" + answer.contains(tools.code)
+                    + "，建议匹配=" + answer.contains(tools.action));
+        }
+    }
+
+    /** 各框架模块保留同一份小案例逻辑，只替换工具注解，不引入跨框架依赖。数据全部虚构。 */
+    public static class ComparisonTicketTools {
+        final String status;
+        final String action;
+        final String code = "CHECK-" + UUID.randomUUID();
+        int ticketCalls;
+        int ruleCalls;
+        String ruleStatus;
+
+        ComparisonTicketTools(String status) {
+            this.status = status;
+            this.action = status.equals("处理中") ? "继续跟进" : "可以结案";
+        }
+
+        @Tool(name = "query_ticket", description = "查询演示工单，取得实际状态和核验码")
+        public String queryTicket(@ToolParam(description = "工单编号，当前只支持 DEMO-001") String ticketId) {
+            ticketCalls++;
+            if (!"DEMO-001".equals(ticketId)) throw new IllegalArgumentException("未知演示工单");
+            String result = "工单=" + ticketId + "；状态=" + status + "；核验码=" + code;
+            System.out.println("【Java query_ticket】" + result);
+            return result;
+        }
+
+        @Tool(name = "query_handling_rule", description = "按查询到的实际工单状态，查询下一步处理建议")
+        public String queryRule(@ToolParam(description = "query_ticket 返回的状态，必须原样传入") String status) {
+            ruleCalls++;
+            if (!this.status.equals(status)) throw new IllegalArgumentException("请使用工单查询返回的实际状态");
+            ruleStatus = status;
+            System.out.println("【Java query_handling_rule】状态=" + status + "；建议=" + action);
+            return "状态=" + status + "；建议=" + action;
+        }
+    }
 
     /**
      * RAG 最小闭环：资料分块、向量入库、按版本过滤检索、增强提示词，再核对真实返回的来源。

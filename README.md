@@ -154,6 +154,11 @@ mvn -pl study-agentscope -am -Dtest=WorkflowAndDelegationStudyTest#delegateWithF
 # 子 Agent 参数：打印真实 Schema，Java 显式传参，对照携带与漏传 session_id
 mvn -pl study-agentscope -am -Dtest=SubAgentParametersStudyTest#showParametersAndSession -DexcludedGroups= test
 
+# 三框架同题：每个框架运行两种工单状态，核对两次工具调用、建议与随机核验码
+mvn -pl study-spring-ai,study-spring-ai-alibaba,study-agentscope -am \
+  '-Dtest=HarnessCoreDemoTest#compareTicketTask,FrameworkComparisonStudyTest#compareTicketTask' \
+  -DexcludedGroups= test
+
 # Java/Reactor 基础练习按方法单独运行
 mvn -pl study-agentscope -am -Dtest=ReactorStudyTest#creation -DexcludedGroups= test
 ```
@@ -205,7 +210,7 @@ MCP 示例各自放在独立的 `McpStudyTest`，使用同版本 filesystem serv
 | 7 | 9 | 顺序／并行工作流、路由与多 Agent 委派、失败归属和完成验证 |
 | 8 | 10 | 三框架比较、少量案例评估和综合实践 |
 
-第 7 组的代表实验已包含顺序、并行、模型选择助手、会话接续、查询失败与结果核对；下一步进入最后一组（第 8 组）：三框架比较与小型综合实践。第 1—7 组已有代表实验，前文和下文标注的待补项仍保留，不据此认定各组全部细项或三个框架所有能力均已覆盖。
+第 7 组的代表实验已包含顺序、并行、模型选择助手、会话接续、查询失败与结果核对；当前进入最后一组（第 8 组），已新增三框架同题的小型综合实验。第 1—8 组均已有代表实验，前文和下文标注的待补项仍保留，不据此认定各组全部细项或三个框架所有能力均已覆盖。
 
 第 1 组已新增 [ContextCompressionTest](study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/ContextCompressionTest.java) 代表实验：手工构造工具历史，调用 AgentScope 的 `ConversationCompactor`，再用真实模型对照全文、截断和摘要。实测全文及本次摘要保留了工单号、验收码和操作限制，截断丢失后两项；摘要将 4 条历史缩为 2 条。它单独验证压缩组件，不代表自动触发、会话写回、长结果外置、另两套框架摘要机制或所有信息无损已验证。
 
@@ -245,6 +250,8 @@ MCP 示例各自放在独立的 `McpStudyTest`，使用同版本 filesystem serv
 示例使用虚构工单，不含业务断言。六个入口已用真实模型运行；连续委派实测中，两个子 Agent 实例 ID 不同但 session_id 相同，第二次模型输入包含首轮历史，并回答出 DEMO-7319。当前使用内存状态存储，没有验证重启恢复。失败代表例只覆盖业务工具抛异常后的反馈，不代表模型请求失败、超时与取消均已验证；并行失败与取消仍待补。模型选择助手仅覆盖两个清晰意图，尚未验证歧义与无匹配时的处理、多层委派或三框架完整协作对照，不因此标记第 7 组全部完成。工具参数及会话机制可参考 [SubAgentTool 官方说明](https://javadoc.io/static/io.agentscope/agentscope/2.0.0/io/agentscope/core/tool/subagent/SubAgentTool.html)，实际行为以项目当前 2.1.0-SNAPSHOT 依赖源码和运行日志为准。
 
 目前已有 Spring AI 工具循环、日志、会话参数、结构化输出、工具异常、预算与超时练习，也有 AgentScope 的分主题实验；模块拆分不代表所有专题都已完成。后续按专题分别在三个 `study-*` 模块运行对照，确有可复用契约时再提取到 core。
+
+第 8 组同题入口与结果见 [三框架比较](docs/THREE-FRAMEWORK-COMPARISON.md)：各自执行“查询工单 → 按实际状态查询规则 → 回答并保留随机核验码”。每个框架分别运行“处理中”和“已完成”两种案例，六个真实模型场景均观测到两次 Java 查询、规则入参匹配、核验码保留和建议匹配；完整消息链均有三轮助手回复。本轮比较工具适配、循环与状态读取，不据此评价性能或认定其余待补能力已完成。
 
 原 README 的长程任务与股票研究说明对应旧分支，当前源码没有这些后端实现，已移除失效的入口和文档链接。公众号待发布稿与每日总结继续放在仓库外的 `/Users/chinazhouwy/Documents/公众号文章`。
 
