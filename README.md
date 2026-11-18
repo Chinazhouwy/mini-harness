@@ -136,6 +136,9 @@ mvn -pl study-agentscope -am -Dtest=PermissionApprovalStudyTest test
 # 文件检查点：发布前暂停，重建 Saver 和执行图后恢复；不需要 API Key
 mvn -pl study-spring-ai-alibaba -am -Dtest=CheckpointRecoveryStudyTest#pauseAndResume test
 
+# 工作流与子 Agent：真实模型对照应用固定顺序、主管通过工具委派
+mvn -pl study-agentscope -am -Dtest=WorkflowAndDelegationStudyTest -DexcludedGroups= test
+
 # Java/Reactor 基础练习按方法单独运行
 mvn -pl study-agentscope -am -Dtest=ReactorStudyTest#creation -DexcludedGroups= test
 ```
@@ -208,6 +211,8 @@ MCP 示例各自放在独立的 `McpStudyTest`，使用同版本 filesystem serv
 第 5 组权限与人工确认新增 [PermissionApprovalStudyTest](study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/PermissionApprovalStudyTest.java)：两个离线测试覆盖 ALLOW、DENY、ASK 后批准、ASK 后拒绝。模型响应固定，权限引擎、事件、工具执行和会话恢复使用真实 AgentScope；日志展示 Java 工具的实际执行次数，直接观察权限效果。确认结果绑定原 ToolUseBlock，通过 Msg.METADATA_CONFIRM_RESULTS 回填，同一会话使用新 RuntimeContext 继续。测试中的批准／拒绝由代码模拟，没有人机界面，也未验证跨进程恢复、参数级文件权限、不可信工具输出或另两框架对应机制。
 
 第 6 组新增 [CheckpointRecoveryStudyTest](study-spring-ai-alibaba/src/test/java/com/chinazhouwy/miniharness/alibaba/study/CheckpointRecoveryStudyTest.java)：简明展示 FileSystemSaver 保存状态与下一节点，interruptBefore 在发布前暂停，重建 Saver 和执行图后沿用 threadId，通过 withResume 继续。当前例子只重建组件，没有重启 JVM，发布也只打印文字；跨进程恢复和幂等不放在这个入门示例中。恢复字段需注册更新策略，withResume 只是调度标记，不替代审批与鉴权。
+
+第 7 组先新增 [WorkflowAndDelegationStudyTest](study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/WorkflowAndDelegationStudyTest.java) 两个简明入口：`sequentialWorkflow` 由 Java 按顺序调用整理助手与复核助手，显式传递结果；`delegateAsTool` 把复核助手注册为 ask_checker 工具，由主管输出工具请求，框架执行子 Agent 并回填结果。两者均已用真实模型运行，日志展示接收材料、委派参数和最终回答，不含业务断言；输入工单是虚构资料。尚未覆盖并行、动态路由、多层委派、失败传播或三框架完整协作对照，不因此标记第 7 组全部完成。
 
 目前已有 Spring AI 工具循环、日志、会话参数、结构化输出、工具异常、预算与超时练习，也有 AgentScope 的分主题实验；模块拆分不代表所有专题都已完成。后续按专题分别在三个 `study-*` 模块运行对照，确有可复用契约时再提取到 core。
 
