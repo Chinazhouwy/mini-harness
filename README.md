@@ -136,8 +136,20 @@ mvn -pl study-agentscope -am -Dtest=PermissionApprovalStudyTest test
 # 文件检查点：发布前暂停，重建 Saver 和执行图后恢复；不需要 API Key
 mvn -pl study-spring-ai-alibaba -am -Dtest=CheckpointRecoveryStudyTest#pauseAndResume test
 
-# 工作流与子 Agent：真实模型对照应用固定顺序、主管通过工具委派
+# 工作流与子 Agent：真实模型对照固定顺序、并行后汇总、主管通过工具委派
 mvn -pl study-agentscope -am -Dtest=WorkflowAndDelegationStudyTest -DexcludedGroups= test
+
+# 只看并行：两个助手独立处理，结果到齐后交给汇总助手
+mvn -pl study-agentscope -am -Dtest=WorkflowAndDelegationStudyTest#parallelThenSummarize -DexcludedGroups= test
+
+# 子 Agent 连续委派：主管从工具结果提取 session_id，第二次携带它恢复子会话
+mvn -pl study-agentscope -am -Dtest=WorkflowAndDelegationStudyTest#delegateWithSession -DexcludedGroups= test
+
+# 模型选择子 Agent：主管按问题选择助手，助手调用各自的 Java 查询工具
+mvn -pl study-agentscope -am -Dtest=WorkflowAndDelegationStudyTest#routeToSpecialist -DexcludedGroups= test
+
+# 子 Agent 参数：打印真实 Schema，Java 显式传参，对照携带与漏传 session_id
+mvn -pl study-agentscope -am -Dtest=SubAgentParametersStudyTest#showParametersAndSession -DexcludedGroups= test
 
 # Java/Reactor 基础练习按方法单独运行
 mvn -pl study-agentscope -am -Dtest=ReactorStudyTest#creation -DexcludedGroups= test
@@ -190,6 +202,8 @@ MCP 示例各自放在独立的 `McpStudyTest`，使用同版本 filesystem serv
 | 7 | 9 | 顺序／并行工作流、路由与多 Agent 委派、失败归属和完成验证 |
 | 8 | 10 | 三框架比较、少量案例评估和综合实践 |
 
+当前主线在第 7 组，剩余两大组：第 7 组已补模型选择助手，接下来补失败归属与结果核对；第 8 组做三框架比较与小型综合实践。第 1—6 组已有代表实验，前文和下文标注的待补项仍保留，不据此认定三个框架所有能力均已覆盖。
+
 第 1 组已新增 [ContextCompressionTest](study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/ContextCompressionTest.java) 代表实验：手工构造工具历史，调用 AgentScope 的 `ConversationCompactor`，再用真实模型对照全文、截断和摘要。实测全文及本次摘要保留了工单号、验收码和操作限制，截断丢失后两项；摘要将 4 条历史缩为 2 条。它单独验证压缩组件，不代表自动触发、会话写回、长结果外置、另两套框架摘要机制或所有信息无损已验证。
 
 第 2 组已新增 [LongTermMemoryTest](study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/LongTermMemoryTest.java) 代表实验：显式调用 `MemoryFlushManager` 提取到每日账本、`MemoryConsolidator` 整理到 `MEMORY.md`，由新建 Harness 的新会话加载记忆。真实模型已验证原值读取、明确纠错后读取新值及不同用户隔离；每日账本仍保留旧历史。为保证观察顺序，本例关闭自动后台记忆任务并等待主动写入完成，不代表自动触发、删除／过期、另两框架记忆组合或实际进程重启均已验证。
@@ -212,7 +226,19 @@ MCP 示例各自放在独立的 `McpStudyTest`，使用同版本 filesystem serv
 
 第 6 组新增 [CheckpointRecoveryStudyTest](study-spring-ai-alibaba/src/test/java/com/chinazhouwy/miniharness/alibaba/study/CheckpointRecoveryStudyTest.java)：简明展示 FileSystemSaver 保存状态与下一节点，interruptBefore 在发布前暂停，重建 Saver 和执行图后沿用 threadId，通过 withResume 继续。当前例子只重建组件，没有重启 JVM，发布也只打印文字；跨进程恢复和幂等不放在这个入门示例中。恢复字段需注册更新策略，withResume 只是调度标记，不替代审批与鉴权。
 
-第 7 组先新增 [WorkflowAndDelegationStudyTest](study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/WorkflowAndDelegationStudyTest.java) 两个简明入口：`sequentialWorkflow` 由 Java 按顺序调用整理助手与复核助手，显式传递结果；`delegateAsTool` 把复核助手注册为 ask_checker 工具，由主管输出工具请求，框架执行子 Agent 并回填结果。两者均已用真实模型运行，日志展示接收材料、委派参数和最终回答，不含业务断言；输入工单是虚构资料。尚未覆盖并行、动态路由、多层委派、失败传播或三框架完整协作对照，不因此标记第 7 组全部完成。
+第 7 组在 [WorkflowAndDelegationStudyTest](study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/WorkflowAndDelegationStudyTest.java) 区分应用编排与子 Agent 委派：
+
+- `sequentialWorkflow`：Java 按顺序调用两个独立 Agent，显式传递结果。
+- `parallelThenSummarize`：Reactor 安排两个独立 Agent 并行，`Mono.zip` 等齐后交给汇总助手。这是应用编排基础，不单独算新的子 Agent 机制。
+- `delegateAsTool`：把复核助手注册为 ask_checker 工具，主管输出工具请求，框架执行子 Agent 并回填结果。
+- `delegateWithSession`：主管连续两次调用 ask_checker，第一次传入工单与验收码，第二次只问验收码，并携带第一次工具结果里的 `session_id`。通过日志观察不同 Agent 实例、相同子会话及恢复的历史；父会话不会整体自动复制给子 Agent，但主管仍可通过 message 主动传入资料，这不是权限隔离机制。
+- `routeToSpecialist`：主管挂载 ask_ticket、ask_refund 两个子 Agent 工具，分别输入工单状态与退款规则问题，由模型选择委派目标；两题使用不同主管会话，避免历史互相影响。每个助手只注册自己的查询工具，主管没有直接注册这些查询方法。日志展示“用户问题 → 主管选择 → 子 Agent 调用 Java 方法 → 最终回答”，每题后打印累计执行次数。真实模型实测第一题工单=1、退款=0，第二题累计工单=1、退款=1。数据为本地虚构资料，不访问工单、支付或退款服务；Java 没有按关键词写 if/else 选择助手。
+
+日志按“全程模型请求 #”从上往下阅读，父子 Agent 共用请求序号；“委派 #”单独标记主管实际发出的工具请求。主管历史只展示条数，每个新工具结果在回填时展开一次；子 Agent 将历史与本次输入分开展示，历史重发不代表工具再次执行。这是阅读用摘要，省略系统提示等内容，不是完整 HTTP 报文。
+
+参数阅读另见 [SubAgentParametersStudyTest](study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/SubAgentParametersStudyTest.java)：打印 SubAgentConfig 全部五项配置、SubAgentTool 实际生成的参数 Schema 与实际返回文本。Java 显式构造 input Map，依次演示新会话、提取返回文本中的 session_id 后继续追问、漏传 ID 后新建会话。这里由代码填写参数，真实模型只在子 Agent 内回答，不包含主管模型的自动委派；也没有通过手写 Schema 或修改工具自动补入 ID。
+
+示例使用虚构工单，不含业务断言。五个入口已用真实模型运行；连续委派实测中，两个子 Agent 实例 ID 不同但 session_id 相同，第二次模型输入包含首轮历史，并回答出 DEMO-7319。当前使用内存状态存储，没有验证重启恢复。并行例子尚未实测失败与取消行为，模型选择助手仅覆盖两个清晰意图，尚未验证歧义与无匹配时的处理、多层委派或三框架完整协作对照，不因此标记第 7 组全部完成。工具参数及会话机制可参考 [SubAgentTool 官方说明](https://javadoc.io/static/io.agentscope/agentscope/2.0.0/io/agentscope/core/tool/subagent/SubAgentTool.html)，实际行为以项目当前 2.1.0-SNAPSHOT 依赖源码和运行日志为准。
 
 目前已有 Spring AI 工具循环、日志、会话参数、结构化输出、工具异常、预算与超时练习，也有 AgentScope 的分主题实验；模块拆分不代表所有专题都已完成。后续按专题分别在三个 `study-*` 模块运行对照，确有可复用契约时再提取到 core。
 
