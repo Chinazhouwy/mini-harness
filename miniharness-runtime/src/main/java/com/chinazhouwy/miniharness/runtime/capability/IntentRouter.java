@@ -14,13 +14,23 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 能力路由器：按固定优先级依次决策。
- * 1. 规则意图抽取（确定性）
- * 2. 活跃任务关联（质疑类消息）
- * 3. 已发布 Workflow 匹配
- * 4. Skill 匹配
- * 5. 兜底：Agent 探索（无模型部署时明确告知无法处理）
- * 歧义时绝不擅自合并任务，而是请求用户确认；可选注入 DecisionModel 辅助歧义消解。
+ * 能力路由器：按固定优先级依次决策（任务书第二节“Capability Engine”的实现）。
+ *
+ * 【五级优先级——为什么是这个顺序】
+ *  1. 规则意图抽取（RuleIntentExtractor，纯正则，0 模型调用）
+ *     —— 能用确定性规则解决的事绝不麻烦模型；
+ *  2. 质疑消息 → 活跃任务关联（resolveChallenge）
+ *     —— “这个利润率不对”必须落到具体的任务/Run 上核查；
+ *     候选 0 个或 >1 个都请求用户确认，绝不擅自合并历史；
+ *  3. 已发布 Workflow 匹配（resolveResearch 按 definition.intent）
+ *     —— 有固化流程就复用流程；
+ *  4. Skill 匹配（复用“怎么做的知识”，但暂不参与执行）；
+ *  5. 兜底 AGENT_EXPLORE —— 都不匹配才轮到开放探索（无模型部署时明确告知无法处理）。
+ *
+ * 【DecisionModel 的位置】
+ * 仅在第 2 级出现多候选歧义时被询问（ModelBasedDecisionModel 走 ModelPort）。
+ * 它的置信度未校准，只作参考；模型答不上来/答错编号都回退到“请求用户确认”。
+ * 路由的最终决定权永远在 Harness，不在模型。
  */
 public class IntentRouter {
 

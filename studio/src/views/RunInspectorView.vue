@@ -1,3 +1,19 @@
+<!--
+  ============================================================================
+  Run Inspector 页：单次执行的“体检报告”（对应任务书“Run Inspector”页面）
+  ============================================================================
+  【这一页做什么】
+  1. 左侧表格列出全部执行（GET /api/runs），点击任意一行打开详情；
+  2. 右侧三块内容（GET /api/runs/{id}）：
+     - 节点结果表：每个节点跑成什么样（状态/错误码/重试次数/耗时）；
+     - 事件时间线：该执行产生的事件按 seq 排序回放（REST 历史 + SSE 实时合并）；
+     - 结构化输出：执行的最终产物 JSON（如研究报告的结论、净利率、证据链）。
+  3. 监听全局事件流：新的实时事件到达时自动刷新列表与详情。
+
+  【为什么事件时间线要“REST + SSE 合并”？】
+  SSE 只能收到“建立连接之后”的新事件；如果执行发生在你打开页面前，
+  就得靠 REST 回放历史。两者按事件序号 seq 去重合并，保证不重不漏。
+-->
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { api } from '../api/client'
@@ -5,11 +21,12 @@ import type { HarnessEvent, Run } from '../api/types'
 import { useHarnessStore } from '../stores/harness'
 
 const store = useHarnessStore()
-const runs = ref<Run[]>([])
-const selected = ref<Run | null>(null)
-const runEvents = ref<HarnessEvent[]>([])
+const runs = ref<Run[]>([])                 // 执行列表
+const selected = ref<Run | null>(null)      // 当前查看的执行
+const runEvents = ref<HarnessEvent[]>([])   // REST 回放的历史事件
 const error = ref('')
 
+/** 刷新执行列表；若已选中某个执行则顺便更新它的详情（状态可能变了）。 */
 async function refresh() {
   try {
     runs.value = await api.runs()
@@ -22,6 +39,7 @@ async function refresh() {
   }
 }
 
+/** 打开某执行详情：拉取执行本身 + 该执行的历史事件（REST 回放）。 */
 async function open(run: Run) {
   error.value = ''
   try {
@@ -34,9 +52,14 @@ async function open(run: Run) {
 }
 
 onMounted(refresh)
+// 每来一条新事件（SSE 推送）就刷新列表，让“正在跑”的执行状态自动前进。
 watch(() => store.events.length, refresh)
 
-/** REST 历史 + SSE 实时合并（按 seq 去重）。 */
+/**
+ * REST 历史 + SSE 实时合并（按 seq 去重后升序排列）。
+ * computed 的含义：依赖（runEvents / store.events / selected）任何一个变化，
+ * 这个列表都会自动重算，模板随之更新。
+ */
 const mergedEvents = computed<HarnessEvent[]>(() => {
   if (!selected.value) return []
   const bySeq = new Map<number, HarnessEvent>()
@@ -52,6 +75,7 @@ const mergedEvents = computed<HarnessEvent[]>(() => {
   <div v-if="error" class="error-text">{{ error }}</div>
 
   <div class="grid-2">
+    <!-- 左侧：执行列表（点击行打开右侧详情） -->
     <div class="panel">
       <h3>执行列表（{{ runs.length }}）</h3>
       <table>
@@ -69,7 +93,9 @@ const mergedEvents = computed<HarnessEvent[]>(() => {
       </table>
     </div>
 
+    <!-- 右侧：选中执行的详情（三块） -->
     <div v-if="selected">
+      <!-- 块 1：节点结果表 -->
       <div class="panel">
         <h3>节点结果 — {{ selected.id }}</h3>
         <table>
@@ -89,6 +115,7 @@ const mergedEvents = computed<HarnessEvent[]>(() => {
         </div>
       </div>
 
+      <!-- 块 2：事件时间线（REST 历史 + SSE 实时合并） -->
       <div class="panel">
         <h3>执行事件时间线（{{ mergedEvents.length }}）</h3>
         <div style="max-height: 260px; overflow-y: auto">
@@ -101,6 +128,7 @@ const mergedEvents = computed<HarnessEvent[]>(() => {
         </div>
       </div>
 
+      <!-- 块 3：结构化输出（研究报告 JSON，含结论/净利率/证据链） -->
       <div class="panel">
         <h3>结构化输出</h3>
         <pre class="json">{{ JSON.stringify(selected.output, null, 2) }}</pre>

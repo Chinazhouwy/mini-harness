@@ -14,6 +14,20 @@ import java.util.Set;
 /**
  * Workflow 评测器：基线与候选在训练集与留出集上分别真实执行，逐条门禁判定。
  * 门禁未全过的候选保持 EVALUATED_FAIL，只能拒绝或另起新候选。
+ *
+ * 【评测的可信度来自哪里】
+ * 1. 每个案例都由 CaseRunner 真实执行一遍（走与生产完全相同的编译器/执行器/工具），
+ *    期望值来自案例定义（人写的外部事实），绝不采信被测流程自己的输出或模型自述；
+ * 2. 训练集（提出改进用的案例）与留出集（独立验证）不重叠——
+ *    防止“在用于提出改进的案例上评估自己”；
+ * 3. 门禁是硬规则，不是“看起来更好就行”：
+ *    ① HOLDOUT_NO_REGRESSION      留出集零回归（基线通过而候选失败的案例数=0）
+ *    ② HOLDOUT_ACCURACY_NOT_WORSE 留出集正确率不下降
+ *    ③ HOLDOUT_ERROR_DETECTION    错误检出率 ≥ 阈值（EvalGatePolicy.minErrorDetectionRate）
+ *    ④ COST_BOUNDED               平均额外工具调用 ≤ 上限（改进不能没有成本约束）
+ *    ⑤ TRAIN_ACCURACY_NOT_WORSE   训练集正确率不下降（改进不能靠牺牲训练集案例）
+ *  全部通过候选才标记 EVALUATED_PASS；之后还要人工批准才会真正发布
+ *  （ApprovalService 是唯一发布通道）。
  */
 public class WorkflowEvaluator {
 

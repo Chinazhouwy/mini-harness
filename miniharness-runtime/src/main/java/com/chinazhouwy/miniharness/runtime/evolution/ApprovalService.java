@@ -18,6 +18,17 @@ import java.util.Optional;
  * 审批服务：候选从「已评测」到「已发布」的唯一通道。
  * 后端校验批准条件（必须 EVALUATED_PASS）；拒绝不影响发布指针；回滚只能回到曾发布过的版本。
  * 进化引擎的其它任何组件都无权调用 WorkflowRegistry.publish。
+ *
+ * 【批准时发生了什么（approve 的四步）】
+ * 1. 校验候选状态：必须是 EVALUATED_PASS，否则抛 APPROVAL_REJECTED（前端会收到 409）；
+ * 2. 分配真实版本号：候选提案里的版本号只是占位，账本的 nextVersion = 现有最大版本+1；
+ * 3. install 新定义 + publish 移动发布指针（留下“谁、何时、基于哪个候选”的审计）；
+ * 4. 若有 Skill 已被固化进该 Workflow，自动降级其状态，避免路由双重匹配。
+ *
+ * 【拒绝与回滚的边界】
+ * - reject：允许在 PENDING_EVAL/EVALUATED_* 状态拒绝；已 APPROVED 的候选不可拒绝
+ *   （想撤回已发布版本请用 rollback——那会留下 WORKFLOW_ROLLED_BACK 审计）；
+ * - rollback：目标版本必须“曾发布过”（曾出现在发布历史中），从未上线的版本不能作为回滚目标。
  */
 public class ApprovalService {
 

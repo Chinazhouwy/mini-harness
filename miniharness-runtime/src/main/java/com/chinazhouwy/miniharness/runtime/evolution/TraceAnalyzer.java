@@ -21,13 +21,32 @@ import java.util.stream.Collectors;
 
 /**
  * 轨迹分析器：从经验记录中挖掘可复用模式与流程缺陷，产出候选提案。
+ * 这是自进化引擎的“大脑”——它只看 ExperienceStore 里保存的客观记录，
+ * 不重新解读模型自述，也不做无证据的因果推断。
  *
- * 规则 A（插入口径验证节点）：同一 Workflow 的经验中，数据口径类失败标注
- * 达到阈值 → 在被标注节点之前插入验证节点，产出 WorkflowCandidate。
- * 规则 B（删除冗余节点）：节点在所有经验中均失败且无成功记录 → 提案删除并重连边。
- * 规则 C（沉淀 Skill）：同一 Workflow 成功运行达到阈值 → 提出可复用 Skill（观察性提案）。
+ * 【三条规则的触发条件与产出（全部可在测试中复现）】
  *
- * 分析器只提案、不发布；相同规则对相同 Workflow 的重复提案会被跳过。
+ * 规则 A（INSERT_VALIDATION_NODE，插入口径验证节点）——主实验用：
+ *   触发：同一 Workflow 的经验中，数据口径类失败标注（单位/报告期/字段/矛盾，
+ *   见 FailureKinds.DATA_QUALITY_KINDS）达到 minOccurrencesForValidationNode 次。
+ *   产出：在被标注节点（如“计算利润率”）之前插入一个验证节点；
+ *   验证节点依赖原锚点的全部上游，锚点额外依赖验证节点（数据流不变，多一道闸）。
+ *   候选必须带来源证据（sourceRunIds = 失败 Run / 评测案例标识）。
+ *
+ * 规则 B（REMOVE_REDUNDANT_NODE，删除冗余节点）：
+ *   触发：节点在全部历史经验中“运行过且从未成功过”（≥1 次 FAILED 且 0 次 SUCCEEDED）。
+ *   语义边界：因上游失败而 SKIPPED 的下游节点不算死节点（它们没运行过）；
+ *   删除候选会把死节点的上游直连其下游，保证数据流不断，并过编译校验。
+ *
+ * 规则 C（Skill 沉淀，观察性提案）：
+ *   触发：同一 Workflow 成功运行达到 minSuccessfulRunsForSkill 次。
+ *   产出：一个“优先复用该流程”的 Skill 提案（记录来源成功 Run）；
+ *   Skill 被固化进 Workflow 后自动降级（见 Skill.COMPILED_INTO_WORKFLOW）。
+ *
+ * 【防重复与防误伤】
+ * - 相同 Workflow + 相同规则已存在候选时跳过（避免每次分析都堆重复提案）；
+ * - 阈值不足时在 notes 里如实记录“未触发及原因”，绝不硬凑提案。
+ * 分析器只提案、不发布；发布指针只能由 ApprovalService 在人工批准后移动。
  */
 public class TraceAnalyzer {
 

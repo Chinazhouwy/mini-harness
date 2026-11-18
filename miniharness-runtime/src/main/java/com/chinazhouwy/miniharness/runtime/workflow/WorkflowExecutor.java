@@ -23,6 +23,20 @@ import java.util.concurrent.TimeUnit;
  * Workflow 执行器：按编译期拓扑序逐节点执行，承担
  * 取消检查、时长预算检查、失败/跳过传播、节点超时与重试、节点级事件发射。
  * 调度与管控全部由 Harness 完成；节点处理器只写确定性业务逻辑。
+ *
+ * 【一次 execute 的完整时间线（对应前端 Run Inspector 里看到的事件）】
+ *   对拓扑序中的每个节点：
+ *     ① 取消/时长预算检查 —— 不满足则该节点及全部下游记 SKIPPED，整体记 CANCELLED/TIMED_OUT
+ *     ② 上游检查 —— 任一直接上游未成功（FAILED 或 SKIPPED），本节点记 SKIPPED（失败传播）
+ *     ③ NODE_STARTED 事件 → 在独立线程池里跑处理器（带 timeoutMs 超时保护）
+ *     ④ 成功 → NODE_SUCCEEDED；业务失败（NodeOutput.FAILED）→ NODE_FAILED，不重试
+ *     ⑤ 异常失败（如工具瞬时故障）→ 未达重试上限则 NODE_RETRYING + 退避后重跑
+ *   任一节点失败 → 整个 Run 记 FAILED（失败即停，剩余节点统一补 SKIPPED）
+ *
+ * 【两类“失败”的区分（评测统计依赖这个区分）】
+ * - 业务失败：处理器返回 NodeOutput.failed(errorCode, ...) —— 预期中的拒绝（如口径校验），
+ *   不重试；errorCode 是结构化的（UNIT_MISMATCH 等），评测据此判“按期望拒绝”。
+ * - 异常失败：处理器抛异常/超时/预算耗尽 —— 走重试策略，重试耗尽后记 NODE_ERROR 类错误码。
  */
 public class WorkflowExecutor {
 

@@ -72,6 +72,26 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * HarnessEngine：MiniHarness 的运行时门面，组装全部引擎组件并对外提供业务入口。
  *
+ * 【整体数据流（读完这段你就知道每个组件的位置）】
+ *
+ *   用户输入
+ *      │ route()/handleUserInput() —— IntentRouter 五级路由（见 capability 包）
+ *      │   1. 规则意图抽取（纯正则，0 模型调用）
+ *      │   2. 质疑消息关联活跃任务（歧义必请求确认，绝不擅自合并）
+ *      │   3. 已发布 Workflow 匹配 → 4. Skill 匹配 → 5. 兜底探索
+ *      ▼
+ *   Task（startRun 把任务与某个 Workflow 版本绑定，产生 Run）
+ *      ▼
+ *   WorkflowExecutor.execute —— 按编译期拓扑序逐节点执行
+ *      │  每一步：NODE_STARTED → (TOOL_REQUESTED/COMPLETED | MODEL_CALLED) → NODE_SUCCEEDED/FAILED
+ *      │  失败即停：下游节点标记 SKIPPED；超时/重试/预算/取消全部由执行器承担
+ *      ▼
+ *   Run 落账 + ExperienceRecord 自动入经验库（自进化的原始素材）
+ *      ▼
+ *   collectExperiencesFromCases（受控案例测试）→ TraceAnalyzer.analyzeAndPropose（挖失败签名）
+ *      → WorkflowCandidate 候选 → WorkflowEvaluator 对比评测（5 条门禁）
+ *      → ApprovalService 批准/拒绝/回滚（唯一有权移动发布指针的组件）
+ *
  * 设计取舍：
  * - 单体内核、组件可替换（仓储/模型/决策模型均为接口）。
  * - Run 执行走独立线程池（异步），测试用 awaitRun 同步等待；取消通过 Harness 侧标志位实现。
@@ -284,6 +304,7 @@ public class HarnessEngine {
                             AtomicBoolean cancelled, String triggeredBy, CompletableFuture<Run> future) {
         try {
             run.transitionTo(RunStatus.RUNNING);
+            // RUN_STARTED 之后：编译流程 → 逐节点执行 → 节点结果并入 Run → 状态机落终态 → 沉淀经验。
             events.publish(HarnessEvent.builder(EventType.RUN_STARTED)
                     .task(task.id()).run(run.id()).workflow(definition.ref())
                     .message("执行开始: " + definition.ref()));
@@ -293,7 +314,7 @@ public class HarnessEngine {
             NodeContext context = new NodeContext(events, task.id(), run.id(), toolRegistry, toolInvoker,
                     config.modelPort(), budget, cancelled::get, nodePool, new LinkedHashMap<>());
             Map<String, Object> workflowInput = new LinkedHashMap<>(run.input());
-            // 任务元数据（如演示用的 caseId）并入执行输入；路由内部键不参与。
+            // 任务元数据（如演示用的 caseId）并入执行输入；路由内部键（routingAction/workflow）不参与。
             for (Map.Entry<String, Object> entry : task.metadata().entrySet()) {
                 if (!entry.getKey().startsWith("routing") && !"workflow".equals(entry.getKey())) {
                     workflowInput.putIfAbsent(entry.getKey(), entry.getValue());

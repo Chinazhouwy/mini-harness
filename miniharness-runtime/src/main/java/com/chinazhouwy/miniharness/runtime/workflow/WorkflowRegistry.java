@@ -16,6 +16,14 @@ import java.util.Optional;
 /**
  * Workflow 版本账本：唯一有权改变「发布指针」的组件。
  * 定义一经登记不可变；发布/回滚只移动指针并留下审计记录，旧版本永远可查、可回滚。
+ *
+ * 【类比】把这里想成“流程的 git 仓库”：
+ *   - install()   = 提交一个新版本到仓库（不影响线上）；
+ *   - publish()   = 把线上流量切到某个版本（发布指针）；
+ *   - rollback()  = 把线上切回某个“曾发布过”的旧版本（不能切到从未上线的版本）；
+ *   - publicationHistory = 完整的上线/回滚审计（谁、何时、基于哪个候选）。
+ * 生产流程的保护机制：除 ApprovalService 在人工批准后调用 publish 外，
+ * 其他任何组件（包括进化引擎自己）都拿不到发布权。
  */
 public class WorkflowRegistry {
 
