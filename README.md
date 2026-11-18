@@ -121,6 +121,18 @@ mvn -pl study-agentscope -am -Dtest=LongTermMemoryTest#rememberCorrectAndRecall 
 # RAG：本地关键词向量检索、按资料版本过滤、真实模型回答与来源核对，以及无命中对照
 mvn -pl study-spring-ai -am -Dtest=HarnessCoreDemoTest#chatWithRetrievedDocuments -DexcludedGroups= test
 
+# Skills：先看到名称和描述，模型按需加载 SKILL.md，再执行其中要求的 Java 工具
+mvn -pl study-agentscope -am -Dtest=SkillsStudyTest#loadSkillThenUseTool -DexcludedGroups= test
+
+# HTTP 技能仓库：测试自启本机 HTTP 服务，无需远端服务
+mvn -pl study-agentscope -am -Dtest=SkillsStudyTest#loadSkillFromHttp -DexcludedGroups= test
+
+# 普通 Nacos 配置项方案：模拟 getConfig 返回值，不连接真实 Nacos
+mvn -pl study-agentscope -am -Dtest=SkillsStudyTest#loadSkillFromNacosConfigStub -DexcludedGroups= test
+
+# 权限与人工确认：固定模型提出工具请求，验证真实框架的允许、拒绝和批复恢复；不需要 API Key
+mvn -pl study-agentscope -am -Dtest=PermissionApprovalStudyTest test
+
 # Java/Reactor 基础练习按方法单独运行
 mvn -pl study-agentscope -am -Dtest=ReactorStudyTest#creation -DexcludedGroups= test
 ```
@@ -175,7 +187,19 @@ MCP 示例各自放在独立的 `McpStudyTest`，使用同版本 filesystem serv
 
 第 3 组已在 [HarnessCoreDemoTest](study-spring-ai/src/test/java/com/chinazhouwy/miniharness/HarnessCoreDemoTest.java) 新增 `chatWithRetrievedDocuments`：TokenTextSplitter 处理短资料，SimpleVectorStore 存储本地二值关键词向量，QuestionAnswerAdvisor 按版本过滤、检索并增强提示词。真实模型实测命中 2026 退款规则后答出 3 个工作日、随机核验码和正确来源；2099 版本无命中时明确无法确定。应用从 RETRIEVED_DOCUMENTS 核对实际来源，来源标识也显式写入正文。此例不代表神经语义 Embedding、长文切分效果、混合检索／重排或另外两套框架的 RAG 已验证。
 
+第 4 组已新增 [SkillsStudyTest](study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/SkillsStudyTest.java)：ReActAgent 挂载只读 FileSystemSkillRepository，自动接入 DynamicSkillMiddleware 和加载工具。真实模型实测先看到技能目录但看不到正文随机标记，调用 `load_skill_through_path` 后正文才进入模型请求，再执行 `query_ticket` Java 工具，最终输出指定简报与标记。这里的渐进加载指正文进入模型上下文的时机，Java 端可能早已读取文件；Skill 本身不新增工具权限。本例未验证附属脚本、热更新或另两框架 Skills 机制。后续进入权限与人工确认专题。
+
+同类中补充远程来源对照，仓库适配器位于 [RemoteSkillRepositories](study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/RemoteSkillRepositories.java)：
+
+- `loadSkillFromHttp`：通过真实 HTTP 请求本机临时服务。`GET /skills` 返回技能名称数组，`GET /skills/ticket-brief` 返回含 frontmatter 的 Markdown；目录和正文读取后适配为 AgentSkill，后续流程复用原示例。
+- `loadSkillFromNacosConfigStub`：模拟普通配置中心的 `getConfig(dataId, group)`，示例映射为 `namespace=demo-team`、`group=AGENT_SKILLS`、`dataId=skills.ticket-brief.md`。此处并没有连接 Nacos。
+- `connectRealNacosConfigExample`：实际使用 Nacos SDK 创建 ConfigService，读取相同配置并挂到 Agent；标有 `@Disabled`，默认不会运行。准备服务、namespace ID、配置项及认证后再启用，结束时释放客户端。
+
+本地目录、HTTP、模拟配置读取三个真实模型流程已通过；真实 Nacos 方法仅编译验证。配置中心方案是本项目对 AgentSkillRepository 的适配，不是官方 NacosSkillRepository／Nacos AI Skill ZIP 服务；本例也没有配置监听、远端附属资源或生产缓存。
+
 优先复用已有实验补对照，机制不同再增加独立示例。前面尚未收口的并发／取消、各框架契约与扩展点比较，以及 MCP Resources／Prompts、其余失败路径仍保留待补，不因进入阶段 7 而记为完成。
+
+第 5 组权限与人工确认新增 [PermissionApprovalStudyTest](study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/PermissionApprovalStudyTest.java)：两个离线测试覆盖 ALLOW、DENY、ASK 后批准、ASK 后拒绝。模型响应固定，权限引擎、事件、工具执行和会话恢复使用真实 AgentScope；断言依据是 Java 工具的实际执行次数。确认结果绑定原 ToolUseBlock，通过 Msg.METADATA_CONFIRM_RESULTS 回填，同一会话使用新 RuntimeContext 继续。测试中的批准／拒绝由代码模拟，没有人机界面，也未验证跨进程恢复、参数级文件权限、不可信工具输出或另两框架对应机制。
 
 目前已有 Spring AI 工具循环、日志、会话参数、结构化输出、工具异常、预算与超时练习，也有 AgentScope 的分主题实验；模块拆分不代表所有专题都已完成。后续按专题分别在三个 `study-*` 模块运行对照，确有可复用契约时再提取到 core。
 

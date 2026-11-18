@@ -41,6 +41,13 @@
                 <version>7.4.1</version>
                 <scope>test</scope>
             </dependency>
+            <!-- 只用于普通配置中心加载 Skill 的 SDK 示例；测试默认不连接真实 Nacos。 -->
+            <dependency>
+                <groupId>com.alibaba.nacos</groupId>
+                <artifactId>nacos-client</artifactId>
+                <version>3.3.0</version>
+                <scope>test</scope>
+            </dependency>
             <dependency>
                 <groupId>org.junit.jupiter</groupId>
                 <artifactId>junit-jupiter</artifactId>
