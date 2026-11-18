@@ -47,6 +47,12 @@
                 <artifactId>spring-ai-openai</artifactId>
                 <scope>test</scope>
             </dependency>
+            <!-- 复用 MCP → ToolCallback 桥接；版本由本模块 1.1.2 BOM 管理。 -->
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-mcp</artifactId>
+                <scope>test</scope>
+            </dependency>
             <dependency>
                 <groupId>org.junit.jupiter</groupId>
                 <artifactId>junit-jupiter</artifactId>

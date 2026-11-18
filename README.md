@@ -103,6 +103,15 @@ mvn -pl study-spring-ai-alibaba -am -Dtest=AlibabaReactAgentTest#realModelReturn
 # Alibaba：共享内存 Saver，重建 Agent 后按会话 ID 接续并检查工具消息
 mvn -pl study-spring-ai-alibaba -am -Dtest=AlibabaReactAgentTest#chatWithSessionCheckpoint -DexcludedGroups= test
 
+# Alibaba：同版本 MCP 文件服务，观察 Graph 状态中的工具请求、结果与最终回答
+mvn -pl study-spring-ai-alibaba -am -Dtest=McpStudyTest#chatWithMcpFileTool -DexcludedGroups= test
+
+# AgentScope：同版本 MCP 文件服务，观察 Toolkit 注册和完整消息中的工具请求／结果
+mvn -pl study-agentscope -am -Dtest=McpStudyTest#chatWithMcpFileTool -DexcludedGroups= test
+
+# MCP 失败代表例：不创建目标文件，观察 ERROR 工具结果和模型的后续解释
+mvn -pl study-agentscope -am -Dtest=McpStudyTest#chatWithMissingMcpFile -DexcludedGroups= test
+
 # Java/Reactor 基础练习按方法单独运行
 mvn -pl study-agentscope -am -Dtest=ReactorStudyTest#creation -DexcludedGroups= test
 ```
@@ -128,9 +137,30 @@ java -jar examples/task-assistant/target/task-assistant-0.1.0.jar
 
 这些实验验证调用完成后的状态接续，没有演示实际重启 JVM 或在任意工具执行位置恢复。
 
-MCP 示例统一放在独立的 [`McpStudyTest`](study-spring-ai/src/test/java/com/chinazhouwy/miniharness/McpStudyTest.java)。已先验证 Spring AI 的 `chatWithMcpFileTool`：通过 stdio 启动固定版本 filesystem server，发现工具，只暴露 `read_text_file`，模型读取临时文件并返回随机校验码，最后关闭客户端及子进程。Alibaba、AgentScope 的同服务对照与工具失败实验待继续。
+MCP 示例各自放在独立的 `McpStudyTest`，使用同版本 filesystem server，通过 stdio 发现工具，只暴露 `read_text_file`，读取临时文件中的随机校验码后关闭连接：
+
+- [Spring AI 示例](study-spring-ai/src/test/java/com/chinazhouwy/miniharness/McpStudyTest.java)：由 ChatClient 的工具循环执行。
+- [Alibaba 示例](study-spring-ai-alibaba/src/test/java/com/chinazhouwy/miniharness/alibaba/study/McpStudyTest.java)：复用 MCP → ToolCallback 适配层，由 ReactAgent 的 Graph 执行循环；打印状态中的工具请求、结果和最终回答，并核对文件校验码。
+- [AgentScope 示例](study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/McpStudyTest.java)：使用 McpClientBuilder 和 Toolkit.registration 注册单个远程工具，由 ReActAgent 执行循环；显式设置模型可见的名称前缀，结束后打印完整消息中的 ToolUseBlock／ToolResultBlock，核对校验码。
+
+失败代表例使用 AgentScope 的 `chatWithMissingMcpFile`：复用正常示例的连接／工具注册／消息打印，只改为不创建文件，观察 ERROR 工具结果及模型的后续解释。它验证工具执行失败的反馈，不代表协议异常、断线、关闭异常或另两套框架的失败路径已通过。
 
 主线保持：工具循环观察 → 三框架对照与隔离环境 → 模型/消息/工具/输出契约 → 扩展点与执行边界 → 运行时/并发/流式 → 会话/状态/MCP → 上下文/记忆/RAG/Skills → 权限/检查点/恢复 → 工作流/多 Agent/完成验证 → 综合实践。
+
+2026-11-18 接续安排：三框架 MCP 正常接入和 AgentScope 工具失败代表例已通过真实模型验证。接下来进入阶段 7；后四个大阶段合并为以下 8 组核心实验，组数不等于只需 8 次对话，不降低三框架功能、源码原理和差异比较的目标。
+
+| 顺序 | 原阶段 | 核心实验 |
+| --- | --- | --- |
+| 1 | 7 | 长工具结果处理、消息窗口与摘要压缩对照 |
+| 2 | 7 | 长期记忆的跨会话保存、检索、纠错和隔离 |
+| 3 | 7 | 小语料 RAG：切分、检索、过滤和来源核对 |
+| 4 | 7 | Skills 发现、渐进加载及工具执行边界 |
+| 5 | 8 | 工具权限、允许／拒绝／等待、人工确认及不可信工具输出 |
+| 6 | 8 | 检查点、暂停恢复、实际进程重启、幂等及工作区隔离 |
+| 7 | 9 | 顺序／并行工作流、路由与多 Agent 委派、失败归属和完成验证 |
+| 8 | 10 | 三框架比较、少量案例评估和综合实践 |
+
+优先复用已有实验补对照，机制不同再增加独立示例。前面尚未收口的并发／取消、各框架契约与扩展点比较，以及 MCP Resources／Prompts、其余失败路径仍保留待补，不因进入阶段 7 而记为完成。
 
 目前已有 Spring AI 工具循环、日志、会话参数、结构化输出、工具异常、预算与超时练习，也有 AgentScope 的分主题实验；模块拆分不代表所有专题都已完成。后续按专题分别在三个 `study-*` 模块运行对照，确有可复用契约时再提取到 core。
 
