@@ -112,6 +112,15 @@ mvn -pl study-agentscope -am -Dtest=McpStudyTest#chatWithMcpFileTool -DexcludedG
 # MCP 失败代表例：不创建目标文件，观察 ERROR 工具结果和模型的后续解释
 mvn -pl study-agentscope -am -Dtest=McpStudyTest#chatWithMissingMcpFile -DexcludedGroups= test
 
+# 上下文压缩：同一长工具结果的全文／截断／框架摘要对照，摘要生成额外调用模型
+mvn -pl study-agentscope -am -Dtest=ContextCompressionTest#compareFullTruncatedAndSummary -DexcludedGroups= test
+
+# 长期记忆：提取到每日文件，整理 MEMORY.md，新会话读取与纠错、不同用户隔离
+mvn -pl study-agentscope -am -Dtest=LongTermMemoryTest#rememberCorrectAndRecall -DexcludedGroups= test
+
+# RAG：本地关键词向量检索、按资料版本过滤、真实模型回答与来源核对，以及无命中对照
+mvn -pl study-spring-ai -am -Dtest=HarnessCoreDemoTest#chatWithRetrievedDocuments -DexcludedGroups= test
+
 # Java/Reactor 基础练习按方法单独运行
 mvn -pl study-agentscope -am -Dtest=ReactorStudyTest#creation -DexcludedGroups= test
 ```
@@ -159,6 +168,12 @@ MCP 示例各自放在独立的 `McpStudyTest`，使用同版本 filesystem serv
 | 6 | 8 | 检查点、暂停恢复、实际进程重启、幂等及工作区隔离 |
 | 7 | 9 | 顺序／并行工作流、路由与多 Agent 委派、失败归属和完成验证 |
 | 8 | 10 | 三框架比较、少量案例评估和综合实践 |
+
+第 1 组已新增 [ContextCompressionTest](study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/ContextCompressionTest.java) 代表实验：手工构造工具历史，调用 AgentScope 的 `ConversationCompactor`，再用真实模型对照全文、截断和摘要。实测全文及本次摘要保留了工单号、验收码和操作限制，截断丢失后两项；摘要将 4 条历史缩为 2 条。它单独验证压缩组件，不代表自动触发、会话写回、长结果外置、另两套框架摘要机制或所有信息无损已验证。
+
+第 2 组已新增 [LongTermMemoryTest](study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/LongTermMemoryTest.java) 代表实验：显式调用 `MemoryFlushManager` 提取到每日账本、`MemoryConsolidator` 整理到 `MEMORY.md`，由新建 Harness 的新会话加载记忆。真实模型已验证原值读取、明确纠错后读取新值及不同用户隔离；每日账本仍保留旧历史。为保证观察顺序，本例关闭自动后台记忆任务并等待主动写入完成，不代表自动触发、删除／过期、另两框架记忆组合或实际进程重启均已验证。
+
+第 3 组已在 [HarnessCoreDemoTest](study-spring-ai/src/test/java/com/chinazhouwy/miniharness/HarnessCoreDemoTest.java) 新增 `chatWithRetrievedDocuments`：TokenTextSplitter 处理短资料，SimpleVectorStore 存储本地二值关键词向量，QuestionAnswerAdvisor 按版本过滤、检索并增强提示词。真实模型实测命中 2026 退款规则后答出 3 个工作日、随机核验码和正确来源；2099 版本无命中时明确无法确定。应用从 RETRIEVED_DOCUMENTS 核对实际来源，来源标识也显式写入正文。此例不代表神经语义 Embedding、长文切分效果、混合检索／重排或另外两套框架的 RAG 已验证。
 
 优先复用已有实验补对照，机制不同再增加独立示例。前面尚未收口的并发／取消、各框架契约与扩展点比较，以及 MCP Resources／Prompts、其余失败路径仍保留待补，不因进入阶段 7 而记为完成。
 
