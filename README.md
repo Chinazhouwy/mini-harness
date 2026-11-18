@@ -148,6 +148,9 @@ mvn -pl study-agentscope -am -Dtest=WorkflowAndDelegationStudyTest#delegateWithS
 # 模型选择子 Agent：主管按问题选择助手，助手调用各自的 Java 查询工具
 mvn -pl study-agentscope -am -Dtest=WorkflowAndDelegationStudyTest#routeToSpecialist -DexcludedGroups= test
 
+# 子 Agent 查询失败：对照成功、失败反馈，用实际查询成功次数核对目标是否完成
+mvn -pl study-agentscope -am -Dtest=WorkflowAndDelegationStudyTest#delegateWithFailedQuery -DexcludedGroups= test
+
 # 子 Agent 参数：打印真实 Schema，Java 显式传参，对照携带与漏传 session_id
 mvn -pl study-agentscope -am -Dtest=SubAgentParametersStudyTest#showParametersAndSession -DexcludedGroups= test
 
@@ -202,7 +205,7 @@ MCP 示例各自放在独立的 `McpStudyTest`，使用同版本 filesystem serv
 | 7 | 9 | 顺序／并行工作流、路由与多 Agent 委派、失败归属和完成验证 |
 | 8 | 10 | 三框架比较、少量案例评估和综合实践 |
 
-当前主线在第 7 组，剩余两大组：第 7 组已补模型选择助手，接下来补失败归属与结果核对；第 8 组做三框架比较与小型综合实践。第 1—6 组已有代表实验，前文和下文标注的待补项仍保留，不据此认定三个框架所有能力均已覆盖。
+第 7 组的代表实验已包含顺序、并行、模型选择助手、会话接续、查询失败与结果核对；下一步进入最后一组（第 8 组）：三框架比较与小型综合实践。第 1—7 组已有代表实验，前文和下文标注的待补项仍保留，不据此认定各组全部细项或三个框架所有能力均已覆盖。
 
 第 1 组已新增 [ContextCompressionTest](study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/ContextCompressionTest.java) 代表实验：手工构造工具历史，调用 AgentScope 的 `ConversationCompactor`，再用真实模型对照全文、截断和摘要。实测全文及本次摘要保留了工单号、验收码和操作限制，截断丢失后两项；摘要将 4 条历史缩为 2 条。它单独验证压缩组件，不代表自动触发、会话写回、长结果外置、另两套框架摘要机制或所有信息无损已验证。
 
@@ -233,12 +236,13 @@ MCP 示例各自放在独立的 `McpStudyTest`，使用同版本 filesystem serv
 - `delegateAsTool`：把复核助手注册为 ask_checker 工具，主管输出工具请求，框架执行子 Agent 并回填结果。
 - `delegateWithSession`：主管连续两次调用 ask_checker，第一次传入工单与验收码，第二次只问验收码，并携带第一次工具结果里的 `session_id`。通过日志观察不同 Agent 实例、相同子会话及恢复的历史；父会话不会整体自动复制给子 Agent，但主管仍可通过 message 主动传入资料，这不是权限隔离机制。
 - `routeToSpecialist`：主管挂载 ask_ticket、ask_refund 两个子 Agent 工具，分别输入工单状态与退款规则问题，由模型选择委派目标；两题使用不同主管会话，避免历史互相影响。每个助手只注册自己的查询工具，主管没有直接注册这些查询方法。日志展示“用户问题 → 主管选择 → 子 Agent 调用 Java 方法 → 最终回答”，每题后打印累计执行次数。真实模型实测第一题工单=1、退款=0，第二题累计工单=1、退款=1。数据为本地虚构资料，不访问工单、支付或退款服务；Java 没有按关键词写 if/else 选择助手。
+- `delegateWithFailedQuery`：同一个工单查询分别跑服务可用、不可用两种场景。失败场景由 Java 查询方法真实抛出 IllegalStateException，框架转换为子 Agent 可见的错误工具结果，子 Agent 报告失败后主管继续回答。应用根据查询方法记录的 successfulReads 独立核对是否取得状态，不分析模型有没有说“完成”。实测成功场景尝试=1、成功=1，失败场景尝试=1、成功=0，主管明确报告任务未完成。此处是只读查询目标核对，不代表通用任务验收器或写操作幂等机制。
 
 日志按“全程模型请求 #”从上往下阅读，父子 Agent 共用请求序号；“委派 #”单独标记主管实际发出的工具请求。主管历史只展示条数，每个新工具结果在回填时展开一次；子 Agent 将历史与本次输入分开展示，历史重发不代表工具再次执行。这是阅读用摘要，省略系统提示等内容，不是完整 HTTP 报文。
 
 参数阅读另见 [SubAgentParametersStudyTest](study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/SubAgentParametersStudyTest.java)：打印 SubAgentConfig 全部五项配置、SubAgentTool 实际生成的参数 Schema 与实际返回文本。Java 显式构造 input Map，依次演示新会话、提取返回文本中的 session_id 后继续追问、漏传 ID 后新建会话。这里由代码填写参数，真实模型只在子 Agent 内回答，不包含主管模型的自动委派；也没有通过手写 Schema 或修改工具自动补入 ID。
 
-示例使用虚构工单，不含业务断言。五个入口已用真实模型运行；连续委派实测中，两个子 Agent 实例 ID 不同但 session_id 相同，第二次模型输入包含首轮历史，并回答出 DEMO-7319。当前使用内存状态存储，没有验证重启恢复。并行例子尚未实测失败与取消行为，模型选择助手仅覆盖两个清晰意图，尚未验证歧义与无匹配时的处理、多层委派或三框架完整协作对照，不因此标记第 7 组全部完成。工具参数及会话机制可参考 [SubAgentTool 官方说明](https://javadoc.io/static/io.agentscope/agentscope/2.0.0/io/agentscope/core/tool/subagent/SubAgentTool.html)，实际行为以项目当前 2.1.0-SNAPSHOT 依赖源码和运行日志为准。
+示例使用虚构工单，不含业务断言。六个入口已用真实模型运行；连续委派实测中，两个子 Agent 实例 ID 不同但 session_id 相同，第二次模型输入包含首轮历史，并回答出 DEMO-7319。当前使用内存状态存储，没有验证重启恢复。失败代表例只覆盖业务工具抛异常后的反馈，不代表模型请求失败、超时与取消均已验证；并行失败与取消仍待补。模型选择助手仅覆盖两个清晰意图，尚未验证歧义与无匹配时的处理、多层委派或三框架完整协作对照，不因此标记第 7 组全部完成。工具参数及会话机制可参考 [SubAgentTool 官方说明](https://javadoc.io/static/io.agentscope/agentscope/2.0.0/io/agentscope/core/tool/subagent/SubAgentTool.html)，实际行为以项目当前 2.1.0-SNAPSHOT 依赖源码和运行日志为准。
 
 目前已有 Spring AI 工具循环、日志、会话参数、结构化输出、工具异常、预算与超时练习，也有 AgentScope 的分主题实验；模块拆分不代表所有专题都已完成。后续按专题分别在三个 `study-*` 模块运行对照，确有可复用契约时再提取到 core。
 

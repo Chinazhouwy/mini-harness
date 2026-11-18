@@ -215,12 +215,49 @@ class WorkflowAndDelegationStudyTest {
         }
     }
 
-    /** 每个子 Agent 只注册自己的 Java 工具；主管只能看见 ask_ticket、ask_refund。 */
+    /** 同一个查询目标分别跑成功、失败；应用根据实际查询结果核对，而不从模型措辞推断完成。 */
+    @Test
+    @DisplayName("子 Agent 查询失败：错误逐层反馈，应用独立核对是否取得事实")
+    void delegateWithFailedQuery() throws Exception {
+        var model = model();
+        for (boolean available : new boolean[]{true, false}) {
+            System.out.println("\n【对照场景】查询服务" + (available ? "可用" : "不可用"));
+            var query = new TicketStatusTool(available);
+            var children = new ArrayList<ReActAgent>();
+            try {
+                var toolkit = new Toolkit();
+                toolkit.registration().subAgent(() -> specialist(model, "工单助手", query, children),
+                        SubAgentConfig.builder().toolName("ask_ticket")
+                                .description("委派工单助手查询 DEMO-001 的实际状态，查询服务可能失败")
+                                .forwardEvents(false)
+                                .build())
+                        .apply();
+                try (var supervisor = ReActAgent.builder().name("主管").model(model).toolkit(toolkit)
+                        .middleware(trace())
+                        .sysPrompt("先委派 ask_ticket 查询工单状态，再依据结果回答。如果查询失败，明确报告未查到状态、任务未完成；不要重试，不要猜测状态。")
+                        .build()) {
+                    var answer = supervisor.call("请查询演示工单 DEMO-001 当前的状态。")
+                            .block(Duration.ofMinutes(2));
+                    System.out.println("【主管最终回答】" + answer.getTextContent());
+                    // 这是本例查询目标的外部事实依据，不是框架自动判断，也不是检查回答有没有“完成”二字。
+                    System.out.println("【应用核对】查询尝试=" + query.calls + "，成功取得事实=" + query.successfulReads
+                            + "；查询目标=" + (query.successfulReads > 0 ? "已取得状态" : "未完成，未取得状态"));
+                }
+            } finally {
+                for (var child : children) {
+                    child.close();
+                }
+            }
+        }
+    }
+
+    /** 每个子 Agent 只注册自己的 Java 工具；主管只能看见注册给它的子 Agent 工具。 */
     private ReActAgent specialist(OpenAIChatModel model, String name, Object dataTool, ArrayList<ReActAgent> children) {
         var toolkit = new Toolkit();
         toolkit.registerTool(dataTool);
         var child = ReActAgent.builder().name(name).model(model).toolkit(toolkit).middleware(trace())
-                .sysPrompt("必须先调用自己的查询工具，再依据实际工具结果用一句中文回答，不编造事实。").build();
+                .sysPrompt("必须先调用自己的查询工具，再依据实际工具结果用一句中文回答，不编造事实。"
+                        + "如果工具报错，明确报告查询失败，不重试，不猜测结果。").build();
         children.add(child);
         return child;
     }
@@ -228,11 +265,26 @@ class WorkflowAndDelegationStudyTest {
     /** 只读本地虚构工单，演示真实的 Java 方法执行，不访问业务服务。 */
     public static class TicketStatusTool {
         int calls;
+        int successfulReads;
+        private final boolean available;
+
+        public TicketStatusTool() {
+            this(true);
+        }
+
+        public TicketStatusTool(boolean available) {
+            this.available = available;
+        }
 
         @Tool(name = "query_ticket_status", description = "查询虚构工单 DEMO-001 的处理状态")
         public String query() {
             calls++;
             System.out.println("【Java 工具执行】query_ticket_status");
+            if (!available) {
+                System.out.println("【Java 工具抛出异常】演示工单查询服务不可用");
+                throw new IllegalStateException("演示工单查询服务不可用");
+            }
+            successfulReads++;
             return "演示工单 DEMO-001 当前状态：处理中。";
         }
     }
