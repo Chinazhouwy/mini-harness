@@ -31,14 +31,13 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static com.chinazhouwy.miniharness.agentscope.study.RemoteSkillRepositories.HttpSkillRepository;
 import static com.chinazhouwy.miniharness.agentscope.study.RemoteSkillRepositories.NacosConfigSkillRepository;
 
@@ -163,7 +162,7 @@ class SkillsStudyTest {
         var ticketTool = new TicketTool();
         Toolkit toolkit = new Toolkit();
         toolkit.registerTool(ticketTool);
-        List<Boolean> bodyVisible = new ArrayList<>();
+        AtomicInteger rounds = new AtomicInteger();
         MiddlewareBase trace = new MiddlewareBase() {
             @Override
             public Flux<AgentEvent> onModelCall(Agent agent, RuntimeContext context, ModelCallInput input,
@@ -172,8 +171,7 @@ class SkillsStudyTest {
                     // 工具结果放在内容块内；序列化整个消息列表检查，不能只看顶层 getTextContent。
                     String messages = JsonUtils.getJsonCodec().toJson(input.messages());
                     boolean visible = messages.contains(marker);
-                    bodyVisible.add(visible);
-                    System.out.println("[模型请求 " + bodyVisible.size() + "] 看得到技能目录="
+                    System.out.println("[模型请求 " + rounds.incrementAndGet() + "] 看得到技能目录="
                             + messages.contains("ticket-brief") + "，看得到正文标记=" + visible);
                     return next.apply(input);
                 });
@@ -200,19 +198,14 @@ class SkillsStudyTest {
             var answer = agent.call("请按工单简报技能，查询 DEMO-001 的进展并生成简报。")
                     .block(Duration.ofMinutes(2));
             System.out.println("[最终回答] " + answer.getTextContent());
-            // 验证正文后来才进入模型请求，Java 工具确实执行，最终回答也使用了仅存在于技能正文的标记。
-            assertTrue(!bodyVisible.getFirst() && bodyVisible.contains(true) && ticketTool.calls > 0
-                    && answer.getTextContent().contains(marker), "应先发现、再加载正文并执行工具");
+            System.out.println("[技能正文中的原始标记] " + marker); // 与上方模型回答对照。
         }
     }
 
     /** 固定演示数据；Skill 定义步骤，这个 Java 方法提供真正可执行的能力。 */
     public static class TicketTool {
-        int calls;
-
         @Tool(name = "query_ticket", description = "查询演示工单的当前处理状态")
         public String queryTicket(@ToolParam(name = "ticketId", description = "工单编号") String ticketId) {
-            calls++;
             String result = "工单编号=" + ticketId + "；当前状态=处理中";
             System.out.println("[Java 工具执行] " + result);
             return result;

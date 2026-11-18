@@ -54,8 +54,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.IntStream;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 /** Spring AI 执行边界与状态学习入口。按方法观察记录、预算、异常和持久化；这些计数器与状态只用于各自 demo，不能直接当作共享生产组件。 */
 @org.junit.jupiter.api.Tag("live")
 public class HarnessCoreDemoTest {
@@ -90,6 +88,7 @@ public class HarnessCoreDemoTest {
         // add 用 EmbeddingModel 编码文档，随后存到本次测试的内存库；没有启动外部向量数据库。
         store.add(chunks);
         System.out.println("[资料入库] 原文档=" + documents.size() + "，片段=" + chunks.size());
+        System.out.println("[资料中的原始核验码] " + checkCode); // 与检索正文、回答及来源标识对照。
 
         var rag = QuestionAnswerAdvisor.builder(store)
                 // topK 是最多取几条；threshold 是相似度筛选阈值，不是回答正确率。
@@ -117,13 +116,6 @@ public class HarnessCoreDemoTest {
                     + " score=" + doc.getScore() + "\n[交给模型的资料] " + doc.getText()));
             String answer = response.chatResponse().getResult().getOutput().getText();
             System.out.println("[模型回答] " + answer);
-            if (year == 2026) {
-                // 随机码只出现在资料里；同时核对应用检索记录与回答来源，不能只信模型自称“引用了”。
-                assertTrue(retrieved.size() == 1 && "refund-2026.md".equals(retrieved.getFirst().getMetadata().get("source"))
-                        && answer.contains(checkCode) && answer.contains("refund-2026.md"), "应根据命中的资料回答并引用来源");
-            } else {
-                assertTrue(retrieved.isEmpty() && !answer.contains(checkCode), "无命中时不应获得前一轮的资料");
-            }
         }
     }
 

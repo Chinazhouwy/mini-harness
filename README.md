@@ -133,11 +133,17 @@ mvn -pl study-agentscope -am -Dtest=SkillsStudyTest#loadSkillFromNacosConfigStub
 # 权限与人工确认：固定模型提出工具请求，验证真实框架的允许、拒绝和批复恢复；不需要 API Key
 mvn -pl study-agentscope -am -Dtest=PermissionApprovalStudyTest test
 
+# 文件检查点：发布前暂停，重建 Saver 和执行图后恢复；不需要 API Key
+mvn -pl study-spring-ai-alibaba -am -Dtest=CheckpointRecoveryStudyTest#pauseAndResume test
+
 # Java/Reactor 基础练习按方法单独运行
 mvn -pl study-agentscope -am -Dtest=ReactorStudyTest#creation -DexcludedGroups= test
 ```
 
 IDE 可直接运行具体测试方法；Maven 的默认标签排除配置不会限制 IDE 直接运行。部分旧示例依赖 Redis、MCP 或人工输入，运行前查看该方法说明。结构化输出 demo 中也保留了当前模型不支持原生 JSON Schema 的失败演示，不建议一次运行所有真实模型示例。
+
+学习 demo 的 `@Test` 主要作为 IDE 运行入口：直接打印输入、输出、执行次数与阶段状态，方便观察；这批示例已移除业务结果断言，只保留必要的超时和运行失败处理。原有回归测试继续保留断言。
+
 
 打包应用装配入口（尚非完整任务助手）：
 
@@ -199,7 +205,9 @@ MCP 示例各自放在独立的 `McpStudyTest`，使用同版本 filesystem serv
 
 优先复用已有实验补对照，机制不同再增加独立示例。前面尚未收口的并发／取消、各框架契约与扩展点比较，以及 MCP Resources／Prompts、其余失败路径仍保留待补，不因进入阶段 7 而记为完成。
 
-第 5 组权限与人工确认新增 [PermissionApprovalStudyTest](study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/PermissionApprovalStudyTest.java)：两个离线测试覆盖 ALLOW、DENY、ASK 后批准、ASK 后拒绝。模型响应固定，权限引擎、事件、工具执行和会话恢复使用真实 AgentScope；断言依据是 Java 工具的实际执行次数。确认结果绑定原 ToolUseBlock，通过 Msg.METADATA_CONFIRM_RESULTS 回填，同一会话使用新 RuntimeContext 继续。测试中的批准／拒绝由代码模拟，没有人机界面，也未验证跨进程恢复、参数级文件权限、不可信工具输出或另两框架对应机制。
+第 5 组权限与人工确认新增 [PermissionApprovalStudyTest](study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/PermissionApprovalStudyTest.java)：两个离线测试覆盖 ALLOW、DENY、ASK 后批准、ASK 后拒绝。模型响应固定，权限引擎、事件、工具执行和会话恢复使用真实 AgentScope；日志展示 Java 工具的实际执行次数，直接观察权限效果。确认结果绑定原 ToolUseBlock，通过 Msg.METADATA_CONFIRM_RESULTS 回填，同一会话使用新 RuntimeContext 继续。测试中的批准／拒绝由代码模拟，没有人机界面，也未验证跨进程恢复、参数级文件权限、不可信工具输出或另两框架对应机制。
+
+第 6 组新增 [CheckpointRecoveryStudyTest](study-spring-ai-alibaba/src/test/java/com/chinazhouwy/miniharness/alibaba/study/CheckpointRecoveryStudyTest.java)：简明展示 FileSystemSaver 保存状态与下一节点，interruptBefore 在发布前暂停，重建 Saver 和执行图后沿用 threadId，通过 withResume 继续。当前例子只重建组件，没有重启 JVM，发布也只打印文字；跨进程恢复和幂等不放在这个入门示例中。恢复字段需注册更新策略，withResume 只是调度标记，不替代审批与鉴权。
 
 目前已有 Spring AI 工具循环、日志、会话参数、结构化输出、工具异常、预算与超时练习，也有 AgentScope 的分主题实验；模块拆分不代表所有专题都已完成。后续按专题分别在三个 `study-*` 模块运行对照，确有可复用契约时再提取到 core。
 

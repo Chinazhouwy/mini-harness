@@ -19,8 +19,6 @@ import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 /** 长期记忆：使用框架提取／整理组件写文件，再由新 Harness 会话加载。 */
 @Tag("live")
 class LongTermMemoryTest {
@@ -43,6 +41,7 @@ class LongTermMemoryTest {
                             .build();
         String oldCode = "MEM-" + UUID.randomUUID().toString().substring(0, 8);
         String newCode = "MEM-" + UUID.randomUUID().toString().substring(0, 8);
+        System.out.println("[原始项目代号] " + oldCode);
         var first = context("user-A", "session-1");
 
         try (HarnessAgent writer = agent(workspace, model)) {
@@ -56,7 +55,6 @@ class LongTermMemoryTest {
                 }
             }
             System.out.println("[首次 MEMORY.md]\n" + memory.readMemoryMd(first));
-            assertTrue(memory.readMemoryMd(first).contains(oldCode), "整理后的记忆应包含首次项目代号");
         }
 
         // 新对象、新 sessionId，仅沿用工作区与 userId；本次请求不包含偏好和随机项目代号。
@@ -65,15 +63,14 @@ class LongTermMemoryTest {
             String question = "根据已有记忆，我偏好的回答语言和项目代号是什么？不知道就说不知道，不调用工具。";
             var answer = reader.call(question, second).block(Duration.ofMinutes(2));
             System.out.println("[新会话读取] " + answer.getTextContent());
-            assertTrue(answer.getTextContent().contains(oldCode), "新会话应从工作区记忆读到随机代号");
 
             // 用户明确纠错：每日记录仍保留历史，MEMORY.md 应整理为新值；这是模型整理结果，不是硬编码覆盖字段。
+            System.out.println("[用户更正] 旧代号=" + oldCode + "，新代号=" + newCode);
             save(reader.getWorkspaceManager(), model, second,
                     "更正之前的项目代号：旧值 " + oldCode + " 已作废，现在是 " + newCode
                             + "。请以新值为准，我偏好简洁中文的习惯不变。");
             String corrected = reader.getWorkspaceManager().readMemoryMd(second);
             System.out.println("[纠错后的 MEMORY.md]\n" + corrected);
-            assertTrue(corrected.contains(newCode), "整理后的记忆应包含新项目代号");
         }
 
         try (HarnessAgent reader = agent(workspace, model)) {
@@ -81,14 +78,11 @@ class LongTermMemoryTest {
             var answer = reader.call("我的当前项目代号是什么？仅依据记忆回答，不调用工具。", third)
                     .block(Duration.ofMinutes(2));
             System.out.println("[纠错后新会话读取] " + answer.getTextContent());
-            assertTrue(answer.getTextContent().contains(newCode) && !answer.getTextContent().contains(oldCode),
-                    "当前回答应使用新值，而不是已作废的代号");
 
             // 同一工作区改 userId：直接检查实际读取内容，再观察模型回答，避免只靠一句“不知道”判断隔离。
             var other = context("user-B", "session-1");
             String otherMemory = reader.getWorkspaceManager().readMemoryMd(other);
             System.out.println("[另一用户的 MEMORY.md] " + (otherMemory.isBlank() ? "空" : otherMemory));
-            assertTrue(otherMemory.isBlank(), "新用户不应读到 user-A 的记忆文件");
             System.out.println("[另一用户回答] " + reader.call("我的项目代号是什么？仅依据记忆回答，不调用工具。", other)
                     .block(Duration.ofMinutes(2)).getTextContent());
         }

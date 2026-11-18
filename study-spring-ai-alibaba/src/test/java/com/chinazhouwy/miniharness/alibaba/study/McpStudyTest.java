@@ -29,8 +29,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 /** MCP 同题对照：文件服务与 Spring AI 示例相同，工具循环改由 Alibaba Graph 执行。 */
 @Tag("live")
 class McpStudyTest {
@@ -93,9 +91,7 @@ class McpStudyTest {
                     System.out.println("[Graph " + message.getMessageType() + "] " + message.getText());
                 }
             }
-            String answer = messages.getLast().getText();
             System.out.println("[文件实际校验码] " + marker);
-            assertTrue(answer.contains(marker), "最终回答应包含从真实文件读取的校验码");
         }
         System.out.println("[MCP 连接] 已关闭");
     }
