@@ -8,23 +8,27 @@
 mini-harness/
 ├── pom.xml                         # 聚合构建与通用插件，不引入任何 Agent 框架
 ├── config/                         # 本地模型配置，真实凭据不入库、不进 JAR
-├── miniharness-core/               # 框架无关的公共代码，目前只有配置读取
-├── miniharness-spring-ai/          # 现有 HarnessCore、模型创建、工具与日志
+├── miniharness-core/               # 框架无关的公共代码，目前只有配置读取 ModelConfig
+├── miniharness-runtime/            # 自研 Harness 内核：状态机/事件/DAG 执行/路由/评测/审批（只依赖 JDK+Jackson）
+├── miniharness-spring-ai/          # Spring AI 适配层：HarnessCore、模型创建、工具日志、SpringAiModelPort
 ├── study-spring-ai/                # Spring AI 学习测试与 demo
 ├── study-agentscope/               # AgentScope 学习测试与 demo
-├── study-spring-ai-alibaba/         # Alibaba ReactAgent 学习测试与 demo
+├── study-spring-ai-alibaba/        # Alibaba ReactAgent 学习测试与 demo
+├── studio/                         # Vue3 前端（独立 npm 工程，只通过 HTTP/SSE 与后端通信）
 └── examples/
-    └── task-assistant/             # Spring Boot 应用装配入口，目前仅有启动类
+    └── task-assistant/             # Spring Boot 应用：装配 runtime + REST/SSE + 打包 studio 产物为单 jar
 ```
 
 | 模块 | 依赖与职责 |
 | --- | --- |
-| `miniharness-core` | 主代码只依赖 JDK。后续确有需求时再提取 runtime、context、tool、session、event 契约，当前不创建空实现。 |
-| `miniharness-spring-ai` | 依赖 core、Spring AI **2.0.2**、agent-utils **0.13.0**；承接现有 Spring AI 实现。`HarnessCore` 依赖 Spring AI，暂不当成通用核心。 |
+| `miniharness-core` | 主代码只依赖 JDK，目前只有 `ModelConfig` 配置读取；被适配层与学习模块共用。 |
+| `miniharness-runtime` | **自研内核（v0.1）**：只依赖 JDK+Jackson，不含任何 Agent 框架类型。包含 Task/Run/Node 状态机与预算（core/task）、事件总线与回放（event）、DAG 编译与执行（workflow，含超时/重试/取消）、意图路由（capability）、失败经验→候选→评测→审批→回滚（evolution）、执行策略对比（strategy）、合成金融 Domain Pack（domain/finance）；模型通过 `ModelPort` 端口接入，离线用 Noop/Scripted 实现。设计见 [DESIGN-v0.1](docs/DESIGN-v0.1.md)。 |
+| `miniharness-spring-ai` | 依赖 core、runtime、Spring AI **2.0.2**、agent-utils **0.13.0**；既有 `HarnessCore` 学习实现，也有把 Spring AI 接到内核 `ModelPort` 的 `SpringAiModelPort` 适配。 |
+| `studio` | Vue3 + Vite 前端，5 个页面（Chat/Tasks/Run Inspector/Workflow Canvas/Evolution Review）；`scripts/build-studio.sh` 构建并拷贝产物到 task-assistant 静态目录。使用见 [STUDIO-GUIDE](docs/STUDIO-GUIDE.md)。 |
 | `study-spring-ai` | 依赖 Spring AI 适配模块；保留 `HarnessCoreDemo`、`HarnessCoreDemoTest`、手写循环及 Spring AI 学习测试。 |
 | `study-agentscope` | 依赖 core、AgentScope **2.1.0-SNAPSHOT**；沿用其 Schema 4.38.0，不再替换 Surefire 运行类路径。新环境需要先取得该快照依赖。 |
 | `study-spring-ai-alibaba` | 依赖 core、Alibaba **1.1.2.2** 和 Spring AI **1.1.2**，本模块单独管理 Jackson 2.19.4。 |
-| `task-assistant` | 只装配 `miniharness-spring-ai`。旧金融静态页已清理；目前仅有启动入口，任务助手业务尚未实现。 |
+| `task-assistant` | Spring Boot 应用：装配 runtime 引擎 + `miniharness-spring-ai` 适配，提供 REST/SSE（Task/Run/Chat/Workflow/Evolution/System 控制器），打包 studio 产物为 UI+API 单 jar；端到端闭环测试 `EndToEndClosedLoopTest` 在此模块。 |
 
 三个 `study-*` 模块彼此不依赖，也不被应用依赖。父工程不继承 Spring Boot 父 POM、不导入 Spring AI BOM；框架版本由使用它的模块自行管理。
 
