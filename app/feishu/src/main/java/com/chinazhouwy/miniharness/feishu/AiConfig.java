@@ -26,7 +26,8 @@ public class AiConfig {
 
     @Bean
     public AgentFactory agentFactory(OpenAIChatModel model,
+                                     FeishuTools tools,
                                      @Value("${feishu.state.dir:logs/feishu-agent-state}") String stateDir) {
-        return new AgentFactory(model, stateDir);
+        return new AgentFactory(model, stateDir, tools);
     }
 }

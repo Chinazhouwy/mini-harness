@@ -20,8 +20,9 @@
 从仓库根目录运行：
 
 ```bash
-mvn -pl app/feishu -am test
-mvn -pl app/feishu -am package -DskipTests
+mvn -f miniharness-core/pom.xml -DskipTests install
+mvn -f app/feishu/pom.xml clean test
+mvn -f app/feishu/pom.xml clean package -DskipTests
 java -jar app/feishu/target/app-feishu-0.1.0.jar
 ```
 
@@ -46,7 +47,8 @@ Spring Boot 日志同时输出到控制台和 `logs/feishu-bot.log`。日志只�
 ## 已知边界
 
 - 只处理 `text` 消息；图片、富文本等事件会忽略并在日志里说明。
-- AI 会话按飞书 `chat_id` 存在 AgentScope 的 `JsonFileAgentStateStore` 中，默认目录 `logs/feishu-agent-state`，重启后能接续；不使用工具。
+- AI 会话按飞书 `chat_id` 存在 AgentScope 的 `JsonFileAgentStateStore` 中，默认目录 `logs/feishu-agent-state`，重启后能接续。
+- Agent 注册了 Pi 风格四个工具：`read`、`write`、`edit`、`bash`。文件操作复用 AgentScope Harness 的 `FilesystemTool`，限制在服务进程当前目录下的 `.feishu-agent-workspace/`；命令执行复用 AgentScope Core 的 `ShellCommandTool`，在服务进程当前目录仅允许 `ls/pwd/cat/find/grep/git/java/javac/mvn/echo`。模型调用工具时日志会打印工具名和参数。
 - 飞书要求事件处理尽快返回，所以消息处理提交到共享虚拟线程执行器 `feishu-ai-worker-N`。
 - 关闭 Spring 容器时会停止长连接并关闭线程池。
 - 如果收不到事件，先检查后台是否选择长连接、事件是否已订阅、应用版本是否已发布。

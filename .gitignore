@@ -26,6 +26,7 @@ logs/
 data/
 /.playwright-cli/
 .agentscope/
+.feishu-agent-workspace/
 
 # Studio 前端构建产物与依赖
 app/studio/node_modules/
