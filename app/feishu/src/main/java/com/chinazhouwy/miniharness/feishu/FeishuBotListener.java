@@ -95,7 +95,7 @@ public class FeishuBotListener {
             }
             log.info("开始调用 AI messageId={} chatId={}", message.getMessageId(), chatId);
             long start = System.nanoTime();
-            String answer = aiReplyService.reply(text);
+            String answer = aiReplyService.reply(chatId, text);
             long latencyMs = (System.nanoTime() - start) / 1_000_000;
             log.info("AI 回复生成成功 messageId={}，耗时={}ms，长度={}，内容={}",
                     message.getMessageId(), latencyMs,
