@@ -10,6 +10,7 @@ mini-harness/
 ├── config/                         # 本地模型配置，真实凭据不入库、不进 JAR
 ├── miniharness-core/               # 框架无关公共代码：配置读取 ModelConfig
 ├── miniharness-runtime/            # 自研 Harness 内核：状态机/事件/DAG 执行/路由/评测/审批（只依赖 JDK+Jackson）
+├── miniharness-plugin/             # 独立 Java 插件内核：服务/inject/生命周期/子作用域
 ├── miniharness-spring-ai/          # Spring AI 适配层：HarnessCore、模型创建、工具日志、SpringAiModelPort
 ├── study/                          # 三框架学习线（不被应用依赖）
 │   ├── study-spring-ai/            # Spring AI 学习测试与 demo
@@ -17,6 +18,8 @@ mini-harness/
 │   └── study-spring-ai-alibaba/    # Alibaba ReactAgent 学习测试与 demo
 └── app/                            # 应用线：后端 + 前端一起
     ├── task-assistant/             # Spring Boot 应用：装配 runtime + REST/SSE，打包前端产物为单 jar
+    ├── bot-team/                   # 最小多 Bot 团队：房间/委派/文件记忆/动作审批
+    ├── feishu/                     # Spring Boot 飞书 AI 机器人：长连接收消息，调用模型回答
     └── studio/                     # Vue3 前端（独立 npm 工程，只通过 HTTP/SSE 与后端通信）
 ```
 
@@ -24,6 +27,9 @@ mini-harness/
 | --- | --- |
 | `miniharness-core` | 主代码只依赖 JDK，目前只有 `ModelConfig` 配置读取；被适配层与学习模块共用。 |
 | `miniharness-runtime` | **自研内核（v0.1）**：只依赖 JDK+Jackson，不含任何 Agent 框架类型。包含 Task/Run/Node 状态机与预算（core/task）、事件总线与回放（event）、DAG 编译与执行（workflow，含超时/重试/取消）、意图路由（capability）、失败经验→候选→评测→审批→回滚（evolution）、执行策略对比（strategy）、合成金融 Domain Pack（domain/finance）；模型通过 `ModelPort` 端口接入，离线用 Noop/Scripted 实现。设计见 [DESIGN-v0.1](docs/DESIGN-v0.1.md)。 |
+| `miniharness-plugin` | 只依赖 JDK 的服务注册与生命周期内核；参考 Cordis 的 inject/effect/子作用域。见 [模块说明](miniharness-plugin/README.md)。 |
+| `bot-team` | 多 Bot 应用骨架：目录、共享房间、显式委派、短期/长期记忆、WAL 文件恢复和危险动作审批；通过 `ModelPort` 接模型。见 [模块说明](app/bot-team/README.md)。 |
+| `feishu` | Spring Boot 常驻应用：官方 SDK 长连接接收文本消息，经 AgentScope4j 模型生成回答后发回原会话。见 [模块说明](app/feishu/README.md)。 |
 | `miniharness-spring-ai` | 依赖 core、runtime、Spring AI **2.0.2**、agent-utils **0.13.0**；既有 `HarnessCore` 学习实现，也有把 Spring AI 接到内核 `ModelPort` 的 `SpringAiModelPort` 适配。 |
 | `studio` | Vue3 + Vite 前端，5 个页面（Chat/Tasks/Run Inspector/Workflow Canvas/Evolution Review）；`scripts/build-studio.sh` 构建并拷贝产物到 task-assistant 静态目录。使用见 [STUDIO-GUIDE](docs/STUDIO-GUIDE.md)。 |
 | `study/study-spring-ai` | 依赖 Spring AI 适配模块；保留 `HarnessCoreDemo`、`HarnessCoreDemoTest`、手写循环及 Spring AI 学习测试。 |
@@ -179,6 +185,16 @@ IDE 可直接运行具体测试方法；Maven 的默认标签排除配置不会�
 mvn -pl app/task-assistant -am -DskipTests package
 java -jar app/task-assistant/target/task-assistant-0.1.0.jar
 ```
+
+启动 Spring Boot + AgentScope4j 飞书 AI 机器人：
+
+```bash
+mvn -pl app/feishu -am test
+mvn -pl app/feishu -am package -DskipTests
+java -jar app/feishu/target/app-feishu-0.1.0.jar
+```
+
+飞书后台、凭证与运行边界见 [app/feishu/README.md](app/feishu/README.md)。运行日志写入项目根目录的 `logs/feishu-bot.log`，该目录已通过 `.gitignore` 排除。
 
 ## 学习方向
 

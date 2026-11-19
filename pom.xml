@@ -12,11 +12,14 @@
     <modules>
         <module>miniharness-core</module>
         <module>miniharness-runtime</module>
+        <module>miniharness-plugin</module>
         <module>miniharness-spring-ai</module>
         <module>study/study-spring-ai</module>
         <module>study/study-agentscope</module>
         <module>study/study-spring-ai-alibaba</module>
         <module>app/task-assistant</module>
+        <module>app/bot-team</module>
+        <module>app/feishu</module>
     </modules>
 
     <!-- 父工程只统一 Java、测试与构建工具，不引入任一框架的 BOM 或运行时依赖。 -->

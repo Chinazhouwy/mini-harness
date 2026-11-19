@@ -17,7 +17,9 @@ Thumbs.db
 # Environment
 .env
 **/openrouter.local.properties
+**/feishu.local.properties
 # Logs
+logs/
 *.log
 
 # 本地学习数据与工具缓存
