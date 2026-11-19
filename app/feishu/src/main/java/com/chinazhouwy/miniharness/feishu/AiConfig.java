@@ -2,6 +2,7 @@ package com.chinazhouwy.miniharness.feishu;
 
 import com.chinazhouwy.miniharness.model.ModelConfig;
 import io.agentscope.extensions.model.openai.OpenAIChatModel;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -24,7 +25,8 @@ public class AiConfig {
     }
 
     @Bean
-    public AgentFactory agentFactory(OpenAIChatModel model) {
-        return new AgentFactory(model);
+    public AgentFactory agentFactory(OpenAIChatModel model,
+                                     @Value("${feishu.state.dir:logs/feishu-agent-state}") String stateDir) {
+        return new AgentFactory(model, stateDir);
     }
 }

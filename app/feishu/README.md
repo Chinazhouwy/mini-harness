@@ -46,7 +46,7 @@ Spring Boot 日志同时输出到控制台和 `logs/feishu-bot.log`。日志只�
 ## 已知边界
 
 - 只处理 `text` 消息；图片、富文本等事件会忽略并在日志里说明。
-- AI 回复会按飞书 `chat_id` 从本地 JSONL 读取最近 20 条消息并拼入模型输入，重启后仍能接续；不使用工具。
+- AI 会话按飞书 `chat_id` 存在 AgentScope 的 `JsonFileAgentStateStore` 中，默认目录 `logs/feishu-agent-state`，重启后能接续；不使用工具。
 - 飞书要求事件处理尽快返回，所以消息处理提交到共享虚拟线程执行器 `feishu-ai-worker-N`。
 - 关闭 Spring 容器时会停止长连接并关闭线程池。
 - 如果收不到事件，先检查后台是否选择长连接、事件是否已订阅、应用版本是否已发布。

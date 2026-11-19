@@ -194,7 +194,7 @@ mvn -pl app/feishu -am package -DskipTests
 java -jar app/feishu/target/app-feishu-0.1.0.jar
 ```
 
-飞书后台、凭证与运行边界见 [app/feishu/README.md](app/feishu/README.md)。运行日志写入项目根目录的 `logs/feishu-bot.log`，会话历史按 `chat_id` 写入 `logs/feishu-conversations/*.jsonl`，默认保留最近 20 条；这些目录已通过 `.gitignore` 排除。
+飞书后台、凭证与运行边界见 [app/feishu/README.md](app/feishu/README.md)。运行日志写入项目根目录的 `logs/feishu-bot.log`，会话状态由 AgentScope 按 `chat_id` 写入 `logs/feishu-agent-state/`；这些目录已通过 `.gitignore` 排除。
 
 ## 学习方向
 
