@@ -32,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * 真实模型下的执行策略对比（@Tag("live")，默认被 excludedGroups 排除，需手动运行）：
- * mvn -pl examples/task-assistant -am test -Dtest=LiveStrategyComparisonTest -DexcludedGroups= test
+ * mvn -pl app/task-assistant -am test -Dtest=LiveStrategyComparisonTest -DexcludedGroups= test
  * 本地 config/openrouter.local.properties 未配置或不可用时自动跳过（Assumptions）。
  */
 @Tag("live")

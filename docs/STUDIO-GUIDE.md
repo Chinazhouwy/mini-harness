@@ -2,33 +2,33 @@
 
 > 目标：读完这篇 + 照着代码里的注释，你能明白「页面上每个数字是从哪来的」，
 > 并能自己动手改一个页面的小功能。
-> 所有前端代码都在 `studio/` 目录，与 Java 后端**只通过 HTTP/SSE 通信**，互不依赖代码。
+> 所有前端代码都在 `app/studio/` 目录，与 Java 后端**只通过 HTTP/SSE 通信**，互不依赖代码。
 
 ## 一、先把项目跑起来
 
 ```bash
 # 终端 1：先启动 Java 后端（提供 /api 接口）
 cd /Users/chinazhouwy/doc/MiniHarness
-mvn clean package -DskipTests -pl examples/task-assistant -am
-MINIHARNESS_MODEL_MODE=offline java -jar examples/task-assistant/target/task-assistant-0.1.0.jar
+mvn clean package -DskipTests -pl app/task-assistant -am
+MINIHARNESS_MODEL_MODE=offline java -jar app/task-assistant/target/task-assistant-0.1.0.jar
 
 # 终端 2：启动前端开发服务器（带热更新：改代码浏览器自动刷新）
-cd studio
+cd app/studio
 npm install        # 第一次需要，安装 vue/vite 等依赖
 npm run dev        # 打开 http://localhost:5173
 ```
 
 开发模式下 Vite（前端构建工具）会把所有 `/api` 开头的请求自动转发给
-`http://127.0.0.1:8080`（见 `studio/vite.config.ts`），所以前端代码里写的都是
+`http://127.0.0.1:8080`（见 `app/studio/vite.config.ts`），所以前端代码里写的都是
 相对路径 `/api/...`，不用关心后端在哪个端口。
 
-也可以不跑后端、直接用打包好的单 jar：`java -jar examples/task-assistant/target/task-assistant-0.1.0.jar`
+也可以不跑后端、直接用打包好的单 jar：`java -jar app/task-assistant/target/task-assistant-0.1.0.jar`
 然后访问 http://127.0.0.1:8080（前端已构建并打包进去了）。
 
 ## 二、目录地图（每个文件是干嘛的）
 
 ```text
-studio/
+app/studio/
 ├── index.html                 # 唯一的 HTML 文件，只有一个空 <div id="app">
 ├── vite.config.ts             # 构建配置：/api 代理到后端 8080
 ├── src/

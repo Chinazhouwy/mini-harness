@@ -16,7 +16,7 @@
 ### 模块现状（实际能力，非 README 规划）
 - `miniharness-core`：仅 `ModelConfig`（外部配置读取，不依赖 Spring）→ **已具备框架无关基因，可复用**。
 - `miniharness-spring-ai`：`HarnessCore`（单轮 ChatClient 门面 + 三层观测：HTTP 拦截器 / StreamAdvisor / ToolCallingManager 装饰器）、`ModelCreator`（OpenAI 兼容模型工厂）、`FileSearchTool`/`ToolCofig`。**无状态、无 Workflow、无事件，不能冒充 Harness Runtime** → 保留为「模型适配层」，新增 Port 适配器而非重构。
-- `examples/task-assistant`：空壳 Spring Boot 4.1.0（仅 starter-web + 启动类）→ **复用为应用装配入口**，新增 REST/SSE 控制器与 Bean 装配。
+- `app/task-assistant`：空壳 Spring Boot 4.1.0（仅 starter-web + 启动类）→ **复用为应用装配入口**，新增 REST/SSE 控制器与 Bean 装配。
 - 三个 `study-*`：真实跑过的学习实验矩阵（超时/预算/重试、上下文策略、registerSchema 挂起回填、权限 7 场景、Graph/checkpoint）。本次以它们为**能力参照**，不破坏、不依赖。
 
 ### 复用决策
@@ -24,9 +24,9 @@
 | --- | --- | --- |
 | 配置读取 | `miniharness-core/ModelConfig` | 直接复用 |
 | 真实模型调用 | `miniharness-spring-ai/ModelCreator+HarnessCore` | 新写 `SpringAiModelPort` 实现 runtime 的 `ModelPort` 接口（依赖方向：spring-ai 适配层 → runtime core） |
-| 工具循环参考 | `study-spring-ai/ManualSpringAiLoopTest` | 参考其手写循环结构实现 runtime 的确定性 Workflow 节点执行（不引入框架类型） |
-| 挂起/回填范式 | `study-agentscope/RegisterSchemaTest` | v0.1 只实现「人工审批节点」；挂起恢复协议记为后续任务 |
-| 应用装配 | `examples/task-assistant` | 原地扩展 |
+| 工具循环参考 | `study/study-spring-ai/ManualSpringAiLoopTest` | 参考其手写循环结构实现 runtime 的确定性 Workflow 节点执行（不引入框架类型） |
+| 挂起/回填范式 | `study/study-agentscope/RegisterSchemaTest` | v0.1 只实现「人工审批节点」；挂起恢复协议记为后续任务 |
+| 应用装配 | `app/task-assistant` | 原地扩展 |
 
 ## 二、新增 Maven 模块
 

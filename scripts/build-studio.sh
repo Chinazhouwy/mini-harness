@@ -2,7 +2,7 @@
 # 构建 Studio 前端并拷贝进 Spring Boot 静态资源，使单个 jar 同时提供 UI 与 API。
 # 用法: scripts/build-studio.sh
 set -euo pipefail
-cd "$(dirname "$0")/../studio"
+cd "$(dirname "$0")/../app/studio"
 
 # 兼容 nvm 环境：非交互 shell 里 npm 可能不在 PATH，按版本目录探测。
 NPM_BIN="$(command -v npm || true)"
@@ -24,7 +24,7 @@ fi
 "$NPM_BIN" run build
 
 cd ..
-rm -rf examples/task-assistant/src/main/resources/static
-mkdir -p examples/task-assistant/src/main/resources/static
-cp -r studio/dist/* examples/task-assistant/src/main/resources/static/
-echo "Studio 已拷贝到 examples/task-assistant/src/main/resources/static"
+rm -rf app/task-assistant/src/main/resources/static
+mkdir -p app/task-assistant/src/main/resources/static
+cp -r studio/dist/* app/task-assistant/src/main/resources/static/
+echo "Studio 已拷贝到 app/task-assistant/src/main/resources/static"

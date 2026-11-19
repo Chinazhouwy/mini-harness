@@ -20,7 +20,7 @@
 
 | # | 验收项 | 状态 | 证据 |
 | --- | --- | --- | --- |
-| 1 | 可启动的 Java 后端 | ✅ | `java -jar examples/task-assistant/target/task-assistant-0.1.0.jar`，UI+API 单 jar 提供 |
+| 1 | 可启动的 Java 后端 | ✅ | `java -jar app/task-assistant/target/task-assistant-0.1.0.jar`，UI+API 单 jar 提供 |
 | 2 | 可启动的 Vue3 前端 | ✅ | `studio/`（npm run dev / build）；build 产物已随 jar 提供，浏览器实测 5 页 |
 | 3 | 框架无关 Harness 内核 | ✅ | `miniharness-runtime` 只依赖 JDK+Jackson，无 Spring AI/AgentScope/Alibaba 类型 |
 | 4 | 真实执行的金融研究 Workflow | ✅ | profitability-research v1/v2，节点确定性执行，工具 `finance.load_statements` |
@@ -39,7 +39,7 @@ study-*（三个学习模块，未改动）        ← 不被任何模块依赖
 miniharness-core（配置读取）          ← 复用
 miniharness-runtime（框架无关内核）    ← 只依赖 JDK+Jackson
 miniharness-spring-ai（适配层）        ← 新增 SpringAiModelPort；依赖方向：适配层→内核
-examples/task-assistant（装配+API）    ← 组装引擎 + REST/SSE
+app/task-assistant（装配+API）    ← 组装引擎 + REST/SSE
 studio/（Vue3，独立 npm 工程）         ← 只通过 HTTP/SSE 通信
 ```
 
@@ -103,8 +103,8 @@ studio/（Vue3，独立 npm 工程）         ← 只通过 HTTP/SSE 通信
 
 ```bash
 # 后端（离线确定性模式，UI+API 单 jar）
-mvn clean package -DskipTests -pl examples/task-assistant -am
-MINIHARNESS_MODEL_MODE=offline java -jar examples/task-assistant/target/task-assistant-0.1.0.jar
+mvn clean package -DskipTests -pl app/task-assistant -am
+MINIHARNESS_MODEL_MODE=offline java -jar app/task-assistant/target/task-assistant-0.1.0.jar
 # 打开 http://127.0.0.1:8080/ （auto 模式且配置了 config/openrouter.local.properties 时自动接真实模型）
 
 # 前端开发模式
@@ -114,7 +114,7 @@ cd studio && npm install && npm run dev   # http://localhost:5173，/api 代理�
 mvn test
 
 # 端到端闭环（10 步，全 HTTP）
-mvn -pl examples/task-assistant -am test -Dtest=EndToEndClosedLoopTest
+mvn -pl app/task-assistant -am test -Dtest=EndToEndClosedLoopTest
 ```
 
 UI 内的最短闭环路径：Chat 输入「研究华夏制造的盈利能力，分析利润率变化」→ 自动执行；Evolution Review 点「运行自进化实验」→ 查看两候选评测 → 批准 v2 → Chat 重新发起（缺陷输入被拒）→ Workflow Canvas 对比 v1/v2。

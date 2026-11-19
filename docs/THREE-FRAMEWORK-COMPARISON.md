@@ -6,16 +6,16 @@
 
 | 框架 | 当前版本 | 运行方法 |
 | --- | --- | --- |
-| Spring AI | 2.0.2 | [HarnessCoreDemoTest#compareTicketTask](../study-spring-ai/src/test/java/com/chinazhouwy/miniharness/HarnessCoreDemoTest.java) |
-| Spring AI Alibaba | 1.1.2.2，使用 Spring AI 1.1.2 | [FrameworkComparisonStudyTest#compareTicketTask](../study-spring-ai-alibaba/src/test/java/com/chinazhouwy/miniharness/alibaba/study/FrameworkComparisonStudyTest.java) |
-| AgentScope | 2.1.0-SNAPSHOT | [FrameworkComparisonStudyTest#compareTicketTask](../study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/FrameworkComparisonStudyTest.java) |
+| Spring AI | 2.0.2 | [HarnessCoreDemoTest#compareTicketTask](../study/study-spring-ai/src/test/java/com/chinazhouwy/miniharness/HarnessCoreDemoTest.java) |
+| Spring AI Alibaba | 1.1.2.2，使用 Spring AI 1.1.2 | [FrameworkComparisonStudyTest#compareTicketTask](../study/study-spring-ai-alibaba/src/test/java/com/chinazhouwy/miniharness/alibaba/study/FrameworkComparisonStudyTest.java) |
+| AgentScope | 2.1.0-SNAPSHOT | [FrameworkComparisonStudyTest#compareTicketTask](../study/study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/FrameworkComparisonStudyTest.java) |
 
 三个模块分别解析依赖。没有把两个 Spring AI 版本放进同一个模块，也没有为这次学习创建通用生产接口。小案例逻辑分别保留在模块内，只有框架适配方式不同。
 
 可以在 IDE 单独运行对应方法，也可以一次运行三份同题 demo：
 
 ```bash
-mvn -pl study-spring-ai,study-spring-ai-alibaba,study-agentscope -am \
+mvn -pl study/study-spring-ai,study/study-spring-ai-alibaba,study/study-agentscope -am \
   '-Dtest=HarnessCoreDemoTest#compareTicketTask,FrameworkComparisonStudyTest#compareTicketTask' \
   -DexcludedGroups= test
 ```

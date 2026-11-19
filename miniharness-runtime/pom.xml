@@ -12,7 +12,7 @@
     <description>框架无关的 Harness 内核：Task/Run 状态、事件、Workflow 编译执行、能力路由与自进化引擎。只依赖 JDK 与 Jackson。</description>
 
     <dependencies>
-        <!-- 与 study-spring-ai-alibaba 相同的处理：单独固定 Jackson 2.x，避免与宿主应用其他 Jackson 版本冲突。 -->
+        <!-- 与 study/study-spring-ai-alibaba 相同的处理：单独固定 Jackson 2.x，避免与宿主应用其他 Jackson 版本冲突。 -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>

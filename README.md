@@ -8,15 +8,16 @@
 mini-harness/
 ├── pom.xml                         # 聚合构建与通用插件，不引入任何 Agent 框架
 ├── config/                         # 本地模型配置，真实凭据不入库、不进 JAR
-├── miniharness-core/               # 框架无关的公共代码，目前只有配置读取 ModelConfig
+├── miniharness-core/               # 框架无关公共代码：配置读取 ModelConfig
 ├── miniharness-runtime/            # 自研 Harness 内核：状态机/事件/DAG 执行/路由/评测/审批（只依赖 JDK+Jackson）
 ├── miniharness-spring-ai/          # Spring AI 适配层：HarnessCore、模型创建、工具日志、SpringAiModelPort
-├── study-spring-ai/                # Spring AI 学习测试与 demo
-├── study-agentscope/               # AgentScope 学习测试与 demo
-├── study-spring-ai-alibaba/        # Alibaba ReactAgent 学习测试与 demo
-├── studio/                         # Vue3 前端（独立 npm 工程，只通过 HTTP/SSE 与后端通信）
-└── examples/
-    └── task-assistant/             # Spring Boot 应用：装配 runtime + REST/SSE + 打包 studio 产物为单 jar
+├── study/                          # 三框架学习线（不被应用依赖）
+│   ├── study-spring-ai/            # Spring AI 学习测试与 demo
+│   ├── study-agentscope/           # AgentScope 学习测试与 demo
+│   └── study-spring-ai-alibaba/    # Alibaba ReactAgent 学习测试与 demo
+└── app/                            # 应用线：后端 + 前端一起
+    ├── task-assistant/             # Spring Boot 应用：装配 runtime + REST/SSE，打包前端产物为单 jar
+    └── studio/                     # Vue3 前端（独立 npm 工程，只通过 HTTP/SSE 与后端通信）
 ```
 
 | 模块 | 依赖与职责 |
@@ -25,9 +26,9 @@ mini-harness/
 | `miniharness-runtime` | **自研内核（v0.1）**：只依赖 JDK+Jackson，不含任何 Agent 框架类型。包含 Task/Run/Node 状态机与预算（core/task）、事件总线与回放（event）、DAG 编译与执行（workflow，含超时/重试/取消）、意图路由（capability）、失败经验→候选→评测→审批→回滚（evolution）、执行策略对比（strategy）、合成金融 Domain Pack（domain/finance）；模型通过 `ModelPort` 端口接入，离线用 Noop/Scripted 实现。设计见 [DESIGN-v0.1](docs/DESIGN-v0.1.md)。 |
 | `miniharness-spring-ai` | 依赖 core、runtime、Spring AI **2.0.2**、agent-utils **0.13.0**；既有 `HarnessCore` 学习实现，也有把 Spring AI 接到内核 `ModelPort` 的 `SpringAiModelPort` 适配。 |
 | `studio` | Vue3 + Vite 前端，5 个页面（Chat/Tasks/Run Inspector/Workflow Canvas/Evolution Review）；`scripts/build-studio.sh` 构建并拷贝产物到 task-assistant 静态目录。使用见 [STUDIO-GUIDE](docs/STUDIO-GUIDE.md)。 |
-| `study-spring-ai` | 依赖 Spring AI 适配模块；保留 `HarnessCoreDemo`、`HarnessCoreDemoTest`、手写循环及 Spring AI 学习测试。 |
-| `study-agentscope` | 依赖 core、AgentScope **2.1.0-SNAPSHOT**；沿用其 Schema 4.38.0，不再替换 Surefire 运行类路径。新环境需要先取得该快照依赖。 |
-| `study-spring-ai-alibaba` | 依赖 core、Alibaba **1.1.2.2** 和 Spring AI **1.1.2**，本模块单独管理 Jackson 2.19.4。 |
+| `study/study-spring-ai` | 依赖 Spring AI 适配模块；保留 `HarnessCoreDemo`、`HarnessCoreDemoTest`、手写循环及 Spring AI 学习测试。 |
+| `study/study-agentscope` | 依赖 core、AgentScope **2.1.0-SNAPSHOT**；沿用其 Schema 4.38.0，不再替换 Surefire 运行类路径。新环境需要先取得该快照依赖。 |
+| `study/study-spring-ai-alibaba` | 依赖 core、Alibaba **1.1.2.2** 和 Spring AI **1.1.2**，本模块单独管理 Jackson 2.19.4。 |
 | `task-assistant` | Spring Boot 应用：装配 runtime 引擎 + `miniharness-spring-ai` 适配，提供 REST/SSE（Task/Run/Chat/Workflow/Evolution/System 控制器），打包 studio 产物为 UI+API 单 jar；端到端闭环测试 `EndToEndClosedLoopTest` 在此模块。 |
 
 三个 `study-*` 模块彼此不依赖，也不被应用依赖。父工程不继承 Spring Boot 父 POM、不导入 Spring AI BOM；框架版本由使用它的模块自行管理。
@@ -40,10 +41,10 @@ Java 包名大体保持不变，主要调整所在模块，方便继续已有练
 
 - [`HarnessCore`](miniharness-spring-ai/src/main/java/com/chinazhouwy/miniharness/HarnessCore.java)、`model/ModelCreator`、`tool/`、`advisor/`、`interceptor/` → `miniharness-spring-ai/src/main/java/`。
 - [`ModelConfig`](miniharness-core/src/main/java/com/chinazhouwy/miniharness/model/ModelConfig.java) → `miniharness-core/src/main/java/`，读取过程不依赖 Spring。
-- [`HarnessCoreDemoTest`](study-spring-ai/src/test/java/com/chinazhouwy/miniharness/HarnessCoreDemoTest.java) → `study-spring-ai/src/test/java/`。后续 Spring AI 练习继续放在这里，使用中文 `@DisplayName`。
-- `agentscope/study/` 全部移入 [`study-agentscope`](study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/)。
-- 原先同时引用两个框架的扩展点测试，拆成 Spring AI 的 [`AgentHookComparisonTest`](study-spring-ai/src/test/java/com/chinazhouwy/miniharness/springai/study/AgentHookComparisonTest.java) 与 AgentScope 的 [`AgentScopeHookTest`](study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/AgentScopeHookTest.java)，使用相同问题分别运行。
-- Alibaba 的 [`AlibabaReactAgentTest`](study-spring-ai-alibaba/src/test/java/com/chinazhouwy/miniharness/alibaba/study/AlibabaReactAgentTest.java) 演示 Graph 工具循环与 `invoke()` 的消息状态，包含离线验证与真实模型入口。
+- [`HarnessCoreDemoTest`](study/study-spring-ai/src/test/java/com/chinazhouwy/miniharness/HarnessCoreDemoTest.java) → `study/study-spring-ai/src/test/java/`。后续 Spring AI 练习继续放在这里，使用中文 `@DisplayName`。
+- `agentscope/study/` 全部移入 [`study/study-agentscope`](study/study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/)。
+- 原先同时引用两个框架的扩展点测试，拆成 Spring AI 的 [`AgentHookComparisonTest`](study/study-spring-ai/src/test/java/com/chinazhouwy/miniharness/springai/study/AgentHookComparisonTest.java) 与 AgentScope 的 [`AgentScopeHookTest`](study/study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/AgentScopeHookTest.java)，使用相同问题分别运行。
+- Alibaba 的 [`AlibabaReactAgentTest`](study/study-spring-ai-alibaba/src/test/java/com/chinazhouwy/miniharness/alibaba/study/AlibabaReactAgentTest.java) 演示 Graph 工具循环与 `invoke()` 的消息状态，包含离线验证与真实模型入口。
 
 原根目录 `src/` 已拆走。IDE 重新加载根 `pom.xml`，每个模块分别拥有 `src/main`、`src/test` 与自己的测试资源。
 
@@ -70,101 +71,101 @@ miniharness.model=填写模型名称
 mvn verify
 
 # 只运行 Spring AI 的离线工具循环与文件工具验证，自动构建上游模块
-mvn -pl study-spring-ai -am -Dtest=ManualSpringAiLoopTest,AgentUtilsToolStudyTest test
+mvn -pl study/study-spring-ai -am -Dtest=ManualSpringAiLoopTest,AgentUtilsToolStudyTest test
 
 # 验证 AgentScope 带参数工具的 Schema 注册，不需要旧 agentscope-study profile
-mvn -pl study-agentscope -am -Dtest=ToolSchemaIsolationTest test
+mvn -pl study/study-agentscope -am -Dtest=ToolSchemaIsolationTest test
 
 # 验证 Alibaba Graph 的模型/工具循环与消息状态，不调用外部模型
-mvn -pl study-spring-ai-alibaba -am -Dtest=AlibabaReactAgentTest#scriptedToolLoopReturnsState test
+mvn -pl study/study-spring-ai-alibaba -am -Dtest=AlibabaReactAgentTest#scriptedToolLoopReturnsState test
 
 # 手动搭建最小执行图，观察 initGraph、条件路由和状态追加
-mvn -pl study-spring-ai-alibaba -am -Dtest=AlibabaReactAgentTest#initGraphDefinesToolLoop test
+mvn -pl study/study-spring-ai-alibaba -am -Dtest=AlibabaReactAgentTest#initGraphDefinesToolLoop test
 ```
 
 需要真实模型/外部服务的示例标记为 `@Tag("live")`；耗时与并发观察练习标记为 `@Tag("manual")`，默认均不执行。显式选定一个 demo，并清空排除标签：
 
 ```bash
 # Spring AI：观察一趟任务结束后的执行状态
-mvn -pl study-spring-ai -am -Dtest=HarnessCoreDemoTest#chatWithRunState -DexcludedGroups= test
+mvn -pl study/study-spring-ai -am -Dtest=HarnessCoreDemoTest#chatWithRunState -DexcludedGroups= test
 
 # Spring AI：重建客户端与记忆组件，从本地文件数据库接续聊天
-mvn -pl study-spring-ai -am -Dtest=HarnessCoreDemoTest#chatWithPersistentMemory -DexcludedGroups= test
+mvn -pl study/study-spring-ai -am -Dtest=HarnessCoreDemoTest#chatWithPersistentMemory -DexcludedGroups= test
 
 # Spring AI：通过 stdio 连接 filesystem MCP server，由模型读取临时文件
 # 需要 Node.js/npm；首次运行 npx 可能下载固定版本的服务包。
-mvn -pl study-spring-ai -am -Dtest=McpStudyTest#chatWithMcpFileTool -DexcludedGroups= test
+mvn -pl study/study-spring-ai -am -Dtest=McpStudyTest#chatWithMcpFileTool -DexcludedGroups= test
 
 # AgentScope：真实模型调用文件工具
-mvn -pl study-agentscope -am -Dtest=AgentScopeFileDemo -DexcludedGroups= test
+mvn -pl study/study-agentscope -am -Dtest=AgentScopeFileDemo -DexcludedGroups= test
 
 # AgentScope：关闭旧实例后，从文件恢复同一用户、同一会话
-mvn -pl study-agentscope -am -Dtest=StateTest#test02SessionRecovery -DexcludedGroups= test
+mvn -pl study/study-agentscope -am -Dtest=StateTest#test02SessionRecovery -DexcludedGroups= test
 
 # Alibaba：真实模型调用工具后读取 OverAllState
-mvn -pl study-spring-ai-alibaba -am -Dtest=AlibabaReactAgentTest#realModelReturnsState -DexcludedGroups= test
+mvn -pl study/study-spring-ai-alibaba -am -Dtest=AlibabaReactAgentTest#realModelReturnsState -DexcludedGroups= test
 
 # Alibaba：共享内存 Saver，重建 Agent 后按会话 ID 接续并检查工具消息
-mvn -pl study-spring-ai-alibaba -am -Dtest=AlibabaReactAgentTest#chatWithSessionCheckpoint -DexcludedGroups= test
+mvn -pl study/study-spring-ai-alibaba -am -Dtest=AlibabaReactAgentTest#chatWithSessionCheckpoint -DexcludedGroups= test
 
 # Alibaba：同版本 MCP 文件服务，观察 Graph 状态中的工具请求、结果与最终回答
-mvn -pl study-spring-ai-alibaba -am -Dtest=McpStudyTest#chatWithMcpFileTool -DexcludedGroups= test
+mvn -pl study/study-spring-ai-alibaba -am -Dtest=McpStudyTest#chatWithMcpFileTool -DexcludedGroups= test
 
 # AgentScope：同版本 MCP 文件服务，观察 Toolkit 注册和完整消息中的工具请求／结果
-mvn -pl study-agentscope -am -Dtest=McpStudyTest#chatWithMcpFileTool -DexcludedGroups= test
+mvn -pl study/study-agentscope -am -Dtest=McpStudyTest#chatWithMcpFileTool -DexcludedGroups= test
 
 # MCP 失败代表例：不创建目标文件，观察 ERROR 工具结果和模型的后续解释
-mvn -pl study-agentscope -am -Dtest=McpStudyTest#chatWithMissingMcpFile -DexcludedGroups= test
+mvn -pl study/study-agentscope -am -Dtest=McpStudyTest#chatWithMissingMcpFile -DexcludedGroups= test
 
 # 上下文压缩：同一长工具结果的全文／截断／框架摘要对照，摘要生成额外调用模型
-mvn -pl study-agentscope -am -Dtest=ContextCompressionTest#compareFullTruncatedAndSummary -DexcludedGroups= test
+mvn -pl study/study-agentscope -am -Dtest=ContextCompressionTest#compareFullTruncatedAndSummary -DexcludedGroups= test
 
 # 长期记忆：提取到每日文件，整理 MEMORY.md，新会话读取与纠错、不同用户隔离
-mvn -pl study-agentscope -am -Dtest=LongTermMemoryTest#rememberCorrectAndRecall -DexcludedGroups= test
+mvn -pl study/study-agentscope -am -Dtest=LongTermMemoryTest#rememberCorrectAndRecall -DexcludedGroups= test
 
 # RAG：本地关键词向量检索、按资料版本过滤、真实模型回答与来源核对，以及无命中对照
-mvn -pl study-spring-ai -am -Dtest=HarnessCoreDemoTest#chatWithRetrievedDocuments -DexcludedGroups= test
+mvn -pl study/study-spring-ai -am -Dtest=HarnessCoreDemoTest#chatWithRetrievedDocuments -DexcludedGroups= test
 
 # Skills：先看到名称和描述，模型按需加载 SKILL.md，再执行其中要求的 Java 工具
-mvn -pl study-agentscope -am -Dtest=SkillsStudyTest#loadSkillThenUseTool -DexcludedGroups= test
+mvn -pl study/study-agentscope -am -Dtest=SkillsStudyTest#loadSkillThenUseTool -DexcludedGroups= test
 
 # HTTP 技能仓库：测试自启本机 HTTP 服务，无需远端服务
-mvn -pl study-agentscope -am -Dtest=SkillsStudyTest#loadSkillFromHttp -DexcludedGroups= test
+mvn -pl study/study-agentscope -am -Dtest=SkillsStudyTest#loadSkillFromHttp -DexcludedGroups= test
 
 # 普通 Nacos 配置项方案：模拟 getConfig 返回值，不连接真实 Nacos
-mvn -pl study-agentscope -am -Dtest=SkillsStudyTest#loadSkillFromNacosConfigStub -DexcludedGroups= test
+mvn -pl study/study-agentscope -am -Dtest=SkillsStudyTest#loadSkillFromNacosConfigStub -DexcludedGroups= test
 
 # 权限与人工确认：固定模型提出工具请求，验证真实框架的允许、拒绝和批复恢复；不需要 API Key
-mvn -pl study-agentscope -am -Dtest=PermissionApprovalStudyTest test
+mvn -pl study/study-agentscope -am -Dtest=PermissionApprovalStudyTest test
 
 # 文件检查点：发布前暂停，重建 Saver 和执行图后恢复；不需要 API Key
-mvn -pl study-spring-ai-alibaba -am -Dtest=CheckpointRecoveryStudyTest#pauseAndResume test
+mvn -pl study/study-spring-ai-alibaba -am -Dtest=CheckpointRecoveryStudyTest#pauseAndResume test
 
 # 工作流与子 Agent：真实模型对照固定顺序、并行后汇总、主管通过工具委派
-mvn -pl study-agentscope -am -Dtest=WorkflowAndDelegationStudyTest -DexcludedGroups= test
+mvn -pl study/study-agentscope -am -Dtest=WorkflowAndDelegationStudyTest -DexcludedGroups= test
 
 # 只看并行：两个助手独立处理，结果到齐后交给汇总助手
-mvn -pl study-agentscope -am -Dtest=WorkflowAndDelegationStudyTest#parallelThenSummarize -DexcludedGroups= test
+mvn -pl study/study-agentscope -am -Dtest=WorkflowAndDelegationStudyTest#parallelThenSummarize -DexcludedGroups= test
 
 # 子 Agent 连续委派：主管从工具结果提取 session_id，第二次携带它恢复子会话
-mvn -pl study-agentscope -am -Dtest=WorkflowAndDelegationStudyTest#delegateWithSession -DexcludedGroups= test
+mvn -pl study/study-agentscope -am -Dtest=WorkflowAndDelegationStudyTest#delegateWithSession -DexcludedGroups= test
 
 # 模型选择子 Agent：主管按问题选择助手，助手调用各自的 Java 查询工具
-mvn -pl study-agentscope -am -Dtest=WorkflowAndDelegationStudyTest#routeToSpecialist -DexcludedGroups= test
+mvn -pl study/study-agentscope -am -Dtest=WorkflowAndDelegationStudyTest#routeToSpecialist -DexcludedGroups= test
 
 # 子 Agent 查询失败：对照成功、失败反馈，用实际查询成功次数核对目标是否完成
-mvn -pl study-agentscope -am -Dtest=WorkflowAndDelegationStudyTest#delegateWithFailedQuery -DexcludedGroups= test
+mvn -pl study/study-agentscope -am -Dtest=WorkflowAndDelegationStudyTest#delegateWithFailedQuery -DexcludedGroups= test
 
 # 子 Agent 参数：打印真实 Schema，Java 显式传参，对照携带与漏传 session_id
-mvn -pl study-agentscope -am -Dtest=SubAgentParametersStudyTest#showParametersAndSession -DexcludedGroups= test
+mvn -pl study/study-agentscope -am -Dtest=SubAgentParametersStudyTest#showParametersAndSession -DexcludedGroups= test
 
 # 三框架同题：每个框架运行两种工单状态，核对两次工具调用、建议与随机核验码
-mvn -pl study-spring-ai,study-spring-ai-alibaba,study-agentscope -am \
+mvn -pl study/study-spring-ai,study/study-spring-ai-alibaba,study/study-agentscope -am \
   '-Dtest=HarnessCoreDemoTest#compareTicketTask,FrameworkComparisonStudyTest#compareTicketTask' \
   -DexcludedGroups= test
 
 # Java/Reactor 基础练习按方法单独运行
-mvn -pl study-agentscope -am -Dtest=ReactorStudyTest#creation -DexcludedGroups= test
+mvn -pl study/study-agentscope -am -Dtest=ReactorStudyTest#creation -DexcludedGroups= test
 ```
 
 IDE 可直接运行具体测试方法；Maven 的默认标签排除配置不会限制 IDE 直接运行。部分旧示例依赖 Redis、MCP 或人工输入，运行前查看该方法说明。结构化输出 demo 中也保留了当前模型不支持原生 JSON Schema 的失败演示，不建议一次运行所有真实模型示例。
@@ -175,8 +176,8 @@ IDE 可直接运行具体测试方法；Maven 的默认标签排除配置不会�
 打包应用装配入口（尚非完整任务助手）：
 
 ```bash
-mvn -pl examples/task-assistant -am -DskipTests package
-java -jar examples/task-assistant/target/task-assistant-0.1.0.jar
+mvn -pl app/task-assistant -am -DskipTests package
+java -jar app/task-assistant/target/task-assistant-0.1.0.jar
 ```
 
 ## 学习方向
@@ -193,9 +194,9 @@ java -jar examples/task-assistant/target/task-assistant-0.1.0.jar
 
 MCP 示例各自放在独立的 `McpStudyTest`，使用同版本 filesystem server，通过 stdio 发现工具，只暴露 `read_text_file`，读取临时文件中的随机校验码后关闭连接：
 
-- [Spring AI 示例](study-spring-ai/src/test/java/com/chinazhouwy/miniharness/McpStudyTest.java)：由 ChatClient 的工具循环执行。
-- [Alibaba 示例](study-spring-ai-alibaba/src/test/java/com/chinazhouwy/miniharness/alibaba/study/McpStudyTest.java)：复用 MCP → ToolCallback 适配层，由 ReactAgent 的 Graph 执行循环；打印状态中的工具请求、结果和最终回答，并核对文件校验码。
-- [AgentScope 示例](study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/McpStudyTest.java)：使用 McpClientBuilder 和 Toolkit.registration 注册单个远程工具，由 ReActAgent 执行循环；显式设置模型可见的名称前缀，结束后打印完整消息中的 ToolUseBlock／ToolResultBlock，核对校验码。
+- [Spring AI 示例](study/study-spring-ai/src/test/java/com/chinazhouwy/miniharness/McpStudyTest.java)：由 ChatClient 的工具循环执行。
+- [Alibaba 示例](study/study-spring-ai-alibaba/src/test/java/com/chinazhouwy/miniharness/alibaba/study/McpStudyTest.java)：复用 MCP → ToolCallback 适配层，由 ReactAgent 的 Graph 执行循环；打印状态中的工具请求、结果和最终回答，并核对文件校验码。
+- [AgentScope 示例](study/study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/McpStudyTest.java)：使用 McpClientBuilder 和 Toolkit.registration 注册单个远程工具，由 ReActAgent 执行循环；显式设置模型可见的名称前缀，结束后打印完整消息中的 ToolUseBlock／ToolResultBlock，核对校验码。
 
 失败代表例使用 AgentScope 的 `chatWithMissingMcpFile`：复用正常示例的连接／工具注册／消息打印，只改为不创建文件，观察 ERROR 工具结果及模型的后续解释。它验证工具执行失败的反馈，不代表协议异常、断线、关闭异常或另两套框架的失败路径已通过。
 
@@ -216,15 +217,15 @@ MCP 示例各自放在独立的 `McpStudyTest`，使用同版本 filesystem serv
 
 第 7 组的代表实验已包含顺序、并行、模型选择助手、会话接续、查询失败与结果核对；当前进入最后一组（第 8 组），已新增三框架同题的小型综合实验。第 1—8 组均已有代表实验，前文和下文标注的待补项仍保留，不据此认定各组全部细项或三个框架所有能力均已覆盖。
 
-第 1 组已新增 [ContextCompressionTest](study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/ContextCompressionTest.java) 代表实验：手工构造工具历史，调用 AgentScope 的 `ConversationCompactor`，再用真实模型对照全文、截断和摘要。实测全文及本次摘要保留了工单号、验收码和操作限制，截断丢失后两项；摘要将 4 条历史缩为 2 条。它单独验证压缩组件，不代表自动触发、会话写回、长结果外置、另两套框架摘要机制或所有信息无损已验证。
+第 1 组已新增 [ContextCompressionTest](study/study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/ContextCompressionTest.java) 代表实验：手工构造工具历史，调用 AgentScope 的 `ConversationCompactor`，再用真实模型对照全文、截断和摘要。实测全文及本次摘要保留了工单号、验收码和操作限制，截断丢失后两项；摘要将 4 条历史缩为 2 条。它单独验证压缩组件，不代表自动触发、会话写回、长结果外置、另两套框架摘要机制或所有信息无损已验证。
 
-第 2 组已新增 [LongTermMemoryTest](study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/LongTermMemoryTest.java) 代表实验：显式调用 `MemoryFlushManager` 提取到每日账本、`MemoryConsolidator` 整理到 `MEMORY.md`，由新建 Harness 的新会话加载记忆。真实模型已验证原值读取、明确纠错后读取新值及不同用户隔离；每日账本仍保留旧历史。为保证观察顺序，本例关闭自动后台记忆任务并等待主动写入完成，不代表自动触发、删除／过期、另两框架记忆组合或实际进程重启均已验证。
+第 2 组已新增 [LongTermMemoryTest](study/study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/LongTermMemoryTest.java) 代表实验：显式调用 `MemoryFlushManager` 提取到每日账本、`MemoryConsolidator` 整理到 `MEMORY.md`，由新建 Harness 的新会话加载记忆。真实模型已验证原值读取、明确纠错后读取新值及不同用户隔离；每日账本仍保留旧历史。为保证观察顺序，本例关闭自动后台记忆任务并等待主动写入完成，不代表自动触发、删除／过期、另两框架记忆组合或实际进程重启均已验证。
 
-第 3 组已在 [HarnessCoreDemoTest](study-spring-ai/src/test/java/com/chinazhouwy/miniharness/HarnessCoreDemoTest.java) 新增 `chatWithRetrievedDocuments`：TokenTextSplitter 处理短资料，SimpleVectorStore 存储本地二值关键词向量，QuestionAnswerAdvisor 按版本过滤、检索并增强提示词。真实模型实测命中 2026 退款规则后答出 3 个工作日、随机核验码和正确来源；2099 版本无命中时明确无法确定。应用从 RETRIEVED_DOCUMENTS 核对实际来源，来源标识也显式写入正文。此例不代表神经语义 Embedding、长文切分效果、混合检索／重排或另外两套框架的 RAG 已验证。
+第 3 组已在 [HarnessCoreDemoTest](study/study-spring-ai/src/test/java/com/chinazhouwy/miniharness/HarnessCoreDemoTest.java) 新增 `chatWithRetrievedDocuments`：TokenTextSplitter 处理短资料，SimpleVectorStore 存储本地二值关键词向量，QuestionAnswerAdvisor 按版本过滤、检索并增强提示词。真实模型实测命中 2026 退款规则后答出 3 个工作日、随机核验码和正确来源；2099 版本无命中时明确无法确定。应用从 RETRIEVED_DOCUMENTS 核对实际来源，来源标识也显式写入正文。此例不代表神经语义 Embedding、长文切分效果、混合检索／重排或另外两套框架的 RAG 已验证。
 
-第 4 组已新增 [SkillsStudyTest](study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/SkillsStudyTest.java)：ReActAgent 挂载只读 FileSystemSkillRepository，自动接入 DynamicSkillMiddleware 和加载工具。真实模型实测先看到技能目录但看不到正文随机标记，调用 `load_skill_through_path` 后正文才进入模型请求，再执行 `query_ticket` Java 工具，最终输出指定简报与标记。这里的渐进加载指正文进入模型上下文的时机，Java 端可能早已读取文件；Skill 本身不新增工具权限。本例未验证附属脚本、热更新或另两框架 Skills 机制。后续进入权限与人工确认专题。
+第 4 组已新增 [SkillsStudyTest](study/study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/SkillsStudyTest.java)：ReActAgent 挂载只读 FileSystemSkillRepository，自动接入 DynamicSkillMiddleware 和加载工具。真实模型实测先看到技能目录但看不到正文随机标记，调用 `load_skill_through_path` 后正文才进入模型请求，再执行 `query_ticket` Java 工具，最终输出指定简报与标记。这里的渐进加载指正文进入模型上下文的时机，Java 端可能早已读取文件；Skill 本身不新增工具权限。本例未验证附属脚本、热更新或另两框架 Skills 机制。后续进入权限与人工确认专题。
 
-同类中补充远程来源对照，仓库适配器位于 [RemoteSkillRepositories](study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/RemoteSkillRepositories.java)：
+同类中补充远程来源对照，仓库适配器位于 [RemoteSkillRepositories](study/study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/RemoteSkillRepositories.java)：
 
 - `loadSkillFromHttp`：通过真实 HTTP 请求本机临时服务。`GET /skills` 返回技能名称数组，`GET /skills/ticket-brief` 返回含 frontmatter 的 Markdown；目录和正文读取后适配为 AgentSkill，后续流程复用原示例。
 - `loadSkillFromNacosConfigStub`：模拟普通配置中心的 `getConfig(dataId, group)`，示例映射为 `namespace=demo-team`、`group=AGENT_SKILLS`、`dataId=skills.ticket-brief.md`。此处并没有连接 Nacos。
@@ -234,11 +235,11 @@ MCP 示例各自放在独立的 `McpStudyTest`，使用同版本 filesystem serv
 
 优先复用已有实验补对照，机制不同再增加独立示例。前面尚未收口的并发／取消、各框架契约与扩展点比较，以及 MCP Resources／Prompts、其余失败路径仍保留待补，不因进入阶段 7 而记为完成。
 
-第 5 组权限与人工确认新增 [PermissionApprovalStudyTest](study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/PermissionApprovalStudyTest.java)：两个离线测试覆盖 ALLOW、DENY、ASK 后批准、ASK 后拒绝。模型响应固定，权限引擎、事件、工具执行和会话恢复使用真实 AgentScope；日志展示 Java 工具的实际执行次数，直接观察权限效果。确认结果绑定原 ToolUseBlock，通过 Msg.METADATA_CONFIRM_RESULTS 回填，同一会话使用新 RuntimeContext 继续。测试中的批准／拒绝由代码模拟，没有人机界面，也未验证跨进程恢复、参数级文件权限、不可信工具输出或另两框架对应机制。
+第 5 组权限与人工确认新增 [PermissionApprovalStudyTest](study/study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/PermissionApprovalStudyTest.java)：两个离线测试覆盖 ALLOW、DENY、ASK 后批准、ASK 后拒绝。模型响应固定，权限引擎、事件、工具执行和会话恢复使用真实 AgentScope；日志展示 Java 工具的实际执行次数，直接观察权限效果。确认结果绑定原 ToolUseBlock，通过 Msg.METADATA_CONFIRM_RESULTS 回填，同一会话使用新 RuntimeContext 继续。测试中的批准／拒绝由代码模拟，没有人机界面，也未验证跨进程恢复、参数级文件权限、不可信工具输出或另两框架对应机制。
 
-第 6 组新增 [CheckpointRecoveryStudyTest](study-spring-ai-alibaba/src/test/java/com/chinazhouwy/miniharness/alibaba/study/CheckpointRecoveryStudyTest.java)：简明展示 FileSystemSaver 保存状态与下一节点，interruptBefore 在发布前暂停，重建 Saver 和执行图后沿用 threadId，通过 withResume 继续。当前例子只重建组件，没有重启 JVM，发布也只打印文字；跨进程恢复和幂等不放在这个入门示例中。恢复字段需注册更新策略，withResume 只是调度标记，不替代审批与鉴权。
+第 6 组新增 [CheckpointRecoveryStudyTest](study/study-spring-ai-alibaba/src/test/java/com/chinazhouwy/miniharness/alibaba/study/CheckpointRecoveryStudyTest.java)：简明展示 FileSystemSaver 保存状态与下一节点，interruptBefore 在发布前暂停，重建 Saver 和执行图后沿用 threadId，通过 withResume 继续。当前例子只重建组件，没有重启 JVM，发布也只打印文字；跨进程恢复和幂等不放在这个入门示例中。恢复字段需注册更新策略，withResume 只是调度标记，不替代审批与鉴权。
 
-第 7 组在 [WorkflowAndDelegationStudyTest](study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/WorkflowAndDelegationStudyTest.java) 区分应用编排与子 Agent 委派：
+第 7 组在 [WorkflowAndDelegationStudyTest](study/study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/WorkflowAndDelegationStudyTest.java) 区分应用编排与子 Agent 委派：
 
 - `sequentialWorkflow`：Java 按顺序调用两个独立 Agent，显式传递结果。
 - `parallelThenSummarize`：Reactor 安排两个独立 Agent 并行，`Mono.zip` 等齐后交给汇总助手。这是应用编排基础，不单独算新的子 Agent 机制。
@@ -249,7 +250,7 @@ MCP 示例各自放在独立的 `McpStudyTest`，使用同版本 filesystem serv
 
 日志按“全程模型请求 #”从上往下阅读，父子 Agent 共用请求序号；“委派 #”单独标记主管实际发出的工具请求。主管历史只展示条数，每个新工具结果在回填时展开一次；子 Agent 将历史与本次输入分开展示，历史重发不代表工具再次执行。这是阅读用摘要，省略系统提示等内容，不是完整 HTTP 报文。
 
-参数阅读另见 [SubAgentParametersStudyTest](study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/SubAgentParametersStudyTest.java)：打印 SubAgentConfig 全部五项配置、SubAgentTool 实际生成的参数 Schema 与实际返回文本。Java 显式构造 input Map，依次演示新会话、提取返回文本中的 session_id 后继续追问、漏传 ID 后新建会话。这里由代码填写参数，真实模型只在子 Agent 内回答，不包含主管模型的自动委派；也没有通过手写 Schema 或修改工具自动补入 ID。
+参数阅读另见 [SubAgentParametersStudyTest](study/study-agentscope/src/test/java/com/chinazhouwy/miniharness/agentscope/study/SubAgentParametersStudyTest.java)：打印 SubAgentConfig 全部五项配置、SubAgentTool 实际生成的参数 Schema 与实际返回文本。Java 显式构造 input Map，依次演示新会话、提取返回文本中的 session_id 后继续追问、漏传 ID 后新建会话。这里由代码填写参数，真实模型只在子 Agent 内回答，不包含主管模型的自动委派；也没有通过手写 Schema 或修改工具自动补入 ID。
 
 示例使用虚构工单，不含业务断言。六个入口已用真实模型运行；连续委派实测中，两个子 Agent 实例 ID 不同但 session_id 相同，第二次模型输入包含首轮历史，并回答出 DEMO-7319。当前使用内存状态存储，没有验证重启恢复。失败代表例只覆盖业务工具抛异常后的反馈，不代表模型请求失败、超时与取消均已验证；并行失败与取消仍待补。模型选择助手仅覆盖两个清晰意图，尚未验证歧义与无匹配时的处理、多层委派或三框架完整协作对照，不因此标记第 7 组全部完成。工具参数及会话机制可参考 [SubAgentTool 官方说明](https://javadoc.io/static/io.agentscope/agentscope/2.0.0/io/agentscope/core/tool/subagent/SubAgentTool.html)，实际行为以项目当前 2.1.0-SNAPSHOT 依赖源码和运行日志为准。
 
@@ -267,8 +268,8 @@ MCP 示例各自放在独立的 `McpStudyTest`，使用同版本 filesystem serv
 
 ```text
 miniharness-runtime/        # 新增：框架无关 Harness 内核（状态机/事件/DAG编译执行/路由/进化引擎），只依赖 JDK+Jackson
-studio/                     # 新增：Vue3+TS+Pinia+Vue Flow 前端，全部消费真实 API（无 Mock）
-examples/task-assistant/    # 扩展：HarnessEngine 装配 + REST/SSE API，UI+API 单 jar 提供
+app/studio/                 # 新增：Vue3+TS+Pinia+Vue Flow 前端，全部消费真实 API（无 Mock）
+app/task-assistant/         # 扩展：HarnessEngine 装配 + REST/SSE API，UI+API 单 jar 提供
 miniharness-spring-ai/      # 扩展：SpringAiModelPort 适配器（依赖方向：适配层→内核）
 ```
 
@@ -276,12 +277,12 @@ miniharness-spring-ai/      # 扩展：SpringAiModelPort 适配器（依赖方�
 
 ```bash
 # 后端 + 前端单 jar（离线确定性模式；auto 模式且配置了模型时自动接真实模型）
-mvn clean package -DskipTests -pl examples/task-assistant -am
-MINIHARNESS_MODEL_MODE=offline java -jar examples/task-assistant/target/task-assistant-0.1.0.jar
+mvn clean package -DskipTests -pl app/task-assistant -am
+MINIHARNESS_MODEL_MODE=offline java -jar app/task-assistant/target/task-assistant-0.1.0.jar
 # 浏览器打开 http://127.0.0.1:8080/
 
 # 前端开发模式（/api 代理到 8080）
-cd studio && npm install && npm run dev
+cd app/studio && npm install && npm run dev
 
 # 全部离线测试（56 个，live/manual 默认排除；端到端闭环在 EndToEndClosedLoopTest）
 mvn test

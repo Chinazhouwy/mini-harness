@@ -6,7 +6,7 @@
         <groupId>com.chinazhouwy</groupId>
         <artifactId>mini-harness</artifactId>
         <version>0.1.0</version>
-        <relativePath>../pom.xml</relativePath>
+        <relativePath>../../pom.xml</relativePath>
     </parent>
     <artifactId>study-spring-ai</artifactId>
     <description>Spring AI 学习测试；只依赖 Spring AI 适配模块</description>

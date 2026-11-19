@@ -10,7 +10,7 @@
  *   await api.createTask('研究华夏制造...')  // POST /api/tasks
  *
  * 【数据形态】
- * 所有接口的返回 JSON 都由后端 examples/task-assistant 的 ApiMappers.java 生成，
+ * 所有接口的返回 JSON 都由后端 app/task-assistant 的 ApiMappers.java 生成，
  * 字段定义见同目录 types.ts——两边的字段名是一一对应的。
  *
  * 【错误怎么处理】

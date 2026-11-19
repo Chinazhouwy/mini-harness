@@ -4,7 +4,7 @@
  * ============================================================================
  * 【给小白的话】
  * 这里的每个 interface 描述“后端某个接口返回的 JSON 长什么样”。
- * 后端生成这些 JSON 的代码在 examples/task-assistant 的 ApiMappers.java——
+ * 后端生成这些 JSON 的代码在 app/task-assistant 的 ApiMappers.java——
  * 两边的字段名一一对应，改任何一边都要同步另一边。
  *
  * 【interface 是什么？】
