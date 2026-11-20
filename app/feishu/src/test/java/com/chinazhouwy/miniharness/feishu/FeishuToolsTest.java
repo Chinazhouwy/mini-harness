@@ -23,11 +23,13 @@ class FeishuToolsTest {
 
         // 只验证官方入口注册后的工具名，不触发真实模型调用。
         OpenAIChatModel model = OpenAIChatModel.builder().apiKey("test-key").baseUrl("https://example.invalid/v1").modelName("test-model").build();
-        var spawnAgent = tools.spawnAgent(model, new io.agentscope.core.state.InMemoryAgentStateStore());
+        var webTools = new DeepSeekWebTools("test-key");
+        var spawnAgent = tools.spawnAgent(model, new io.agentscope.core.state.InMemoryAgentStateStore(), webTools);
         Toolkit agentToolkit = new Toolkit();
         agentToolkit.registerTool(tools);
+        agentToolkit.registerTool(webTools);
         agentToolkit.registerAgentTool(spawnAgent);
-        assertThat(agentToolkit.getToolNames()).contains("spawn_agent", "read", "write", "edit", "bash");
+        assertThat(agentToolkit.getToolNames()).contains("spawn_agent", "read", "write", "edit", "bash", "web_search", "web_fetch");
 
         String file = "pi-" + UUID.randomUUID() + ".txt";
         try {
@@ -36,9 +38,16 @@ class FeishuToolsTest {
             assertThat(output(tools.edit(null, file, "pi", "agent", false))).contains("Edited");
             assertThat(output(tools.read(null, file, null, null, null, null))).contains("hello agent");
 
+            // 已放开命令白名单：date 这类普通命令可以直接执行。
+            assertThat(output(tools.bash("date", 5).block(Duration.ofSeconds(10)))).contains("<returncode>0</returncode>");
+
             ToolResultBlock bash = tools.bash("echo pi-ok", 5).block(Duration.ofSeconds(10));
             assertThat(bash).isNotNull();
             assertThat(output(bash)).contains("pi-ok");
+
+            // 仍然拦截明显违规写法（多条命令串联）。
+            assertThat(output(tools.bash("echo one && echo two", 5).block(Duration.ofSeconds(10))))
+                    .contains("SecurityError", "multiple command separators");
         } finally {
             try {
                 Files.deleteIfExists(Path.of(".feishu-agent-workspace", file));

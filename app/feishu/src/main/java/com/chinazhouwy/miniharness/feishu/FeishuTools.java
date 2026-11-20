@@ -8,7 +8,10 @@ import io.agentscope.core.tool.AgentTool;
 import io.agentscope.core.tool.Tool;
 import io.agentscope.core.tool.ToolParam;
 import io.agentscope.core.tool.Toolkit;
+import io.agentscope.core.tool.coding.CommandValidator;
+import io.agentscope.core.tool.coding.CommandValidator.ValidationResult;
 import io.agentscope.core.tool.coding.ShellCommandTool;
+import io.agentscope.core.tool.coding.UnixCommandValidator;
 import io.agentscope.core.tool.subagent.SubAgentConfig;
 import io.agentscope.core.tool.subagent.SubAgentProvider;
 import io.agentscope.core.tool.subagent.SubAgentTool;
@@ -26,15 +29,56 @@ import java.util.Set;
  * Pi 风格四件套工具：read / write / edit / bash。
  *
  * <p>文件操作直接复用 AgentScope Harness 的 FilesystemTool，命令执行复用 AgentScope Core 的
- * ShellCommandTool；这里只负责把工具名和参数收敛成四个，并限制工作目录与命令白名单。
+ * ShellCommandTool；这里只负责把工具名和参数收敛成四个，限制文件工作目录，并对命令只做基本安全校验。
  */
 @Component
 public class FeishuTools {
     private static final String WORKSPACE = ".feishu-agent-workspace";
-    private static final Set<String> ALLOWED_COMMANDS = Set.of(
-            "ls", "pwd", "cat", "find", "grep", "git", "java", "javac", "mvn", "echo");
+
+    // 自定义命令校验：去掉命令白名单，但保留两类明显违规检查：命令串联、越界相对路径。
+    private static final CommandValidator SIMPLE_COMMAND_VALIDATOR = new CommandValidator() {
+        // 具体怎么识别可执行程序、命令分隔符、../ 越界，继续复用 AgentScope 官方 Unix 实现。
+        private final UnixCommandValidator unix = new UnixCommandValidator();
+
+        // ShellCommandTool 执行前会调用这里：allowedCommands 参数虽然传进来，但这里故意不使用，
+        // 所以 date、python、curl 等普通命令都能执行；只拦命令串联和 ./../ 越界。
+        @Override
+        public ValidationResult validate(String command, Set<String> allowedCommands) {
+            // 取出命令的第一个词，比如 "date +%F" 取出 "date"，用于错误提示和路径检查。
+            String executable = unix.extractExecutable(command);
+
+            // 拒绝 &&、||、|、;、换行等拼接：一次只跑一条命令，避免模型写出复杂链式命令。
+            if (unix.containsMultipleCommands(command)) {
+                return ValidationResult.rejected("Command contains multiple command separators", executable);
+            }
+
+            // 对 ./ 开头的相对路径做越界检查：像 ./../secret 这种跳出当前目录的命令要拒绝。
+            if (executable.startsWith("./") && !unix.isPathWithinCurrentDirectory(executable)) {
+                return ValidationResult.rejected("Command escapes current directory", executable);
+            }
+
+            // 其它情况一律放行。
+            return ValidationResult.allowed(executable);
+        }
+
+        // 下面两个方法不是主校验流程的入口，但 CommandValidator 接口要求实现；
+        // 仍然委托给官方 UnixCommandValidator，保证和 validate() 里的判断口径一致。
+
+        // 给外部调用：从命令文本里识别可执行程序名。
+        @Override
+        public String extractExecutable(String command) {
+            return unix.extractExecutable(command);
+        }
+
+        // 给外部调用：判断命令里是否包含多条命令分隔符。
+        @Override
+        public boolean containsMultipleCommands(String command) {
+            return unix.containsMultipleCommands(command);
+        }
+    };
 
     private final FilesystemTool fileTools;
+
     private final ShellCommandTool shell;
 
     public FeishuTools() {
@@ -44,7 +88,8 @@ public class FeishuTools {
         // SANDBOXED 会把相对路径和绝对路径都锚定到 workspace；namespaceFactory 为 null 表示不做会话隔离。
         LocalFilesystem filesystem = new LocalFilesystem(workspace, LocalFsMode.SANDBOXED, null, 10, null);
         this.fileTools = new FilesystemTool(filesystem);
-        this.shell = new ShellCommandTool(cwd.toString(), ALLOWED_COMMANDS, null);
+        // Pi 风格：不限制具体命令，只拦命令串联、越界相对路径等违规写法。
+        this.shell = new ShellCommandTool(cwd.toString(), null, null, SIMPLE_COMMAND_VALIDATOR);
     }
 
     /** 读取文件；编辑前先读，大文件可用 offset、limit、char_offset、max_chars 分页。 */
@@ -83,9 +128,9 @@ public class FeishuTools {
         return fileTools.editFile(context, path, oldString, newString, replaceAll);
     }
 
-    /** 在服务进程当前目录执行白名单命令；命令拼接由 AgentScope 的校验器拦截。 */
+    /** 在服务进程当前目录执行单条命令；具体命令不设白名单，只拦命令拼接和越界相对路径。 */
     @Tool(name = "bash",
-            description = "在服务进程当前目录执行白名单命令：ls/pwd/cat/find/grep/git/java/javac/mvn/echo；禁止拼接多条命令。")
+            description = "在服务进程当前目录执行单条命令；不限制具体命令，但禁止 &&、|、; 等命令拼接。")
     public Mono<ToolResultBlock> bash(
             @ToolParam(name = "command", description = "要执行的单条命令") String command,
             @ToolParam(name = "timeout", description = "可选超时秒数，默认 300", required = false) Integer timeout) {
@@ -96,13 +141,14 @@ public class FeishuTools {
      * spawn_agent：复用 AgentScope 官方 SubAgentTool，由主 Agent 委派独立任务。
      * 官方协议参数是 message（必填）和 session_id（可选，用于追问同一子 Agent）。
      */
-    public AgentTool spawnAgent(OpenAIChatModel model, AgentStateStore stateStore) {
+    public AgentTool spawnAgent(OpenAIChatModel model, AgentStateStore stateStore, DeepSeekWebTools webTools) {
         SubAgentProvider<ReActAgent> provider = () -> ReActAgent.builder()
                 .name("feishu-sub-agent")
                 .description("处理一个独立任务的子助手")
                 .model(model)
-                .toolkit(subAgentToolkit())
-                .sysPrompt("你是飞书主助手委派的子 Agent，直接完成分配的任务，并用简洁中文汇报结果。")
+                .toolkit(subAgentToolkit(webTools))
+                .sysPrompt("你是飞书主助手委派的子 Agent，直接完成分配的任务，并用简洁中文汇报结果。需要联网时用 web_search 搜索、用 web_fetch 读原文。")
+                .middleware(new ModelRequestLogMiddleware())
                 .build();
 
         SubAgentConfig config = SubAgentConfig.builder()
@@ -114,10 +160,11 @@ public class FeishuTools {
         return new SubAgentTool(provider, config);
     }
 
-    /** 子 Agent 只拿 Pi 四工具，避免把 spawn_agent 再传给下一层。 */
-    private Toolkit subAgentToolkit() {
+    /** 子 Agent 拿 Pi 四工具 + DeepSeek 联网工具，避免把 spawn_agent 再传给下一层。 */
+    private Toolkit subAgentToolkit(DeepSeekWebTools webTools) {
         Toolkit toolkit = new Toolkit();
         toolkit.registerTool(this);
+        toolkit.registerTool(webTools);
         return toolkit;
     }
 }

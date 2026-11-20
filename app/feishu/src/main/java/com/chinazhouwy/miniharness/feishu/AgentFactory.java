@@ -33,7 +33,7 @@ public class AgentFactory {
         Toolkit toolkit = new Toolkit();
         toolkit.registerTool(tools);
         toolkit.registerTool(webTools);
-        toolkit.registerAgentTool(tools.spawnAgent(model, stateStore));
+        toolkit.registerAgentTool(tools.spawnAgent(model, stateStore, webTools));
         return ReActAgent.builder()
                 .name(bot.id())
                 .model(model)
