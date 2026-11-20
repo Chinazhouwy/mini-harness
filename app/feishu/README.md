@@ -49,6 +49,7 @@ Spring Boot 日志同时输出到控制台和 `logs/feishu-bot.log`。日志只�
 - 只处理 `text` 消息；图片、富文本等事件会忽略并在日志里说明。
 - AI 会话按飞书 `chat_id` 存在 AgentScope 的 `JsonFileAgentStateStore` 中，默认目录 `logs/feishu-agent-state`，重启后能接续。
 - Agent 注册了 Pi 风格四个工具：`read`、`write`、`edit`、`bash`，另在 `FeishuTools` 内声明 `spawnAgent(...)`，底层交给 AgentScope 官方 `SubAgentTool`。文件操作复用 AgentScope Harness 的 `FilesystemTool`，限制在服务进程当前目录下的 `.feishu-agent-workspace/`；命令执行复用 AgentScope Core 的 `ShellCommandTool`，在服务进程当前目录仅允许 `ls/pwd/cat/find/grep/git/java/javac/mvn/echo`。`spawn_agent` 用官方 `SubAgentProvider` 每次新建子 Agent、`SubAgentConfig` 管理工具名与持久化会话；子 Agent 只暴露 Pi 四工具，并复用同一个 `JsonFileAgentStateStore`。官方协议参数是必填 `message` 和可选 `session_id`：新建任务只传 `message`，返回文本里的 `session_id` 可用于追问同一子 Agent。
+- 另注册 DeepSeek 联网工具 `web_search`、`web_fetch`，直接调用 `https://api.deepseek.com/v1/tools/search` 和 `/v1/tools/fetch`；鉴权复用 `config/openrouter.local.properties` 的 `miniharness.api.key`，不另存密钥。Search 按成功请求计费，Fetch 按成功抓取的网页计费；失败、空结果不计费。
 - 飞书要求事件处理尽快返回，所以消息处理提交到共享虚拟线程执行器 `feishu-ai-worker-N`。
 - 关闭 Spring 容器时会停止长连接并关闭线程池。
 - 如果收不到事件，先检查后台是否选择长连接、事件是否已订阅、应用版本是否已发布。
