@@ -2,6 +2,7 @@ package com.chinazhouwy.miniharness.feishu;
 
 import io.agentscope.core.message.ToolResultBlock;
 import io.agentscope.core.tool.Toolkit;
+import io.agentscope.extensions.model.openai.OpenAIChatModel;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Files;
@@ -11,7 +12,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** 验证 Toolkit 只看到 Pi 四工具，并做一次最小读写链路。 */
+/** 验证 Pi 四工具、官方注册的 spawn_agent，以及一次最小读写链路。 */
 class FeishuToolsTest {
     @Test
     void registersAndRunsPiStyleTools() {
@@ -19,6 +20,14 @@ class FeishuToolsTest {
         Toolkit toolkit = new Toolkit();
         toolkit.registerTool(tools);
         assertThat(toolkit.getToolNames()).containsExactlyInAnyOrder("read", "write", "edit", "bash");
+
+        // 只验证官方入口注册后的工具名，不触发真实模型调用。
+        OpenAIChatModel model = OpenAIChatModel.builder().apiKey("test-key").baseUrl("https://example.invalid/v1").modelName("test-model").build();
+        var spawnAgent = tools.spawnAgent(model, new io.agentscope.core.state.InMemoryAgentStateStore());
+        Toolkit agentToolkit = new Toolkit();
+        agentToolkit.registerTool(tools);
+        agentToolkit.registerAgentTool(spawnAgent);
+        assertThat(agentToolkit.getToolNames()).contains("spawn_agent", "read", "write", "edit", "bash");
 
         String file = "pi-" + UUID.randomUUID() + ".txt";
         try {

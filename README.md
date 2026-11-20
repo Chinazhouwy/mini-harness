@@ -10,15 +10,12 @@ mini-harness/
 ├── config/                         # 本地模型配置，真实凭据不入库、不进 JAR
 ├── miniharness-core/               # 框架无关公共代码：配置读取 ModelConfig
 ├── miniharness-runtime/            # 自研 Harness 内核：状态机/事件/DAG 执行/路由/评测/审批（只依赖 JDK+Jackson）
-├── miniharness-plugin/             # 独立 Java 插件内核：服务/inject/生命周期/子作用域
 ├── miniharness-spring-ai/          # Spring AI 适配层：HarnessCore、模型创建、工具日志、SpringAiModelPort
 ├── study/                          # 三框架学习线（不被应用依赖）
 │   ├── study-spring-ai/            # Spring AI 学习测试与 demo
 │   ├── study-agentscope/           # AgentScope 学习测试与 demo
 │   └── study-spring-ai-alibaba/    # Alibaba ReactAgent 学习测试与 demo
 └── app/                            # 应用线：后端 + 前端一起
-    ├── task-assistant/             # Spring Boot 应用：装配 runtime + REST/SSE，打包前端产物为单 jar
-    ├── bot-team/                   # 最小多 Bot 团队：房间/委派/文件记忆/动作审批
     ├── feishu/                     # Spring Boot 飞书 AI 机器人：长连接收消息，调用模型回答
     └── studio/                     # Vue3 前端（独立 npm 工程，只通过 HTTP/SSE 与后端通信）
 ```
@@ -27,19 +24,16 @@ mini-harness/
 | --- | --- |
 | `miniharness-core` | 主代码只依赖 JDK，目前只有 `ModelConfig` 配置读取；被适配层与学习模块共用。 |
 | `miniharness-runtime` | **自研内核（v0.1）**：只依赖 JDK+Jackson，不含任何 Agent 框架类型。包含 Task/Run/Node 状态机与预算（core/task）、事件总线与回放（event）、DAG 编译与执行（workflow，含超时/重试/取消）、意图路由（capability）、失败经验→候选→评测→审批→回滚（evolution）、执行策略对比（strategy）、合成金融 Domain Pack（domain/finance）；模型通过 `ModelPort` 端口接入，离线用 Noop/Scripted 实现。设计见 [DESIGN-v0.1](docs/DESIGN-v0.1.md)。 |
-| `miniharness-plugin` | 只依赖 JDK 的服务注册与生命周期内核；参考 Cordis 的 inject/effect/子作用域。见 [模块说明](miniharness-plugin/README.md)。 |
-| `bot-team` | 多 Bot 应用骨架：目录、共享房间、显式委派、短期/长期记忆、WAL 文件恢复和危险动作审批；通过 `ModelPort` 接模型。见 [模块说明](app/bot-team/README.md)。 |
+| `studio` | Vue3 + Vite 前端，5 个页面（Chat/Tasks/Run Inspector/Workflow Canvas/Evolution Review）。使用见 [STUDIO-GUIDE](docs/STUDIO-GUIDE.md)。 |
 | `feishu` | Spring Boot 常驻应用：官方 SDK 长连接接收文本消息，经 AgentScope4j 模型生成回答后发回原会话。见 [模块说明](app/feishu/README.md)。 |
 | `miniharness-spring-ai` | 依赖 core、runtime、Spring AI **2.0.2**、agent-utils **0.13.0**；既有 `HarnessCore` 学习实现，也有把 Spring AI 接到内核 `ModelPort` 的 `SpringAiModelPort` 适配。 |
-| `studio` | Vue3 + Vite 前端，5 个页面（Chat/Tasks/Run Inspector/Workflow Canvas/Evolution Review）；`scripts/build-studio.sh` 构建并拷贝产物到 task-assistant 静态目录。使用见 [STUDIO-GUIDE](docs/STUDIO-GUIDE.md)。 |
 | `study/study-spring-ai` | 依赖 Spring AI 适配模块；保留 `HarnessCoreDemo`、`HarnessCoreDemoTest`、手写循环及 Spring AI 学习测试。 |
 | `study/study-agentscope` | 依赖 core、AgentScope **2.1.0-SNAPSHOT**；沿用其 Schema 4.38.0，不再替换 Surefire 运行类路径。新环境需要先取得该快照依赖。 |
 | `study/study-spring-ai-alibaba` | 依赖 core、Alibaba **1.1.2.2** 和 Spring AI **1.1.2**，本模块单独管理 Jackson 2.19.4。 |
-| `task-assistant` | Spring Boot 应用：装配 runtime 引擎 + `miniharness-spring-ai` 适配，提供 REST/SSE（Task/Run/Chat/Workflow/Evolution/System 控制器），打包 studio 产物为 UI+API 单 jar；端到端闭环测试 `EndToEndClosedLoopTest` 在此模块。 |
 
 三个 `study-*` 模块彼此不依赖，也不被应用依赖。父工程不继承 Spring Boot 父 POM、不导入 Spring AI BOM；框架版本由使用它的模块自行管理。
 
-Maven 聚合构建不等于把所有模块合并到一个运行类路径。分别运行各模块测试，应用只选择一套实现，才能同时隔离版本冲突与 Bean 扫描。不要在 `task-assistant` 中同时依赖三个学习模块。
+Maven 聚合构建不等于把所有模块合并到一个运行类路径。分别运行各模块测试，应用只选择一套实现，才能同时隔离版本冲突与 Bean 扫描。
 
 ## 代码迁移位置
 
@@ -179,13 +173,6 @@ IDE 可直接运行具体测试方法；Maven 的默认标签排除配置不会�
 学习 demo 的 `@Test` 主要作为 IDE 运行入口：直接打印输入、输出、执行次数与阶段状态，方便观察；这批示例已移除业务结果断言，只保留必要的超时和运行失败处理。原有回归测试继续保留断言。
 
 
-打包应用装配入口（尚非完整任务助手）：
-
-```bash
-mvn -pl app/task-assistant -am -DskipTests package
-java -jar app/task-assistant/target/task-assistant-0.1.0.jar
-```
-
 启动 Spring Boot + AgentScope4j 飞书 AI 机器人：
 
 ```bash
@@ -285,22 +272,13 @@ MCP 示例各自放在独立的 `McpStudyTest`，使用同版本 filesystem serv
 ```text
 miniharness-runtime/        # 新增：框架无关 Harness 内核（状态机/事件/DAG编译执行/路由/进化引擎），只依赖 JDK+Jackson
 app/studio/                 # 新增：Vue3+TS+Pinia+Vue Flow 前端，全部消费真实 API（无 Mock）
-app/task-assistant/         # 扩展：HarnessEngine 装配 + REST/SSE API，UI+API 单 jar 提供
 miniharness-spring-ai/      # 扩展：SpringAiModelPort 适配器（依赖方向：适配层→内核）
 ```
 
 可运行闭环：用户输入 → 规则路由匹配任务/Workflow → 执行 v1 → 事件与轨迹落账 → 失败经验产生 v2 候选（插入口径验证节点）→ 训练/留出双集对比评测 → 人工批准/拒绝 → 发布新版本 → 再次执行（行为真实不同）→ 回滚。金融数据全部为标注的合成数据，不接入真实行情与交易。
 
 ```bash
-# 后端 + 前端单 jar（离线确定性模式；auto 模式且配置了模型时自动接真实模型）
-mvn clean package -DskipTests -pl app/task-assistant -am
-MINIHARNESS_MODEL_MODE=offline java -jar app/task-assistant/target/task-assistant-0.1.0.jar
-# 浏览器打开 http://127.0.0.1:8080/
-
-# 前端开发模式（/api 代理到 8080）
-cd app/studio && npm install && npm run dev
-
-# 全部离线测试（56 个，live/manual 默认排除；端到端闭环在 EndToEndClosedLoopTest）
+# 全部离线测试（live/manual 默认排除）
 mvn test
 ```
 

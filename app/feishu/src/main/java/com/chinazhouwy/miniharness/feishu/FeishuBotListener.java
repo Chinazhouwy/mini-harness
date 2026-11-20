@@ -100,7 +100,7 @@ public class FeishuBotListener {
             log.info("AI 回复生成成功 messageId={}，耗时={}ms，长度={}，内容={}",
                     message.getMessageId(), latencyMs,
                     answer == null ? 0 : answer.length(), display(answer));
-            sender.sendText(chatId, "【AI回答】: " + answer);
+            sender.sendText(chatId, answer);
             log.info("回复发送成功 messageId={} chatId={}", message.getMessageId(), chatId);
         } catch (Exception e) {
             log.error("处理消息失败 {}", e.getMessage(), e);

@@ -1,10 +1,18 @@
 package com.chinazhouwy.miniharness.feishu;
 
+import io.agentscope.core.ReActAgent;
 import io.agentscope.core.agent.RuntimeContext;
+import io.agentscope.core.state.AgentStateStore;
 import io.agentscope.core.message.ToolResultBlock;
+import io.agentscope.core.tool.AgentTool;
 import io.agentscope.core.tool.Tool;
 import io.agentscope.core.tool.ToolParam;
+import io.agentscope.core.tool.Toolkit;
 import io.agentscope.core.tool.coding.ShellCommandTool;
+import io.agentscope.core.tool.subagent.SubAgentConfig;
+import io.agentscope.core.tool.subagent.SubAgentProvider;
+import io.agentscope.core.tool.subagent.SubAgentTool;
+import io.agentscope.extensions.model.openai.OpenAIChatModel;
 import io.agentscope.harness.agent.filesystem.local.LocalFilesystem;
 import io.agentscope.harness.agent.tool.FilesystemTool;
 import io.agentscope.harness.agent.workspace.LocalFsMode;
@@ -82,5 +90,34 @@ public class FeishuTools {
             @ToolParam(name = "command", description = "要执行的单条命令") String command,
             @ToolParam(name = "timeout", description = "可选超时秒数，默认 300", required = false) Integer timeout) {
         return shell.executeShellCommand(command, timeout);
+    }
+
+    /**
+     * spawn_agent：复用 AgentScope 官方 SubAgentTool，由主 Agent 委派独立任务。
+     * 官方协议参数是 message（必填）和 session_id（可选，用于追问同一子 Agent）。
+     */
+    public AgentTool spawnAgent(OpenAIChatModel model, AgentStateStore stateStore) {
+        SubAgentProvider<ReActAgent> provider = () -> ReActAgent.builder()
+                .name("feishu-sub-agent")
+                .description("处理一个独立任务的子助手")
+                .model(model)
+                .toolkit(subAgentToolkit())
+                .sysPrompt("你是飞书主助手委派的子 Agent，直接完成分配的任务，并用简洁中文汇报结果。")
+                .build();
+
+        SubAgentConfig config = SubAgentConfig.builder()
+                .toolName("spawn_agent")
+                .description("创建子 Agent 处理独立任务；参数 message 写清任务，可选 session_id 表示追问同一子 Agent。")
+                .stateStore(stateStore)
+                .build();
+
+        return new SubAgentTool(provider, config);
+    }
+
+    /** 子 Agent 只拿 Pi 四工具，避免把 spawn_agent 再传给下一层。 */
+    private Toolkit subAgentToolkit() {
+        Toolkit toolkit = new Toolkit();
+        toolkit.registerTool(this);
+        return toolkit;
     }
 }

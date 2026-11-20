@@ -12,13 +12,10 @@
     <modules>
         <module>miniharness-core</module>
         <module>miniharness-runtime</module>
-        <module>miniharness-plugin</module>
         <module>miniharness-spring-ai</module>
         <module>study/study-spring-ai</module>
         <module>study/study-agentscope</module>
         <module>study/study-spring-ai-alibaba</module>
-        <module>app/task-assistant</module>
-        <module>app/bot-team</module>
         <module>app/feishu</module>
     </modules>
 

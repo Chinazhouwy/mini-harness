@@ -7,10 +7,11 @@ import io.agentscope.extensions.model.openai.OpenAIChatModel;
 
 import java.nio.file.Path;
 
-/** 每次回复新建一个 Agent；AgentScope 按 userId/sessionId 从文件恢复会话。 */
+/** 每次回复新建一个 Agent；用哪个 Bot 的人设，由调用方传入。 */
 public class AgentFactory {
-    private static final String SYSTEM_PROMPT = "你是飞书里的 AI 助手，用简洁、自然的中文回答用户。"
-            + "可用工具只有四个：read 读取文件、write 新建文件、edit 修改文件、bash 执行白名单命令。";
+    private static final String TOOL_HINT = "可用工具有五个：read 读取文件、write 新建文件、edit 修改文件、bash 执行白名单命令、"
+            + "spawn_agent 创建子 Agent 处理独立任务。"
+            + "遇到可拆开的独立任务时，用 spawn_agent 委派，并把返回里的 session_id 告诉用户，便于后续追问。";
 
     private final OpenAIChatModel model;
     private final JsonFileAgentStateStore stateStore;
@@ -22,15 +23,17 @@ public class AgentFactory {
         this.tools = tools;
     }
 
-    public ReActAgent create() {
+    public ReActAgent create(Bot bot) {
         Toolkit toolkit = new Toolkit();
         toolkit.registerTool(tools);
+        toolkit.registerAgentTool(tools.spawnAgent(model, stateStore));
         return ReActAgent.builder()
-                .name("feishu-assistant")
+                .name(bot.id())
                 .model(model)
                 .toolkit(toolkit)
-                .sysPrompt(SYSTEM_PROMPT)
+                .sysPrompt(bot.persona() + TOOL_HINT)
                 .stateStore(stateStore)
                 .build();
     }
+
 }
