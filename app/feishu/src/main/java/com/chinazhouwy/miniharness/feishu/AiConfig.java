@@ -28,7 +28,8 @@ public class AiConfig {
     public AgentFactory agentFactory(OpenAIChatModel model,
                                      FeishuTools tools,
                                      DeepSeekWebTools webTools,
+                                     AgentEventStore eventStore,
                                      @Value("${feishu.state.dir:logs/feishu-agent-state}") String stateDir) {
-        return new AgentFactory(model, stateDir, tools, webTools);
+        return new AgentFactory(model, stateDir, tools, webTools, eventStore);
     }
 }

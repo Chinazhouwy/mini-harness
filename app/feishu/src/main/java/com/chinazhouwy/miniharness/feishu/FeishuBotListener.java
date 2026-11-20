@@ -25,15 +25,18 @@ public class FeishuBotListener {
     private final AppCredentials credentials;
     private final FeishuSender sender;
     private final AiReplyService aiReplyService;
+    private final AgentEventStore eventStore;
     private final ExecutorService workers;
     private final com.lark.oapi.ws.Client wsClient;
 
     public FeishuBotListener(AppCredentials credentials,
                              FeishuSender sender,
-                             AiReplyService aiReplyService) {
+                             AiReplyService aiReplyService,
+                             AgentEventStore eventStore) {
         this.credentials = credentials;
         this.sender = sender;
         this.aiReplyService = aiReplyService;
+        this.eventStore = eventStore;
 
         ThreadFactory workerFactory = Thread.ofVirtual().name("feishu-ai-worker-", 0).factory();
         this.workers = Executors.newThreadPerTaskExecutor(workerFactory);
@@ -95,12 +98,15 @@ public class FeishuBotListener {
             }
             log.info("开始调用 AI messageId={} chatId={}", message.getMessageId(), chatId);
             long start = System.nanoTime();
-            String answer = aiReplyService.reply(chatId, text);
+            var traceContext = aiReplyService.newContext(chatId, message.getMessageId());
+            eventStore.appEvent(traceContext, "MESSAGE_RECEIVED", "START", "feishu", text);
+            String answer = aiReplyService.reply(chatId, text, traceContext);
             long latencyMs = (System.nanoTime() - start) / 1_000_000;
             log.info("AI 回复生成成功 messageId={}，耗时={}ms，长度={}，内容={}",
                     message.getMessageId(), latencyMs,
                     answer == null ? 0 : answer.length(), display(answer));
             sender.sendText(chatId, answer);
+            eventStore.appEvent(traceContext, "MESSAGE_SENT", "OK", "feishu", answer);
             log.info("回复发送成功 messageId={} chatId={}", message.getMessageId(), chatId);
         } catch (Exception e) {
             log.error("处理消息失败 {}", e.getMessage(), e);

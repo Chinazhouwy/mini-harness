@@ -50,7 +50,7 @@ class FeishuToolsTest {
                     .contains("SecurityError", "multiple command separators");
         } finally {
             try {
-                Files.deleteIfExists(Path.of(".feishu-agent-workspace", file));
+                Files.deleteIfExists(ProjectPaths.home().resolve(".feishu-agent-workspace").resolve(file));
             } catch (Exception ignored) {
                 // 清理失败不影响本次工具行为验证。
             }

@@ -1,6 +1,7 @@
 package com.chinazhouwy.miniharness.feishu;
 
 import io.agentscope.core.agent.RuntimeContext;
+import io.agentscope.core.event.AgentResultEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -14,33 +15,43 @@ public class AiReplyService {
 
     private final AgentFactory agentFactory;
     private final BotRegistry botRegistry;
+    private final AgentEventStore eventStore;
 
-    public AiReplyService(AgentFactory agentFactory, BotRegistry botRegistry) {
+    public AiReplyService(AgentFactory agentFactory, BotRegistry botRegistry, AgentEventStore eventStore) {
         this.agentFactory = agentFactory;
         this.botRegistry = botRegistry;
+        this.eventStore = eventStore;
     }
 
-    public String reply(String chatId, String userText) {
+    /** 由监听器创建一次上下文，保证收到、Agent 调用、发送同属一个 traceId。 */
+    public RuntimeContext newContext(String chatId, String messageId) {
         Bot bot = botRegistry.defaultBot();
-        String sessionId = bot.id() + ":" + chatId;
-        RuntimeContext context = RuntimeContext.builder()
-                .userId("feishu-user")
-                .sessionId(sessionId)
-                .build();
+        return eventStore.newContext(bot.id() + ":" + chatId, messageId);
+    }
+
+    public String reply(String chatId, String userText, RuntimeContext context) {
+        Bot bot = botRegistry.defaultBot();
+        String sessionId = context.getSessionId();
         log.info("==== 发给模型的请求开始 ====");
         log.info("bot={} name={} sessionId={} userId={}", bot.id(), bot.name(), sessionId, "feishu-user");
         log.info("systemPrompt={}", agentFactory.systemPrompt(bot));
         log.info("userMessage={}", display(userText));
         log.info("==== 发给模型的请求结束 ====");
         try (var agent = agentFactory.create(bot)) {
-            String answer = agent.call(userText, context)
-                    .block(Duration.ofMinutes(2))
-                    .getTextContent();
-            log.info("AgentScope 会话完成 bot={} sessionId={}", bot.name(), sessionId);
+            String answer = agent.streamEvents(userText, context)
+                    .doOnNext(event -> eventStore.agentEvent(context, event))
+                    .filter(AgentResultEvent.class::isInstance)
+                    .map(event -> ((AgentResultEvent) event).getResult())
+                    .filter(result -> result != null && result.getTextContent() != null)
+                    .map(result -> result.getTextContent())
+                    .blockLast(Duration.ofMinutes(2));
             String text = answer == null || answer.isBlank() ? "（模型返回了空回复）" : answer;
+            eventStore.appEvent(context, "AGENT_REPLY", "OK", bot.name(), text);
+            log.info("AgentScope 会话完成 bot={} sessionId={}", bot.name(), sessionId);
             log.info("模型回复={}", display(text));
             return "【" + bot.name() + "】" + text;
         } catch (Exception e) {
+            eventStore.appEvent(context, "AGENT_REPLY", "FAILED", bot.name(), String.valueOf(e.getMessage()));
             log.error("AgentScope 调用模型失败：{}", e.getMessage(), e);
             throw e;
         }

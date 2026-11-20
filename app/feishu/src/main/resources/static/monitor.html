@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>MiniHarness 飞书 Bot 执行监控</title>
+  <style>
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:18px;background:#f6f7f9;color:#1f2937}
+    h1{font-size:20px;margin:0 0 6px}
+    .hint{color:#6b7280;font-size:13px;margin-bottom:12px}
+    .bar{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+    button{padding:7px 12px;border:1px solid #d1d5db;border-radius:6px;background:white;color:#374151;cursor:pointer}
+    button.primary{background:#2563eb;color:white;border-color:#2563eb}
+    button.active{box-shadow:0 0 0 2px #bfdbfe}
+    .layout{display:grid;grid-template-columns:250px 1fr 300px;gap:12px}
+    .panel{background:white;border:1px solid #e5e7eb;border-radius:8px;padding:12px;min-height:640px;overflow:auto}
+    .panel h2{font-size:14px;margin:0 0 10px;color:#374151}
+    .trace{padding:8px;border-bottom:1px solid #f3f4f6;cursor:pointer;font-size:12px}
+    .trace:hover,.trace.active{background:#eff6ff}
+    .trace b{display:block;margin-bottom:4px;font-family:ui-monospace,Menlo,monospace}
+    .trace span{color:#6b7280}
+    #stageWrap{position:relative;min-height:600px;border:1px dashed #e5e7eb;border-radius:6px;background:radial-gradient(#e5e7eb 1px,transparent 1px);background-size:22px 22px;overflow:auto}
+    #stage{display:block;width:100%;height:600px}
+    .edge{fill:none;stroke:#94a3b8;stroke-width:2;marker-end:url(#arrow)}
+    .edge.sub{stroke:#8b5cf6;stroke-dasharray:5 4}
+    .edge.flowing{stroke:#2563eb;stroke-width:3;stroke-dasharray:8 6;animation:dash 0.8s linear infinite}
+    @keyframes dash{to{stroke-dashoffset:-28}}
+    .node circle,.node rect{stroke-width:2;fill:white}
+    .node text{font-size:11px;fill:#111827;pointer-events:none}
+    .node .sub{font-size:10px;fill:#6b7280}
+    .node.active circle,.node.active rect{fill:#dbeafe;stroke:#2563eb;stroke-width:3;filter:drop-shadow(0 0 7px rgba(37,99,235,.55))}
+    .node.done circle,.node.done rect{fill:#ecfdf5;stroke:#10b981}
+    .node.err circle,.node.err rect{fill:#fef2f2;stroke:#ef4444}
+    .node.sub-node circle,.node.sub-node rect{stroke:#8b5cf6}
+    .ball{fill:#2563eb;stroke:white;stroke-width:2;filter:drop-shadow(0 0 6px rgba(37,99,235,.8))}
+    .ball.sub-ball{fill:#8b5cf6}
+    .ball.pulse{animation:pulse 0.8s ease-in-out infinite alternate}
+    @keyframes pulse{from{r:7;opacity:1}to{r:11;opacity:.72}}
+    .row{padding:7px 8px;border-bottom:1px solid #f3f4f6;font-size:12px;cursor:pointer}
+    .row .meta{color:#6b7280;font-size:11px;margin-bottom:3px}
+    .row .summary{word-break:break-all}
+    .empty{color:#9ca3af;font-size:13px}
+    #live{margin-top:10px;font-size:12px;color:#6b7280}
+    .legend{display:flex;gap:12px;font-size:12px;color:#6b7280;margin-top:8px;flex-wrap:wrap}
+    .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px}
+  </style>
+</head>
+<body>
+  <h1>MiniHarness 飞书 Bot 执行监控</h1>
+  <div class="hint">每条飞书消息生成一个执行球。球停在哪里，程序就在哪里执行；进入下一环节时会长出箭头，球沿箭头移动。流式碎片只让当前球脉冲，不会把图刷爆。</div>
+  <div class="bar">
+    <button class="primary" onclick="loadRecent()">刷新最近消息</button>
+    <button id="followBtn" onclick="toggleFollow()">跟随最新：开</button>
+    <button onclick="replay()">回放当前</button>
+    <span id="current" class="hint"></span>
+  </div>
+  <div class="layout">
+    <div class="panel">
+      <h2>最近 trace</h2>
+      <div id="traces"><div class="empty">加载中...</div></div>
+    </div>
+    <div>
+      <div id="stageWrap"><svg id="stage" viewBox="0 0 900 600" preserveAspectRatio="xMidYMin meet">
+        <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#94a3b8"/></marker></defs>
+        <g id="edges"></g><g id="nodes"></g><g id="balls"></g>
+      </svg></div>
+      <div class="legend"><span><i class="dot" style="background:#2563eb"></i>执行球/活跃节点</span><span><i class="dot" style="background:#10b981"></i>已完成</span><span><i class="dot" style="background:#8b5cf6"></i>子 Agent 分叉</span><span><i class="dot" style="background:#ef4444"></i>失败</span></div>
+    </div>
+    <div class="panel">
+      <h2>当前阶段</h2>
+      <div id="eventDetail"><div class="empty">点节点看阶段事件</div></div>
+    </div>
+  </div>
+  <div id="live">实时事件：连接中...</div>
+<script>
+let followLatest = true;
+let currentTrace = null;
+let currentEvents = [];
+let machine = null;
+let replayTimer = null;
+let ballAnim = null;
+let animFrame = null;
+
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function short(s,n=8){return String(s||'-').slice(0,n)}
+function setFollow(on){followLatest=on;const b=document.getElementById('followBtn');b.textContent='跟随最新：'+(on?'开':'关');b.classList.toggle('active',on)}
+function toggleFollow(){setFollow(!followLatest);if(followLatest&&currentTrace)loadTrace(currentTrace,false)}
+
+function makeMachine(){
+  return {nodes:[],edges:[],current:{},positions:{main:0,sub:0},lastEvent:null};
+}
+function isDelta(e){
+  const t=String(e.eventType||'');
+  return t.includes('DELTA')||t.includes('PROGRESS')||t.includes('HINT_BLOCK');
+}
+function isEnd(e){
+  const t=String(e.eventType||'');
+  const s=String(e.status||'');
+  return t.endsWith('_END')||s==='OK'||s==='END'||s==='RESULT'||s==='SUCCESS'||s.startsWith('SUCCESS');
+}
+function laneOf(e){
+  const parent=e.parentSessionId;
+  if(parent&&parent!=='-')return 'sub:'+short(parent,10);
+  if(String(e.eventType||'').includes('SUBAGENT'))return 'sub:main';
+  return 'main';
+}
+function stageOf(e){
+  const t=String(e.eventType||'');
+  if(t.includes('MESSAGE_RECEIVED'))return {type:'root',label:'飞书消息',name:'进入'};
+  if(t.includes('AGENT_START'))return {type:'agent',label:'Agent 启动',name:e.name||'小飞'};
+  if(t.includes('MODEL_CALL_START'))return {type:'model',label:'模型思考',name:'模型调用'};
+  if(t.includes('TOOL_CALL_START')||t.includes('TOOL_CALL'))return {type:'tool',label:'调用工具',name:e.name||'工具'};
+  if(t.includes('TOOL_RESULT'))return {type:'tool',label:'工具返回',name:e.name||'工具'};
+  if(t.includes('SUBAGENT')||e.parentSessionId&&e.parentSessionId!=='-')return {type:'sub',label:'子 Agent',name:'子任务'};
+  if(t.includes('AGENT_RESULT'))return {type:'reply',label:'生成回复',name:'结果'};
+  if(t.includes('MESSAGE_SENT')||t.includes('AGENT_REPLY'))return {type:'reply',label:'回复发送',name:'飞书'};
+  if(t.includes('AGENT_END'))return {type:'done',label:'执行结束',name:'完成'};
+  return {type:'other',label:String(e.eventType||'事件').slice(0,10),name:short(e.status||'',6)};
+}
+function nodeKey(e,stage){
+  const id=e.toolCallId&&e.toolCallId!=='-'?e.toolCallId:(e.replyId&&e.replyId!=='-'?e.replyId:null);
+  if(id)return stage.type+':'+id;
+  if(stage.type==='root')return 'root:'+(e.traceId||'-');
+  if(stage.type==='sub')return 'sub:'+short(e.sessionId||e.parentSessionId||'child',10);
+  return stage.type+':'+short(e.eventId||e.ts||'',10);
+}
+function nextPos(machine,lane){
+  const isSub=lane.startsWith('sub:');
+  const idx=machine.positions[lane]===undefined?machine.positions[lane]=0:++machine.positions[lane];
+  if(isSub)return {x:90+(idx%6)*130,y:400+Math.floor(idx/6)*56};
+  return {x:90+(idx%7)*118,y:90+Math.floor(idx/7)*82};
+}
+function addNode(machine,e){
+  const stage=stageOf(e),lane=laneOf(e),key=nodeKey(e,stage);
+  let node=machine.nodes.find(n=>n.key===key);
+  if(node){
+    node.event=e; node.stage=stage;
+    if(isEnd(e))node.done=true;
+    if(String(e.status||'').startsWith('ERROR')||e.status==='FAILED')node.err=true;
+    return {node,moved:false,lane};
+  }
+  const pos=nextPos(machine,lane);
+  node={key,event:e,stage,lane,x:pos.x,y:pos.y,done:isEnd(e),err:e.status==='FAILED'||String(e.status||'').startsWith('ERROR'),sub:lane.startsWith('sub:')};
+  machine.nodes.push(node);
+  const fromKey=machine.current[lane]||machine.current.main||machine.nodes[0]?.key;
+  if(fromKey&&fromKey!==key){
+    machine.edges.push({from:fromKey,to:key,sub:lane.startsWith('sub:'),flowing:true});
+  }
+  machine.current[lane]=key;
+  return {node,moved:true,lane,fromKey};
+}
+function pulseBall(machine,e){
+  const lane=laneOf(e);
+  const key=machine.current[lane]||machine.current.main;
+  if(key){
+    const node=machine.nodes.find(n=>n.key===key);
+    if(node)node.event=e;
+  }
+}
+function applyEvent(machine,e){
+  machine.lastEvent=e;
+  if(isDelta(e)){pulseBall(machine,e);return;}
+  const r=addNode(machine,e);
+  if(isEnd(e)&&r.node)r.node.done=true;
+  return r;
+}
+function svgEl(machine){
+  const nodes=machine.nodes,edges=machine.edges;
+  const edgeSvg=edges.map((ed,i)=>{
+    const a=nodes.find(n=>n.key===ed.from),b=nodes.find(n=>n.key===ed.to);
+    if(!a||!b)return '';
+    const mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
+    const d='M'+(a.x+18)+','+a.y+' Q'+mx+','+(my-28)+' '+(b.x-18)+','+b.y;
+    ed.d=d;
+    return '<path id="edge-'+i+'" class="edge'+(ed.sub?' sub':'')+(ed.flowing?' flowing':'')+'" d="'+d+'"/>';
+  }).join('');
+  const nodeSvg=nodes.map((n,i)=>{
+    const active=(machine.current[n.lane]||machine.current.main)===n.key&&!n.done;
+    const cls='node'+(active?' active':'')+(n.done?' done':'')+(n.err?' err':'')+(n.sub?' sub-node':'');
+    const shape=n.stage.type==='root'?'<circle cx="'+n.x+'" cy="'+n.y+'" r="20"/>':'<rect x="'+(n.x-18)+'" y="'+(n.y-14)+'" width="36" height="28" rx="9"/>';
+    return '<g class="'+cls+'" data-key="'+esc(n.key)+'" onclick="showNode(this.dataset.key)">'+shape+
+      '<text x="'+n.x+'" y="'+(n.y-19)+'" text-anchor="middle">'+esc(n.stage.label)+'</text>'+
+      '<text class="sub" x="'+n.x+'" y="'+(n.y+26)+'" text-anchor="middle">'+esc(short(n.stage.name||'',10))+'</text></g>';
+  }).join('');
+  let activeKey = ballAnim?.toKey;
+  if(!activeKey){
+    const lanes=[...new Set(nodes.map(n=>n.lane))];
+    activeKey=lanes.map(l=>machine.current[l]||machine.current.main).find(k=>k)||nodes[0]?.key;
+  }
+  const ballSvg=nodes.filter(n=>n.key===activeKey&&!n.done).map(n=>{
+    let bx=n.x,by=n.y-2;
+    if(ballAnim){
+      const path=document.getElementById('edge-'+ballAnim.edgeIndex);
+      if(path&&path.getPointAtLength){
+        const len=path.getTotalLength(),p=path.getPointAtLength(len*ballAnim.progress);
+        bx=p.x;by=p.y;
+      }
+    }
+    const pulse=!ballAnim&&isDelta(machine.lastEvent)&&laneOf(machine.lastEvent||{})===n.lane;
+    return '<circle class="ball'+(n.sub?' sub-ball':'')+(pulse?' pulse':'')+'" cx="'+bx+'" cy="'+by+'" r="8"/>';
+  }).join('');
+  return {edgeSvg,nodeSvg,ballSvg};
+}
+function draw(machine){
+  const parts=svgEl(machine);
+  document.getElementById('edges').innerHTML=parts.edgeSvg;
+  document.getElementById('nodes').innerHTML=parts.nodeSvg;
+  document.getElementById('balls').innerHTML=parts.ballSvg;
+  window.__machine=machine;
+}
+function animateBall(machine,edgeIndex,toKey,done){
+  if(animFrame)cancelAnimationFrame(animFrame);
+  ballAnim={edgeIndex,toKey,progress:0,start:performance.now(),duration:520};
+  const step=(now)=>{
+    if(!ballAnim)return;
+    ballAnim.progress=Math.min(1,(now-ballAnim.start)/ballAnim.duration);
+    draw(machine);
+    if(ballAnim.progress<1){animFrame=requestAnimationFrame(step)}
+    else{const finished=ballAnim;ballAnim=null;animFrame=null;if(done)done(finished)}
+  };
+  animFrame=requestAnimationFrame(step);
+}
+function showNode(key){
+  const n=(window.__machine?.nodes||[]).find(n=>n.key===key);
+  if(!n)return;
+  const e=n.event||{};
+  document.getElementById('eventDetail').innerHTML='<div class="row active"><div class="meta">'+esc(n.stage.label)+' · '+esc(e.eventType||'')+' · '+esc(e.ts||'')+'</div><div class="meta">lane '+esc(n.lane)+' · trace '+esc(short(e.traceId,12))+'</div><div class="summary">'+esc(e.summary||'')+'</div></div>';
+}
+function renderEvents(events){
+  ballAnim=null;if(animFrame)cancelAnimationFrame(animFrame);animFrame=null;
+  machine=makeMachine();
+  for(const e of events)applyEvent(machine,e);
+  draw(machine);
+  currentEvents=events;
+}
+function replay(){
+  if(replayTimer){clearInterval(replayTimer);replayTimer=null}
+  ballAnim=null;if(animFrame)cancelAnimationFrame(animFrame);animFrame=null;
+  if(!currentEvents.length)return;
+  machine=makeMachine();
+  draw(machine);
+  let i=0;
+  replayTimer=setInterval(()=>{
+    if(i>=currentEvents.length){clearInterval(replayTimer);replayTimer=null;return}
+    const before=machine.edges.length;
+    const res=applyEvent(machine,currentEvents[i++]);
+    if(res?.moved&&machine.edges.length>before){
+      const edgeIndex=machine.edges.length-1;
+      animateBall(machine,edgeIndex,res.node.key);
+    }else{
+      draw(machine);
+    }
+  },520);
+}
+async function loadTrace(trace,pin){
+  if(!trace)return;
+  if(pin)setFollow(false);
+  currentTrace=trace;
+  const r=await fetch('/api/events?traceId='+encodeURIComponent(trace)+'&limit=500');
+  const events=await r.json();
+  document.getElementById('current').textContent='当前 trace：'+short(trace,12)+(followLatest?'（跟随最新）':'');
+  renderEvents(events);
+  [...document.querySelectorAll('.trace')].forEach(el=>el.classList.toggle('active',el.dataset.trace===trace));
+}
+async function loadRecent(){
+  const r=await fetch('/api/events?limit=1000');
+  const events=await r.json();
+  const map=new Map();
+  for(const e of events){const trace=e.traceId||'-';if(!map.has(trace))map.set(trace,[]);map.get(trace).push(e)}
+  const box=document.getElementById('traces');
+  const items=[...map].reverse();
+  box.innerHTML=items.length?items.map(([trace,es])=>'<div class="trace" data-trace="'+esc(trace)+'" onclick="loadTrace(this.dataset.trace,true)"><b>'+esc(short(trace,12))+'</b><span>'+es.length+' 个事件 · '+esc(es[0].ts)+'</span></div>').join(''):'<div class="empty">还没有事件；去飞书发一条消息试试</div>';
+  if(followLatest&&items.length)await loadTrace(items[0][0],false);
+}
+function connect(){
+  const es=new EventSource('/api/stream');
+  es.onmessage=m=>{
+    const e=JSON.parse(m.data);
+    document.getElementById('live').textContent='实时事件：'+e.eventType+' · '+short(e.traceId);
+    if(followLatest)loadRecent();
+    else if(currentTrace===e.traceId&&machine){
+      const before=machine.edges.length;
+      const res=applyEvent(machine,e);
+      if(res?.moved&&machine.edges.length>before){
+        animateBall(machine,machine.edges.length-1,res.node.key,()=>{});
+      }else{
+        draw(machine);
+      }
+    }
+  };
+  es.onerror=()=>{document.getElementById('live').textContent='实时事件：连接断开，可刷新页面重试';es.close()};
+}
+setFollow(true);loadRecent();connect();
+</script>
+</body>
+</html>

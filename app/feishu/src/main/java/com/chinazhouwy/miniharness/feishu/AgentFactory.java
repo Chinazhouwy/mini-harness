@@ -17,12 +17,15 @@ public class AgentFactory {
     private final JsonFileAgentStateStore stateStore;
     private final FeishuTools tools;
     private final DeepSeekWebTools webTools;
+    private final AgentEventStore eventStore;
 
-    public AgentFactory(OpenAIChatModel model, String stateDir, FeishuTools tools, DeepSeekWebTools webTools) {
+    public AgentFactory(OpenAIChatModel model, String stateDir, FeishuTools tools, DeepSeekWebTools webTools,
+                        AgentEventStore eventStore) {
         this.model = model;
         this.stateStore = new JsonFileAgentStateStore(Path.of(stateDir));
         this.tools = tools;
         this.webTools = webTools;
+        this.eventStore = eventStore;
     }
 
     public String systemPrompt(Bot bot) {
@@ -41,6 +44,7 @@ public class AgentFactory {
                 .sysPrompt(systemPrompt(bot))
                 .stateStore(stateStore)
                 .middleware(new ModelRequestLogMiddleware())
+                .middleware(eventStore.middleware())
                 .build();
     }
 

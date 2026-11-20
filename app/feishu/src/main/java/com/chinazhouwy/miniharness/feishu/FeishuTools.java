@@ -22,7 +22,11 @@ import io.agentscope.harness.agent.workspace.LocalFsMode;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.time.LocalDateTime;
 import java.util.Set;
 
 /**
@@ -34,6 +38,8 @@ import java.util.Set;
 @Component
 public class FeishuTools {
     private static final String WORKSPACE = ".feishu-agent-workspace";
+    private static final String WRITE_LOG = "feishu-write-record.log";
+    private static final Object WRITE_LOCK = new Object();
 
     // 自定义命令校验：去掉命令白名单，但保留两类明显违规检查：命令串联、越界相对路径。
     private static final CommandValidator SIMPLE_COMMAND_VALIDATOR = new CommandValidator() {
@@ -81,15 +87,21 @@ public class FeishuTools {
 
     private final ShellCommandTool shell;
 
+    private final Path workspace;
+
+    private final Path writeLog;
+
     public FeishuTools() {
-        Path cwd = Path.of("").toAbsolutePath().normalize();
-        Path workspace = cwd.resolve(WORKSPACE);
+        Path home = ProjectPaths.home();
+        this.workspace = home.resolve(WORKSPACE);
+        this.writeLog = home.resolve("logs").resolve(WRITE_LOG);
 
         // SANDBOXED 会把相对路径和绝对路径都锚定到 workspace；namespaceFactory 为 null 表示不做会话隔离。
-        LocalFilesystem filesystem = new LocalFilesystem(workspace, LocalFsMode.SANDBOXED, null, 10, null);
+        LocalFilesystem filesystem = new LocalFilesystem(this.workspace, LocalFsMode.SANDBOXED, null, 10, null);
         this.fileTools = new FilesystemTool(filesystem);
         // Pi 风格：不限制具体命令，只拦命令串联、越界相对路径等违规写法。
-        this.shell = new ShellCommandTool(cwd.toString(), null, null, SIMPLE_COMMAND_VALIDATOR);
+        // bash 工作目录也锚到项目根，避免从 IntelliJ / 命令行不同位置启动时命令结果不同。
+        this.shell = new ShellCommandTool(home.toString(), null, null, SIMPLE_COMMAND_VALIDATOR);
     }
 
     /** 读取文件；编辑前先读，大文件可用 offset、limit、char_offset、max_chars 分页。 */
@@ -112,7 +124,10 @@ public class FeishuTools {
             RuntimeContext context,
             @ToolParam(name = "path", description = "目标文件路径，相对 workspace") String path,
             @ToolParam(name = "content", description = "要写入的完整内容") String content) {
-        return fileTools.writeFile(context, path, content);
+        ToolResultBlock result = fileTools.writeFile(context, path, content);
+        // 写入拦截器：单独记录到 logs/feishu-write-record.log，不混进主日志。
+        recordWrite(context, path, result);
+        return result;
     }
 
     /** 精确替换现有文件中的文本。 */
@@ -135,6 +150,22 @@ public class FeishuTools {
             @ToolParam(name = "command", description = "要执行的单条命令") String command,
             @ToolParam(name = "timeout", description = "可选超时秒数，默认 300", required = false) Integer timeout) {
         return shell.executeShellCommand(command, timeout);
+    }
+
+    /** 把每次 write 追加到独立文件：时间、sessionId、相对路径、绝对 fileUrl、结果状态。 */
+    private void recordWrite(RuntimeContext context, String path, ToolResultBlock result) {
+        String sessionId = context == null ? "-" : String.valueOf(context.getSessionId());
+        String fileUrl = workspace.resolve(path).toAbsolutePath().normalize().toUri().toString();
+        String line = LocalDateTime.now() + "\nsessionId=" + sessionId + "\npath=" + path + "\nfileUrl=" + fileUrl + "\nresult=" + result.getState() + System.lineSeparator();
+        synchronized (WRITE_LOCK) {
+            try {
+                Files.createDirectories(writeLog.getParent());
+                Files.writeString(writeLog, line, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            } catch (Exception e) {
+                // 记录失败不影响工具本身的写入结果。
+                System.err.println("WRITE 记录失败: " + e.getMessage());
+            }
+        }
     }
 
     /**
