@@ -23,6 +23,10 @@ public class AgentFactory {
         this.tools = tools;
     }
 
+    public String systemPrompt(Bot bot) {
+        return bot.persona() + TOOL_HINT;
+    }
+
     public ReActAgent create(Bot bot) {
         Toolkit toolkit = new Toolkit();
         toolkit.registerTool(tools);
@@ -31,8 +35,9 @@ public class AgentFactory {
                 .name(bot.id())
                 .model(model)
                 .toolkit(toolkit)
-                .sysPrompt(bot.persona() + TOOL_HINT)
+                .sysPrompt(systemPrompt(bot))
                 .stateStore(stateStore)
+                .middleware(new ModelRequestLogMiddleware())
                 .build();
     }
 
