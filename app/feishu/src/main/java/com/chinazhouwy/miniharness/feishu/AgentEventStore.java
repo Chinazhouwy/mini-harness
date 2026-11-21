@@ -12,14 +12,23 @@ import io.agentscope.core.event.AgentStartEvent;
 import io.agentscope.core.event.ModelCallEndEvent;
 import io.agentscope.core.event.ModelCallStartEvent;
 import io.agentscope.core.event.SubagentExposedEvent;
+import io.agentscope.core.event.TextBlockDeltaEvent;
+import io.agentscope.core.event.ThinkingBlockDeltaEvent;
+import io.agentscope.core.event.ToolCallDeltaEvent;
 import io.agentscope.core.event.ToolCallEndEvent;
 import io.agentscope.core.event.ToolCallStartEvent;
+import io.agentscope.core.event.ToolProgressEvent;
+import io.agentscope.core.event.ToolResultDataDeltaEvent;
 import io.agentscope.core.event.ToolResultEndEvent;
 import io.agentscope.core.event.ToolResultStartEvent;
+import io.agentscope.core.event.ToolResultTextDeltaEvent;
 import io.agentscope.core.middleware.ActingInput;
 import io.agentscope.core.middleware.MiddlewareBase;
+import io.agentscope.core.middleware.ModelCallInput;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.ToolUseBlock;
+import io.agentscope.core.model.ChatUsage;
+import io.agentscope.core.util.JsonUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -40,6 +49,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 /** 把 AgentScope 事件流写成 JSONL，并发布到进程内事件总线。 */
@@ -47,11 +57,14 @@ import java.util.function.Function;
 public class AgentEventStore {
     private static final Logger log = LoggerFactory.getLogger(AgentEventStore.class);
     private static final int MAX_SUMMARY = 300;
+    private static final int MAX_DETAIL = 4000;
     private static final Object WRITE_LOCK = new Object();
 
     private final Path logDir;
     private final ObjectMapper mapper = new ObjectMapper();
     private final Sinks.Many<Map<String, Object>> sink = Sinks.many().multicast().onBackpressureBuffer();
+    private final ConcurrentHashMap<String, CallStats> modelCalls = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, CallStats> toolCalls = new ConcurrentHashMap<>();
 
     public AgentEventStore() {
         this(ProjectPaths.home().resolve("logs"));
@@ -80,22 +93,52 @@ public class AgentEventStore {
 
     /** AgentScope 运行事件：直接消费 streamEvents() 发出的事件。 */
     public void agentEvent(RuntimeContext context, AgentEvent event) {
-        Map<String, Object> e = base(context, event.getType().name(), status(event), eventName(event),
+        String type = event.getType().name();
+        Map<String, Object> metadata = event.getMetadata();
+        boolean forwardedSubagent = metadata != null && metadata.containsKey("subagent_event");
+        if (forwardedSubagent) type = "SUBAGENT_EVENT";
+
+        Map<String, Object> e = base(context, type, status(event), eventName(event),
                 toolCallId(event), summary(event));
         e.put("eventId", event.getId());
         e.put("ts", event.getCreatedAt());
         e.put("source", event.getSource());
+        String replyId = replyId(event);
+        if (replyId != null) e.put("replyId", replyId);
+        if (forwardedSubagent && context != null) {
+            e.put("parentSessionId", context.getSessionId());
+        }
+
         ExecutionIdentity identity = event.getExecution();
         if (identity != null) {
-            e.put("sessionId", identity.sessionId());
-            e.put("runId", identity.runId());
-            e.put("turnId", identity.turnId());
+            if (identity.sessionId() != null) e.put("sessionId", identity.sessionId());
+            if (identity.runId() != null) e.put("runId", identity.runId());
+            if (identity.turnId() != null) e.put("turnId", identity.turnId());
         }
-        Map<String, Object> metadata = event.getMetadata();
-        if (metadata != null && metadata.get("parentSessionId") != null) {
-            e.put("parentSessionId", String.valueOf(metadata.get("parentSessionId")));
+
+        if (metadata != null) {
+            for (String key : new String[]{"parentSessionId", "parentRunId", "parentTurnId"}) {
+                Object value = metadata.get(key);
+                if (value != null) e.put(key, String.valueOf(value));
+            }
+            Object subEvent = metadata.get("subagent_event");
+            if (subEvent != null) {
+                e.put("eventType", "SUBAGENT_EVENT");
+                e.put("subagentEvent", String.valueOf(subEvent));
+            }
+            Object subName = metadata.get("subagent_name");
+            if (subName != null) e.put("subagentName", String.valueOf(subName));
+            Object subId = metadata.get("subagent_id");
+            if (subId != null) e.put("subagentId", String.valueOf(subId));
+            Object subSession = metadata.get("subagent_session_id");
+            if (subSession != null) {
+                String child = String.valueOf(subSession);
+                e.put("subagentSessionId", child);
+                // 子 Agent 的 session 是随机值；同时把父 session 写进去，历史查询仍能挂回主链路。
+                e.put("parentSessionId", context == null ? "-" : context.getSessionId());
+                e.put("sessionId", child);
+            }
         }
-        if (identity != null && identity.agentId() != null) e.put("name", identity.agentId());
         append(e);
     }
 
@@ -144,7 +187,7 @@ public class AgentEventStore {
         event.put("name", name);
         event.put("status", status);
         event.put("toolCallId", toolCallId);
-        event.put("summary", clip(summary));
+        event.put("summary", clip(summary, MAX_SUMMARY));
         return event;
     }
 
@@ -190,27 +233,168 @@ public class AgentEventStore {
         return all;
     }
 
-    /** 用于 streamEvents() 的中间件：记录工具名与参数摘要，不改调用内容。 */
+    /** 中间件聚合模型/工具调用的入参、出参、耗时，只写一条详情事件，不改调用链。 */
     public MiddlewareBase middleware() {
         return new MiddlewareBase() {
             @Override
             public Set<ExtensionPoint> activePoints() {
-                return EnumSet.of(ExtensionPoint.ON_ACTING);
+                return EnumSet.of(ExtensionPoint.ON_MODEL_CALL, ExtensionPoint.ON_ACTING);
+            }
+
+            @Override
+            public Flux<AgentEvent> onModelCall(Agent agent, RuntimeContext ctx, ModelCallInput input,
+                                                Function<ModelCallInput, Flux<AgentEvent>> next) {
+                String requestKey = modelKey(ctx, "pending-" + UUID.randomUUID());
+                String modelId = input != null && input.model() != null ? input.model().getModelName() : "-";
+                String modelInput = modelInput(input);
+                long start = System.nanoTime();
+                modelCalls.put(requestKey, new CallStats(modelId, modelInput, start));
+                return next.apply(input).doOnNext(event -> collectModelEvent(ctx, requestKey, event, modelId, modelInput, start));
             }
 
             @Override
             public Flux<AgentEvent> onActing(Agent agent, RuntimeContext ctx, ActingInput input,
-                                              Function<ActingInput, Flux<AgentEvent>> next) {
+                                             Function<ActingInput, Flux<AgentEvent>> next) {
                 if (input != null && input.toolCalls() != null) {
                     for (ToolUseBlock tool : input.toolCalls()) {
                         if (tool == null) continue;
+                        String id = tool.getId() == null ? "-" : tool.getId();
                         String args = tool.getInput() == null ? "" : mapper.valueToTree(tool.getInput()).toString();
-                        appEvent(ctx, "TOOL_CALL_START", "START", tool.getName(), args);
+                        String key = traceKey(ctx) + ":" + id;
+                        toolCalls.put(key, new CallStats(tool.getName(), args, System.nanoTime()));
+                        detailEvent(ctx, "TOOL_CALL_DETAIL", "START", tool.getName(), id,
+                                null, null, args, null, null, "-");
                     }
                 }
-                return next.apply(input);
+                return next.apply(input).doOnNext(event -> collectToolEvent(ctx, event));
             }
         };
+    }
+
+    private void collectModelEvent(RuntimeContext ctx, String pendingKey, AgentEvent event,
+                                   String modelId, String modelInput, long start) {
+        if (event instanceof ModelCallStartEvent e) {
+            String replyId = e.getReplyId();
+            String key = modelKey(ctx, replyId);
+            CallStats stats = modelCalls.remove(pendingKey);
+            if (stats == null) stats = new CallStats(modelId, modelInput, start);
+            stats.output.setLength(0);
+            modelCalls.put(key, stats);
+            return;
+        }
+        if (event instanceof TextBlockDeltaEvent e) {
+            appendModelOutput(ctx, e.getReplyId(), e.getDelta());
+            return;
+        }
+        if (event instanceof ThinkingBlockDeltaEvent e) {
+            appendModelOutput(ctx, e.getReplyId(), e.getDelta());
+            return;
+        }
+        if (event instanceof ToolCallDeltaEvent e) {
+            appendModelOutput(ctx, e.getReplyId(), e.getDelta());
+            return;
+        }
+        if (event instanceof ModelCallEndEvent e) {
+            String key = modelKey(ctx, e.getReplyId());
+            CallStats stats = modelCalls.remove(key);
+            if (stats == null) stats = new CallStats(modelId, modelInput, start);
+            ChatUsage usage = e.getUsage();
+            long durationMs = usage != null && usage.getTime() > 0
+                    ? Math.round(usage.getTime() * 1000)
+                    : (System.nanoTime() - stats.startNanos) / 1_000_000;
+            detailEvent(ctx, "MODEL_CALL_DETAIL", "END", stats.name, null,
+                    e.getReplyId(), stats.name, stats.input, stats.output.toString(), durationMs, null);
+        }
+    }
+
+    private void collectToolEvent(RuntimeContext ctx, AgentEvent event) {
+        if (event instanceof ToolResultTextDeltaEvent e) {
+            appendToolOutput(ctx, e.getToolCallId(), e.getDelta());
+            return;
+        }
+        if (event instanceof ToolResultDataDeltaEvent e) {
+            appendToolOutput(ctx, e.getToolCallId(), toJson(e.getData()));
+            return;
+        }
+        if (event instanceof ToolProgressEvent e) {
+            String text = e.getText();
+            if (text != null && !text.isBlank()) appendToolOutput(ctx, e.getToolCallId(), text);
+            return;
+        }
+        if (event instanceof ToolResultEndEvent e) {
+            String key = traceKey(ctx) + ":" + e.getToolCallId();
+            CallStats stats = toolCalls.remove(key);
+            long durationMs = stats == null ? 0 : (System.nanoTime() - stats.startNanos) / 1_000_000;
+            detailEvent(ctx, "TOOL_CALL_DETAIL", String.valueOf(e.getState()), e.getToolCallName(),
+                    e.getToolCallId(), e.getReplyId(), null,
+                    stats == null ? null : stats.input, stats == null ? null : stats.output.toString(),
+                    durationMs, null);
+        }
+    }
+
+    private void detailEvent(RuntimeContext ctx, String type, String status, String name, String toolCallId,
+                             String replyId, String modelId, String input, String output,
+                             Long durationMs, String subagentSessionId) {
+        Map<String, Object> e = base(ctx, type, status, name, toolCallId, output);
+        if (replyId != null) e.put("replyId", replyId);
+        if (modelId != null) e.put("modelId", modelId);
+        if (durationMs != null) e.put("durationMs", durationMs);
+        e.put("input", clip(input, MAX_DETAIL));
+        e.put("output", clip(output, MAX_DETAIL));
+        e.put("detail", true);
+        if (subagentSessionId != null) e.put("subagentSessionId", subagentSessionId);
+        append(e);
+    }
+
+    private void appendModelOutput(RuntimeContext ctx, String replyId, String delta) {
+        if (delta == null || delta.isEmpty()) return;
+        CallStats stats = modelCalls.get(modelKey(ctx, replyId));
+        if (stats != null && stats.output.length() < MAX_DETAIL) stats.output.append(delta);
+    }
+
+    private void appendToolOutput(RuntimeContext ctx, String toolCallId, String delta) {
+        if (delta == null || delta.isEmpty()) return;
+        CallStats stats = toolCalls.get(traceKey(ctx) + ":" + toolCallId);
+        if (stats != null && stats.output.length() < MAX_DETAIL) stats.output.append(delta);
+    }
+
+    private static String modelInput(ModelCallInput input) {
+        if (input == null || input.messages() == null) return "";
+        try {
+            return JsonUtils.getJsonCodec().toJson(input.messages());
+        } catch (RuntimeException e) {
+            return input.messages().toString();
+        }
+    }
+
+    private static String toJson(Object value) {
+        if (value == null) return "";
+        try {
+            return JsonUtils.getJsonCodec().toJson(value);
+        } catch (RuntimeException e) {
+            return String.valueOf(value);
+        }
+    }
+
+    private static String modelKey(RuntimeContext ctx, String replyId) {
+        return traceKey(ctx) + ":reply:" + str(replyId);
+    }
+
+    private static String traceKey(RuntimeContext ctx) {
+        return ctx == null ? "-" : str(ctx.get("feishu.traceId"));
+    }
+
+    private static final class CallStats {
+        private final String name;
+        private final String input;
+        private final long startNanos;
+        private final StringBuilder output = new StringBuilder();
+
+        private CallStats(String name, String input, long startNanos) {
+            this.name = str(name);
+            this.input = str(input);
+            this.startNanos = startNanos;
+        }
     }
 
     private static String eventName(AgentEvent event) {
@@ -219,6 +403,8 @@ public class AgentEventStore {
         if (event instanceof ToolCallEndEvent e) return e.getToolCallName();
         if (event instanceof ToolResultStartEvent e) return e.getToolCallName();
         if (event instanceof ToolResultEndEvent e) return e.getToolCallName();
+        if (event instanceof ToolProgressEvent e) return e.getToolCallName();
+        if (event instanceof ToolResultTextDeltaEvent e) return e.getToolCallName();
         return event.getClass().getSimpleName();
     }
 
@@ -236,7 +422,24 @@ public class AgentEventStore {
         if (event instanceof ToolCallEndEvent e) return e.getToolCallId();
         if (event instanceof ToolResultStartEvent e) return e.getToolCallId();
         if (event instanceof ToolResultEndEvent e) return e.getToolCallId();
+        if (event instanceof ToolProgressEvent e) return e.getToolCallId();
+        if (event instanceof ToolResultTextDeltaEvent e) return e.getToolCallId();
+        if (event instanceof ToolResultDataDeltaEvent e) return e.getToolCallId();
         return "-";
+    }
+
+    private static String replyId(AgentEvent event) {
+        if (event instanceof AgentStartEvent e) return e.getReplyId();
+        if (event instanceof AgentEndEvent e) return e.getReplyId();
+        if (event instanceof ModelCallStartEvent e) return e.getReplyId();
+        if (event instanceof ModelCallEndEvent e) return e.getReplyId();
+        if (event instanceof ToolCallStartEvent e) return e.getReplyId();
+        if (event instanceof ToolCallEndEvent e) return e.getReplyId();
+        if (event instanceof ToolResultStartEvent e) return e.getReplyId();
+        if (event instanceof ToolResultEndEvent e) return e.getReplyId();
+        if (event instanceof ToolProgressEvent e) return e.getReplyId();
+        if (event instanceof ToolResultTextDeltaEvent e) return e.getReplyId();
+        return null;
     }
 
     private static String summary(AgentEvent event) {
@@ -261,9 +464,9 @@ public class AgentEventStore {
         return a != null && b != null && a.equals(b);
     }
 
-    private static String clip(String value) {
+    private static String clip(String value, int max) {
         if (value == null) return "";
         String oneLine = value.replace("\n", " ").replace("\r", " ").replace("\t", " ");
-        return oneLine.length() <= MAX_SUMMARY ? oneLine : oneLine.substring(0, MAX_SUMMARY) + "...";
+        return oneLine.length() <= max ? oneLine : oneLine.substring(0, max) + "...";
     }
 }

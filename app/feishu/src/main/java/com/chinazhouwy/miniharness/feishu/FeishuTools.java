@@ -172,14 +172,14 @@ public class FeishuTools {
      * spawn_agent：复用 AgentScope 官方 SubAgentTool，由主 Agent 委派独立任务。
      * 官方协议参数是 message（必填）和 session_id（可选，用于追问同一子 Agent）。
      */
-    public AgentTool spawnAgent(OpenAIChatModel model, AgentStateStore stateStore, DeepSeekWebTools webTools) {
+    public AgentTool spawnAgent(OpenAIChatModel model, AgentStateStore stateStore, DeepSeekWebTools webTools, AgentEventStore eventStore) {
         SubAgentProvider<ReActAgent> provider = () -> ReActAgent.builder()
                 .name("feishu-sub-agent")
                 .description("处理一个独立任务的子助手")
                 .model(model)
                 .toolkit(subAgentToolkit(webTools))
                 .sysPrompt("你是飞书主助手委派的子 Agent，直接完成分配的任务，并用简洁中文汇报结果。需要联网时用 web_search 搜索、用 web_fetch 读原文。")
-                .middleware(new ModelRequestLogMiddleware())
+                .middleware(new ModelRequestLogMiddleware()).middleware(eventStore.middleware())
                 .build();
 
         SubAgentConfig config = SubAgentConfig.builder()

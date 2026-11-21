@@ -1,295 +1,290 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8">
-  <title>MiniHarness 飞书 Bot 执行监控</title>
-  <style>
-    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:18px;background:#f6f7f9;color:#1f2937}
-    h1{font-size:20px;margin:0 0 6px}
-    .hint{color:#6b7280;font-size:13px;margin-bottom:12px}
-    .bar{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
-    button{padding:7px 12px;border:1px solid #d1d5db;border-radius:6px;background:white;color:#374151;cursor:pointer}
-    button.primary{background:#2563eb;color:white;border-color:#2563eb}
-    button.active{box-shadow:0 0 0 2px #bfdbfe}
-    .layout{display:grid;grid-template-columns:250px 1fr 300px;gap:12px}
-    .panel{background:white;border:1px solid #e5e7eb;border-radius:8px;padding:12px;min-height:640px;overflow:auto}
-    .panel h2{font-size:14px;margin:0 0 10px;color:#374151}
-    .trace{padding:8px;border-bottom:1px solid #f3f4f6;cursor:pointer;font-size:12px}
-    .trace:hover,.trace.active{background:#eff6ff}
-    .trace b{display:block;margin-bottom:4px;font-family:ui-monospace,Menlo,monospace}
-    .trace span{color:#6b7280}
-    #stageWrap{position:relative;min-height:600px;border:1px dashed #e5e7eb;border-radius:6px;background:radial-gradient(#e5e7eb 1px,transparent 1px);background-size:22px 22px;overflow:auto}
-    #stage{display:block;width:100%;height:600px}
-    .edge{fill:none;stroke:#94a3b8;stroke-width:2;marker-end:url(#arrow)}
-    .edge.sub{stroke:#8b5cf6;stroke-dasharray:5 4}
-    .edge.flowing{stroke:#2563eb;stroke-width:3;stroke-dasharray:8 6;animation:dash 0.8s linear infinite}
-    @keyframes dash{to{stroke-dashoffset:-28}}
-    .node circle,.node rect{stroke-width:2;fill:white}
-    .node text{font-size:11px;fill:#111827;pointer-events:none}
-    .node .sub{font-size:10px;fill:#6b7280}
-    .node.active circle,.node.active rect{fill:#dbeafe;stroke:#2563eb;stroke-width:3;filter:drop-shadow(0 0 7px rgba(37,99,235,.55))}
-    .node.done circle,.node.done rect{fill:#ecfdf5;stroke:#10b981}
-    .node.err circle,.node.err rect{fill:#fef2f2;stroke:#ef4444}
-    .node.sub-node circle,.node.sub-node rect{stroke:#8b5cf6}
-    .ball{fill:#2563eb;stroke:white;stroke-width:2;filter:drop-shadow(0 0 6px rgba(37,99,235,.8))}
-    .ball.sub-ball{fill:#8b5cf6}
-    .ball.pulse{animation:pulse 0.8s ease-in-out infinite alternate}
-    @keyframes pulse{from{r:7;opacity:1}to{r:11;opacity:.72}}
-    .row{padding:7px 8px;border-bottom:1px solid #f3f4f6;font-size:12px;cursor:pointer}
-    .row .meta{color:#6b7280;font-size:11px;margin-bottom:3px}
-    .row .summary{word-break:break-all}
-    .empty{color:#9ca3af;font-size:13px}
-    #live{margin-top:10px;font-size:12px;color:#6b7280}
-    .legend{display:flex;gap:12px;font-size:12px;color:#6b7280;margin-top:8px;flex-wrap:wrap}
-    .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px}
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MiniHarness · Terminal Cockpit</title>
+<style>
+:root{--bg:#0b0c10;--win:#14161c;--panel:#171a21;--panel2:#1c2029;--line:#252a35;--line2:#333a49;--text:#e8ebf2;--muted:#8b93a5;--dim:#565e70;--green:#39ff9a;--cyan:#57d9ff;--purple:#b083ff;--amber:#ffc061;--red:#ff5f6d;--glow:0 0 14px rgba(57,255,154,.35)}
+*{box-sizing:border-box}
+body{margin:0;background:#05060a;color:var(--text);font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;height:100vh;overflow:hidden;padding:12px}
+body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:99;background:repeating-linear-gradient(0deg,rgba(255,255,255,.012) 0,rgba(255,255,255,.012) 1px,transparent 1px,transparent 3px);opacity:.5}
+.window{height:100%;border:1px solid #2b3040;border-radius:16px;background:var(--win);box-shadow:0 24px 80px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.04);display:flex;flex-direction:column;overflow:hidden;position:relative}
+.titlebar{height:32px;flex:none;display:flex;align-items:center;padding:0 14px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#191c23,#12141a)}
+.lights{display:flex;gap:7px}.lights i{width:10px;height:10px;border-radius:50%;display:block}
+.lights i:nth-child(1){background:#ff5f57}.lights i:nth-child(2){background:#febc2e}.lights i:nth-child(3){background:#28c840}
+.titlebar .center{flex:1;text-align:center;color:var(--dim);font-size:10px;letter-spacing:.12em}
+.titlebar .live{color:var(--green);font-size:10px;letter-spacing:.1em;border:1px solid rgba(57,255,154,.3);border-radius:20px;padding:2px 8px}
+.top{display:grid;grid-template-columns:minmax(320px,1.4fr) minmax(180px,.8fr) minmax(260px,1fr);gap:14px;padding:14px 18px 10px;border-bottom:1px solid var(--line)}
+.ident{display:flex;align-items:center;gap:14px}
+.pause{width:74px;height:74px;flex:none;border-radius:50%;border:1px solid #3a4150;background:radial-gradient(circle at 35% 30%,#2a2f3b,#111319);display:grid;place-items:center;cursor:pointer;color:var(--text);font-size:24px;box-shadow:inset 0 2px 6px rgba(255,255,255,.06),0 6px 18px rgba(0,0,0,.5);transition:.2s}
+.pause:hover{border-color:var(--green);color:var(--green)}
+.pause.on{color:var(--amber);border-color:rgba(255,192,97,.5)}
+.ident h1{margin:0;font-size:23px;letter-spacing:.02em;color:var(--amber);font-weight:600;text-shadow:0 0 18px rgba(255,192,97,.18)}
+.ver{font-size:9px;color:var(--muted);border:1px dashed #3a4150;border-radius:4px;padding:1px 6px;vertical-align:middle;margin-left:8px;letter-spacing:.08em}
+.runline{margin-top:3px;color:var(--muted);font-size:11px}.runline .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--amber);box-shadow:0 0 8px var(--amber);margin-right:6px;animation:blink 1.2s infinite}
+.runline b{color:var(--text);font-weight:500}
+@keyframes blink{50%{opacity:.3}}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.chip{font-size:9px;letter-spacing:.08em;color:var(--purple);border:1px solid rgba(176,131,255,.35);border-radius:3px;padding:2px 7px;background:rgba(176,131,255,.05)}
+.tagline{align-self:end;color:var(--dim);font-size:10px;font-style:italic;line-height:1.6}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:4px 18px;align-content:center;text-align:right}
+.stat label{display:block;color:var(--dim);font-size:9px;letter-spacing:.14em;text-transform:uppercase}
+.stat b{font-size:23px;font-weight:500;line-height:1.15;font-variant-numeric:tabular-nums}
+.stat b.g{color:var(--green)}.stat b.r{color:var(--red)}.stat b.c{color:var(--cyan)}.stat b.a{color:var(--amber)}
+.ctrl{display:flex;gap:6px;padding:7px 14px 0;align-items:center}
+.ctrl button{background:#171b23;color:var(--muted);border:1px solid var(--line2);border-radius:4px;padding:3px 9px;font:inherit;font-size:9px;cursor:pointer;letter-spacing:.06em}
+.ctrl button:hover{color:var(--text);border-color:#4a5365}
+.ctrl button.on{color:var(--green);border-color:rgba(57,255,154,.45)}
+.ctrl .spacer{flex:1}
+.ctrl .tp{color:var(--dim);font-size:9px}
+.body{flex:1;min-height:0;display:grid;grid-template-columns:212px minmax(420px,1fr) 310px;gap:10px;padding:10px 12px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.pt{height:28px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 10px;border-bottom:1px solid var(--line);color:var(--muted);font-size:10px;letter-spacing:.14em}.pt span:last-child{color:var(--dim);font-size:9px;letter-spacing:.06em}
+.agents{padding:8px;overflow:auto;display:flex;flex-direction:column;gap:6px}
+.acard{border:1px solid var(--line);border-radius:6px;background:var(--panel2);padding:8px 9px;opacity:.5;transition:.25s}
+.acard.on{opacity:1;border-color:rgba(57,255,154,.45);box-shadow:var(--glow)}
+.acard.on[data-role="sub"]{border-color:rgba(176,131,255,.55);box-shadow:0 0 14px rgba(176,131,255,.25)}
+.acard.on[data-role="web"]{border-color:rgba(87,217,255,.5);box-shadow:0 0 14px rgba(87,217,255,.22)}
+.arow{display:flex;align-items:center;gap:7px}
+.aico{width:22px;height:22px;flex:none;border-radius:5px;display:grid;place-items:center;font-size:12px;background:#222732;border:1px solid #333a49;color:var(--muted)}
+.acard.on .aico{color:#0b0c10;background:var(--green);border-color:var(--green)}
+.acard.on[data-role="sub"] .aico{background:var(--purple);border-color:var(--purple)}
+.acard.on[data-role="web"] .aico{background:var(--cyan);border-color:var(--cyan)}
+.aname{font-size:11px;font-weight:600;letter-spacing:.04em;flex:1}
+.badge{font-size:8px;letter-spacing:.1em;padding:1px 6px;border-radius:3px;border:1px solid #3a4150;color:var(--dim)}
+.acard.on .badge{color:var(--green);border-color:rgba(57,255,154,.5)}
+.ad{color:var(--dim);font-size:9px;margin-top:4px;line-height:1.45}
+.am{color:var(--muted);font-size:9px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acard.on .am{color:var(--green)}
+.flow-wrap{position:relative;flex:1;min-height:0;overflow:hidden;background:radial-gradient(circle at 50% 45%,rgba(57,255,154,.04),transparent 55%),linear-gradient(rgba(255,255,255,.012) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.012) 1px,transparent 1px);background-size:auto,26px 26px,26px 26px}
+.flow{position:absolute;inset:0;width:100%;height:100%}
+.flow .edge{fill:none;stroke:#313847;stroke-width:1.4;stroke-dasharray:4 6;marker-end:url(#arrow)}
+.flow .edge.sub{stroke:#5b4682}.flow .edge.live{stroke:var(--green);stroke-width:2;filter:drop-shadow(0 0 5px rgba(57,255,154,.55));animation:dash .8s linear infinite}
+.flow .edge.sub.live{stroke:var(--purple);filter:drop-shadow(0 0 6px rgba(176,131,255,.5))}
+@keyframes dash{to{stroke-dashoffset:-20}}
+.flow .nrect{fill:#151922;stroke:#39414f;stroke-width:1.4;stroke-dasharray:5 5}
+.flow .node.active .nrect{stroke:var(--green);stroke-dasharray:none;filter:drop-shadow(0 0 8px rgba(57,255,154,.4))}
+.flow .node.sub.active .nrect{stroke:var(--purple);filter:drop-shadow(0 0 9px rgba(176,131,255,.5))}
+.flow .node.done .nrect{stroke:#2c6b4c;stroke-dasharray:none}
+.flow .node.err .nrect{stroke:var(--red);stroke-dasharray:none}
+.flow .nt1{fill:var(--text);font-size:11px;font-weight:600}
+.flow .nt2{fill:var(--dim);font-size:8px;letter-spacing:.06em}
+.flow .halo{fill:none;stroke:rgba(57,255,154,.35);stroke-width:1;stroke-dasharray:3 5}
+.flow .stagelabel{fill:var(--green);font-size:9px;letter-spacing:.14em}
+.ring{fill:var(--green);filter:drop-shadow(0 0 10px var(--green))}.ring.sub{fill:var(--purple);filter:drop-shadow(0 0 10px var(--purple))}
+.ring-o{fill:none;stroke:var(--green);stroke-width:1.5;opacity:.5}.ring-o.sub{stroke:var(--purple)}
+@keyframes pulse{0%{r:6;opacity:1}100%{r:10;opacity:.55}}
+.flow-empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--dim);letter-spacing:.14em;font-size:11px}
+.log{overflow:auto;padding:4px 8px 8px;flex:1}
+.log .cmd{color:var(--dim);font-size:9px;padding:2px 0 6px;border-bottom:1px dashed var(--line);margin-bottom:4px}
+.line{padding:3px 2px;border-bottom:1px solid rgba(255,255,255,.022);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;display:flex;gap:6px;align-items:baseline}
+.line:hover{background:rgba(255,255,255,.03)}
+.line .t{color:var(--dim);font-size:9px;flex:none}
+.line .tag{font-size:8px;letter-spacing:.04em;padding:0 4px;border-radius:2px;flex:none;border:1px solid #333a49;color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis}
+.line .tag.adv{color:var(--green);border-color:rgba(57,255,154,.35)}
+.line .tag.sub{color:var(--purple);border-color:rgba(176,131,255,.4)}
+.line .tag.err{color:var(--red);border-color:rgba(255,95,109,.4)}
+.line .nm{color:var(--text);overflow:hidden;text-overflow:ellipsis}
+.line .st{color:var(--dim);font-size:9px;margin-left:auto;flex:none}
+.bottom{height:132px;flex:none;display:grid;grid-template-columns:1.15fr 1fr;gap:10px;padding:0 12px 12px;position:relative}
+.traces,.detail{overflow:auto;padding:6px 9px}
+.tr{padding:4px 6px;border-bottom:1px solid rgba(255,255,255,.03);cursor:pointer;display:flex;gap:10px;align-items:baseline;white-space:nowrap}
+.tr:hover,.tr.on{background:rgba(57,255,154,.06)}
+.tr b{color:var(--cyan);font-weight:500;font-size:10px}.tr span{color:var(--muted);overflow:hidden;text-overflow:ellipsis;font-size:10px}.tr .ts{color:var(--dim);font-size:9px;margin-left:auto}
+.dr{padding:3px 0;border-bottom:1px solid rgba(255,255,255,.03);color:var(--muted);white-space:pre-wrap;word-break:break-word;font-size:10px}.dr b{color:var(--text);font-weight:500}
+.empty{color:var(--dim);padding:12px;font-size:10px}
+.wm{position:absolute;right:16px;bottom:6px;color:#3a4150;font-size:9px;letter-spacing:.14em;pointer-events:none}
+.mask{position:fixed;inset:0;background:rgba(3,4,8,.66);backdrop-filter:blur(3px);z-index:120;display:none;align-items:center;justify-content:center;padding:24px}
+.mask.on{display:flex}
+.popup{width:min(860px,94vw);max-height:86vh;background:#11141b;border:1px solid #39414f;border-radius:12px;box-shadow:0 30px 100px rgba(0,0,0,.75),0 0 30px rgba(57,255,154,.08);display:flex;flex-direction:column;overflow:hidden}
+.popup .ph{height:38px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#1b1f28,#14171e)}
+.popup .ph b{color:var(--amber);font-size:13px;font-weight:600}.popup .ph span{color:var(--dim);font-size:10px;letter-spacing:.1em}.popup .ph .sp{flex:1}.popup .ph button{background:#1c2029;color:var(--muted);border:1px solid var(--line2);border-radius:4px;cursor:pointer;font:inherit;padding:3px 10px}.popup .ph button:hover{color:var(--text);border-color:#4a5365}
+.popup .pb{overflow:auto;padding:12px 14px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.popup .kv{grid-column:1/-1;border:1px solid var(--line);border-radius:7px;padding:8px 10px;background:#151922;display:flex;flex-wrap:wrap;gap:8px 22px}
+.popup .kv div{font-size:10px;color:var(--muted)}.popup .kv b{color:var(--text);font-weight:500;margin-right:6px}
+.popup .box{border:1px solid var(--line);border-radius:7px;background:#10131a;display:flex;flex-direction:column;min-height:140px;max-height:360px;overflow:hidden}
+.popup .box h3{margin:0;padding:6px 9px;font-size:10px;font-weight:500;letter-spacing:.1em;color:var(--green);border-bottom:1px solid var(--line);background:#171b23}
+.popup .box pre{margin:0;padding:9px;white-space:pre-wrap;word-break:break-word;color:var(--muted);font:10px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow:auto;flex:1}
+.popup .full{grid-column:1/-1}
+@media(max-width:700px){.popup .pb{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
-  <h1>MiniHarness 飞书 Bot 执行监控</h1>
-  <div class="hint">每条飞书消息生成一个执行球。球停在哪里，程序就在哪里执行；进入下一环节时会长出箭头，球沿箭头移动。流式碎片只让当前球脉冲，不会把图刷爆。</div>
-  <div class="bar">
-    <button class="primary" onclick="loadRecent()">刷新最近消息</button>
-    <button id="followBtn" onclick="toggleFollow()">跟随最新：开</button>
-    <button onclick="replay()">回放当前</button>
-    <span id="current" class="hint"></span>
-  </div>
-  <div class="layout">
-    <div class="panel">
-      <h2>最近 trace</h2>
-      <div id="traces"><div class="empty">加载中...</div></div>
-    </div>
+<div class="window">
+<div class="titlebar">
+  <div class="lights"><i></i><i></i><i></i></div>
+  <div class="center">MINIHARNESS — FEISHU BOT · TERMINAL COCKPIT · log first</div>
+  <div class="live" id="liveBadge">● live</div>
+</div>
+<div class="top">
+  <div class="ident">
+    <div class="pause on" id="pauseBtn" onclick="toggleFollow()" title="暂停 / 恢复跟随最新">Ⅱ</div>
     <div>
-      <div id="stageWrap"><svg id="stage" viewBox="0 0 900 600" preserveAspectRatio="xMidYMin meet">
-        <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#94a3b8"/></marker></defs>
-        <g id="edges"></g><g id="nodes"></g><g id="balls"></g>
-      </svg></div>
-      <div class="legend"><span><i class="dot" style="background:#2563eb"></i>执行球/活跃节点</span><span><i class="dot" style="background:#10b981"></i>已完成</span><span><i class="dot" style="background:#8b5cf6"></i>子 Agent 分叉</span><span><i class="dot" style="background:#ef4444"></i>失败</span></div>
-    </div>
-    <div class="panel">
-      <h2>当前阶段</h2>
-      <div id="eventDetail"><div class="empty">点节点看阶段事件</div></div>
+      <h1>MiniHarness Terminal<span class="ver">v0.1-night</span></h1>
+      <div class="runline"><span class="dot"></span><b id="runState">running</b> · <span id="runElapsed">00:00:00</span></div>
+      <div class="chips"><span class="chip">TRACE</span><span class="chip">STREAM</span><span class="chip">SPAWN</span><span class="chip">JSONL</span></div>
     </div>
   </div>
-  <div id="live">实时事件：连接中...</div>
+  <div class="tagline" id="tagline">每次调用都有据可查 · 节点随 LLM 运行时生长</div>
+  <div class="stats">
+    <div class="stat"><label>events</label><b class="c" id="sEvents">0</b></div>
+    <div class="stat"><label>tools</label><b id="sTools">0</b></div>
+    <div class="stat"><label>completed</label><b class="g" id="sDone">0</b></div>
+    <div class="stat"><label>errors</label><b class="r" id="sErr">0</b></div>
+  </div>
+</div>
+<div class="ctrl">
+  <button id="followBtn" class="on" onclick="toggleFollow()">跟随最新</button>
+  <button onclick="loadRecent()">刷新列表</button>
+  <button onclick="replay()">回放当前</button>
+  <span class="spacer"></span>
+  <span class="tp" id="tracePill">trace: -</span>
+</div>
+<div class="body">
+  <section class="panel"><div class="pt"><span>AGENTS</span><span id="agentCount">7 online</span></div><div id="agents" class="agents"></div></section>
+  <section class="panel"><div class="pt"><span>LIVE FLOW</span><span id="flowPhase">等待事件</span></div><div class="flow-wrap"><svg id="flow" class="flow" viewBox="0 0 900 420" preserveAspectRatio="xMidYMid meet"><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#4a5365"/></marker></defs><g id="edges"></g><g id="nodes"></g><g id="runnerG" style="display:none"><circle id="ringOut" class="ring-o" r="14" cx="0" cy="0"></circle><circle id="runner" class="ring pulse" r="6" cx="0" cy="0"></circle></g></svg><div id="flowEmpty" class="flow-empty">NO ACTIVE TRACE</div></div></section>
+  <section class="panel"><div class="pt"><span>EVENT LOG</span><span>latest last</span></div><div id="log" class="log"><div class="cmd">$ tail -f logs/feishu-events-*.jsonl</div><div id="logLines"></div></div></section>
+</div>
+<div class="bottom">
+  <section class="panel"><div class="pt"><span>TRACE HISTORY</span><span>reading the log · 按 sessionId 聚合</span></div><div id="traces" class="traces"><div class="empty">加载中...</div></div></section>
+  <section class="panel"><div class="pt"><span>EVENT DETAIL</span><span>点卡片 / 节点 / 日志查看浮窗</span></div><div id="detail" class="detail"><div class="empty">等待选择事件</div></div></section>
+  <div class="wm">MINIHARNESS · @feishu-bot</div>
+</div>
+<div id="mask" class="mask" onclick="if(event.target===this)closePopup()">
+ <div class="popup">
+  <div class="ph"><b id="popTitle">EVENT DETAIL</b><span id="popSub">点击卡片 / 节点 / 日志查看调用详情</span><span class="sp"></span><button onclick="copyPopup()">复制</button><button onclick="closePopup()">关闭 ✕</button></div>
+  <div class="pb" id="popBody"></div>
+ </div>
+</div>
+</div>
 <script>
-let followLatest = true;
-let currentTrace = null;
-let currentEvents = [];
-let machine = null;
-let replayTimer = null;
-let ballAnim = null;
-let animFrame = null;
-
-function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function short(s,n=8){return String(s||'-').slice(0,n)}
-function setFollow(on){followLatest=on;const b=document.getElementById('followBtn');b.textContent='跟随最新：'+(on?'开':'关');b.classList.toggle('active',on)}
-function toggleFollow(){setFollow(!followLatest);if(followLatest&&currentTrace)loadTrace(currentTrace,false)}
-
-function makeMachine(){
-  return {nodes:[],edges:[],current:{},positions:{main:0,sub:0},lastEvent:null};
-}
-function isDelta(e){
-  const t=String(e.eventType||'');
-  return t.includes('DELTA')||t.includes('PROGRESS')||t.includes('HINT_BLOCK');
-}
-function isEnd(e){
-  const t=String(e.eventType||'');
-  const s=String(e.status||'');
-  return t.endsWith('_END')||s==='OK'||s==='END'||s==='RESULT'||s==='SUCCESS'||s.startsWith('SUCCESS');
-}
-function laneOf(e){
-  const parent=e.parentSessionId;
-  if(parent&&parent!=='-')return 'sub:'+short(parent,10);
-  if(String(e.eventType||'').includes('SUBAGENT'))return 'sub:main';
-  return 'main';
-}
+const $=id=>document.getElementById(id),NS='http://www.w3.org/2000/svg';
+const NODE_W=132,NODE_H=48,ROW_GAP=96;
+const pageStart=Date.now();
+let followLatest=true,currentTrace=null,currentEvents=[],machine=null,replayTimer=null,animation=null,startAt=0,selectedEvent=null;
+const short=v=>!v||v==='-'?'':String(v).slice(0,8);
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const svg=(tag,attrs)=>{const n=document.createElementNS(NS,tag);for(const k in attrs)n.setAttribute(k,attrs[k]);return n};
+const dur=ms=>{const s=Math.floor(ms/1000),p=n=>String(n).padStart(2,'0');return p(Math.floor(s/3600))+':'+p(Math.floor(s%3600/60))+':'+p(s%60)};
+const ROLES=[
+ {r:'entry',ico:'✦',name:'飞书入口',badge:'MSG',d:'接收 im.message.receive_v1 文本事件'},
+ {r:'agent',ico:'◈',name:'主 Agent',badge:'REASON',d:'ReActAgent 推理循环 · streamEvents'},
+ {r:'model',ico:'◉',name:'模型推理',badge:'LLM',d:'OpenAIChatModel · 每轮真实请求'},
+ {r:'tool',ico:'⬡',name:'工具调用',badge:'TOOL',d:'read / write / edit / bash'},
+ {r:'web',ico:'◎',name:'联网工具',badge:'WEB',d:'web_search / web_fetch'},
+ {r:'sub',ico:'✧',name:'子 Agent',badge:'SPAWN',d:'spawn_agent 委派任务'},
+ {r:'send',ico:'➤',name:'回复发送',badge:'SEND',d:'sendText 回原会话'}
+];
 function stageOf(e){
-  const t=String(e.eventType||'');
-  if(t.includes('MESSAGE_RECEIVED'))return {type:'root',label:'飞书消息',name:'进入'};
-  if(t.includes('AGENT_START'))return {type:'agent',label:'Agent 启动',name:e.name||'小飞'};
-  if(t.includes('MODEL_CALL_START'))return {type:'model',label:'模型思考',name:'模型调用'};
-  if(t.includes('TOOL_CALL_START')||t.includes('TOOL_CALL'))return {type:'tool',label:'调用工具',name:e.name||'工具'};
-  if(t.includes('TOOL_RESULT'))return {type:'tool',label:'工具返回',name:e.name||'工具'};
-  if(t.includes('SUBAGENT')||e.parentSessionId&&e.parentSessionId!=='-')return {type:'sub',label:'子 Agent',name:'子任务'};
-  if(t.includes('AGENT_RESULT'))return {type:'reply',label:'生成回复',name:'结果'};
-  if(t.includes('MESSAGE_SENT')||t.includes('AGENT_REPLY'))return {type:'reply',label:'回复发送',name:'飞书'};
-  if(t.includes('AGENT_END'))return {type:'done',label:'执行结束',name:'完成'};
-  return {type:'other',label:String(e.eventType||'事件').slice(0,10),name:short(e.status||'',6)};
+ const t=e.eventType||'',n=e.name||'';
+ if(t==='MESSAGE_RECEIVED')return['entry','飞书消息','接收'];
+ if(t==='AGENT_REPLY')return['entry','回复生成','完成'];
+ if(t==='MESSAGE_SENT')return['entry','消息发送','完成'];
+ if(t==='AGENT_START'||t==='AGENT_RESULT')return['agent',e.name||'主 Agent',short(e.replyId)];
+ if(t==='MODEL_CALL_START'||t==='MODEL_CALL_DETAIL')return['model','模型推理',short(e.replyId)];
+ if(t==='SUBAGENT_EXPOSED'||t==='SUBAGENT_EVENT')return['sub',e.subagentName||'子 Agent',short(e.subagentSessionId||e.sessionId)];
+ if(t==='TOOL_CALL_START'||t==='TOOL_CALL_END'||t==='TOOL_RESULT_START'||t==='TOOL_RESULT_END'||t==='TOOL_CALL_DETAIL')return['tool',n||'工具',short(e.toolCallId)];
+ return null;
 }
-function nodeKey(e,stage){
-  const id=e.toolCallId&&e.toolCallId!=='-'?e.toolCallId:(e.replyId&&e.replyId!=='-'?e.replyId:null);
-  if(id)return stage.type+':'+id;
-  if(stage.type==='root')return 'root:'+(e.traceId||'-');
-  if(stage.type==='sub')return 'sub:'+short(e.sessionId||e.parentSessionId||'child',10);
-  return stage.type+':'+short(e.eventId||e.ts||'',10);
+function stageKey(e){const s=stageOf(e);if(!s)return null;const id=(e.toolCallId&&e.toolCallId!=='-')?e.toolCallId:((e.replyId&&e.replyId!=='-')?e.replyId:'main');return s[1]+':'+id}
+function classify(e){const t=e.eventType||'';if(t==='TOOL_PROGRESS'||t.endsWith('_DELTA')||t.includes('BLOCK')||t==='HINT_BLOCK'||t==='PROGRESS')return 'pulse';if(t==='MESSAGE_SENT'||t==='AGENT_REPLY'||t==='AGENT_RESULT'||t==='AGENT_END'||t==='MODEL_CALL_END'||t==='TOOL_RESULT_END'||t==='MODEL_CALL_START'||t==='TOOL_CALL_START'||t==='SUBAGENT_EXPOSED'||t==='SUBAGENT_EVENT'||t==='MESSAGE_RECEIVED')return 'advance';if(t==='MODEL_CALL_DETAIL'||t==='TOOL_CALL_DETAIL')return 'ignore';return 'ignore'}
+function roleOf(e){
+ const t=e.eventType||'',n=e.name||'';
+ if(t==='MESSAGE_RECEIVED')return 'entry';
+ if(t==='AGENT_REPLY'||t==='MESSAGE_SENT')return 'send';
+ if(t==='MODEL_CALL_START'||t==='MODEL_CALL_END'||t==='MODEL_CALL_DETAIL')return 'model';
+ if(t==='SUBAGENT_EXPOSED'||t==='SUBAGENT_EVENT')return 'sub';
+ if(t==='TOOL_CALL_DETAIL')return n.indexOf('web_')===0?'web':'tool';if(t.indexOf('TOOL')===0)return n.indexOf('web_')===0?'web':'tool';
+ if(t.indexOf('AGENT')===0)return 'agent';
+ return null;
 }
-function nextPos(machine,lane){
-  const isSub=lane.startsWith('sub:');
-  const idx=machine.positions[lane]===undefined?machine.positions[lane]=0:++machine.positions[lane];
-  if(isSub)return {x:90+(idx%6)*130,y:400+Math.floor(idx/6)*56};
-  return {x:90+(idx%7)*118,y:90+Math.floor(idx/7)*82};
+function makeMachine(events){
+ const nodes=[],byKey=new Map();
+ for(let idx=0;idx<events.length;idx++){const e=events[idx],s=stageOf(e),k=stageKey(e);if(!s||!k)continue;let node=byKey.get(k);if(!node){node={key:k,stage:s[0],name:s[1],meta:s[2],sub:s[0]==='sub',events:[],last:idx,status:'active'};byKey.set(k,node);nodes.push(node)}node.events.push(e);node.last=idx;const st=String(e.status||'').toUpperCase();if(st==='ERROR'||st==='FAIL'||st==='FAILED')node.status='err';else if(node.status!=='err'&&['MESSAGE_SENT','AGENT_END','AGENT_REPLY','TOOL_RESULT_END'].indexOf(e.eventType)>=0)node.status='done'}
+ function pathFor(a,b){const ay=a.y+NODE_H/2,by=b.y+NODE_H/2;if(b.y>a.y)return 'M '+(a.x+NODE_W)+' '+ay+' C '+(a.x+NODE_W+58)+' '+ay+', '+(a.x+NODE_W+58)+' '+by+', '+(b.x+NODE_W)+' '+by;if(b.x>a.x)return 'M '+(a.x+NODE_W)+' '+ay+' C '+(a.x+NODE_W+30)+' '+ay+', '+(b.x-30)+' '+by+', '+b.x+' '+by;return 'M '+a.x+' '+ay+' C '+(a.x-30)+' '+ay+', '+(b.x+NODE_W+30)+' '+by+', '+(b.x+NODE_W)+' '+by}
+ nodes.forEach((n,i)=>{const row=Math.floor(i/4),col=i%4,fromLeft=row%2===0;n.pos={x:40+((fromLeft?col:3-col))*178,y:70+row*ROW_GAP}});
+ const edges=[];for(let i=1;i<nodes.length;i++)edges.push({id:'e'+i,from:nodes[i-1].key,to:nodes[i].key,sub:nodes[i].sub||nodes[i-1].sub,live:i===nodes.length-1,d:pathFor(nodes[i-1].pos,nodes[i].pos)});
+ return {nodes,edges,byKey,head:nodes.length?nodes[nodes.length-1].key:null};
 }
-function addNode(machine,e){
-  const stage=stageOf(e),lane=laneOf(e),key=nodeKey(e,stage);
-  let node=machine.nodes.find(n=>n.key===key);
-  if(node){
-    node.event=e; node.stage=stage;
-    if(isEnd(e))node.done=true;
-    if(String(e.status||'').startsWith('ERROR')||e.status==='FAILED')node.err=true;
-    return {node,moved:false,lane};
-  }
-  const pos=nextPos(machine,lane);
-  node={key,event:e,stage,lane,x:pos.x,y:pos.y,done:isEnd(e),err:e.status==='FAILED'||String(e.status||'').startsWith('ERROR'),sub:lane.startsWith('sub:')};
-  machine.nodes.push(node);
-  const fromKey=machine.current[lane]||machine.current.main||machine.nodes[0]?.key;
-  if(fromKey&&fromKey!==key){
-    machine.edges.push({from:fromKey,to:key,sub:lane.startsWith('sub:'),flowing:true});
-  }
-  machine.current[lane]=key;
-  return {node,moved:true,lane,fromKey};
+function renderAgents(){$('agents').innerHTML=ROLES.map(x=>'<div class="acard" data-role="'+x.r+'"><div class="arow"><span class="aico">'+x.ico+'</span><span class="aname">'+x.name+'</span><span class="badge">'+x.badge+'</span></div><div class="ad">'+x.d+'</div><div class="am" data-am="'+x.r+'">idle</div></div>').join('');$('agentCount').textContent=ROLES.length+' roles';$('agents').querySelectorAll('.acard').forEach(c=>{c.style.cursor='pointer';c.onclick=()=>showRole(c.dataset.role)})}
+function renderFlow(edgeToAnimate){
+ if(animation){cancelAnimationFrame(animation);animation=null}
+ $('edges').innerHTML='';$('nodes').innerHTML='';
+ const has=machine&&machine.nodes.length;
+ $('flowEmpty').style.display=has?'none':'grid';$('runnerG').style.display=has?'':'none';
+ if(!has)return;
+ const edgeMap=new Map();
+ for(const e of machine.edges){
+  const path=svg('path',{d:e.d,class:'edge'+(e.sub?' sub':'')+(e.live?' live':'')});$('edges').appendChild(path);edgeMap.set(e.id,path);
+ }
+ for(const n of machine.nodes){
+  const cls='node '+(n.sub?'sub ':'')+(n.status==='done'?'done':n.status==='err'?'err':n.key===machine.head?'active':'');
+  const g=svg('g',{class:cls});g.appendChild(svg('rect',{x:n.pos.x,y:n.pos.y,width:NODE_W,height:NODE_H,rx:10,class:'nrect'}));
+  const t1=svg('text',{x:n.pos.x+10,y:n.pos.y+20,class:'nt1'});t1.textContent=n.name;g.appendChild(t1);
+  const t2=svg('text',{x:n.pos.x+10,y:n.pos.y+36,class:'nt2'});t2.textContent=n.meta||n.stage;g.appendChild(t2);
+  g.style.cursor='pointer';g.onclick=()=>selectEvent(n.events[n.events.length-1]);$('nodes').appendChild(g);
+ }
+ const active=machine.byKey.get(machine.head);
+ if(active){$('nodes').appendChild(svg('rect',{x:active.pos.x-6,y:active.pos.y-6,width:NODE_W+12,height:NODE_H+12,rx:14,class:'halo'}));const lb=svg('text',{x:active.pos.x,y:active.pos.y-14,class:'stagelabel'});lb.textContent='● RUNNING';$('nodes').appendChild(lb)}
+ const ringOut=$('ringOut'),runner=$('runner');
+ ringOut.setAttribute('class','ring-o'+(active&&active.sub?' sub':''));runner.setAttribute('class','ring'+(active&&active.sub?' sub':'')+' pulse');
+ const move=(x,y)=>{ringOut.setAttribute('cx',x);ringOut.setAttribute('cy',y);runner.setAttribute('cx',x);runner.setAttribute('cy',y)};
+ if(edgeToAnimate&&edgeMap.has(edgeToAnimate.id)){
+  const path=edgeMap.get(edgeToAnimate.id),len=path.getTotalLength(),t0=performance.now();
+  runner.setAttribute('class','ring'+(active&&active.sub?' sub':''));
+  const step=now=>{const p=Math.min(1,(now-t0)/520),pt=path.getPointAtLength(len*(1-Math.pow(1-p,3)));move(pt.x,pt.y);if(p<1)animation=requestAnimationFrame(step);else runner.setAttribute('class','ring'+(active&&active.sub?' sub':'')+' pulse')};
+  animation=requestAnimationFrame(step);
+ }else move(active.pos.x+NODE_W/2,active.pos.y+NODE_H/2);
+ $('flowPhase').textContent=active?active.name:'等待事件';
 }
-function pulseBall(machine,e){
-  const lane=laneOf(e);
-  const key=machine.current[lane]||machine.current.main;
-  if(key){
-    const node=machine.nodes.find(n=>n.key===key);
-    if(node)node.event=e;
-  }
+function renderLog(){const start=Math.max(0,currentEvents.length-300);$('logLines').innerHTML=currentEvents.slice(start).map((e,i)=>{const t=e.eventType||'',err=/error|fail/i.test(e.status||''),sub=t==='SUBAGENT_EVENT'||t==='SUBAGENT_EXPOSED',adv=classify(e)==='advance',tag=err?'err':sub?'sub':adv?'adv':'';return '<div class="line" data-i="'+(start+i)+'"><span class="t">'+esc((e.ts||'').slice(11,19))+'</span><span class="tag '+tag+'">'+esc(t.slice(0,18))+'</span><span class="nm">'+esc(e.name||'-')+'</span><span class="st">'+esc(short(e.toolCallId||e.replyId))+' '+esc(e.status||'')+'</span></div>'}).join('');$('logLines').querySelectorAll('.line').forEach(n=>n.onclick=()=>selectEvent(currentEvents[+n.dataset.i]));$('log').scrollTop=$('log').scrollHeight}
+function detailFor(e){
+ if(!e)return null;
+ if(e.eventType==='MODEL_CALL_DETAIL'||e.eventType==='TOOL_CALL_DETAIL')return e;
+ const key=e.toolCallId&&e.toolCallId!=='-'?'tool:'+e.toolCallId:(e.replyId&&e.replyId!=='-'?'reply:'+e.replyId:null);
+ if(!key)return null;
+ for(let i=currentEvents.length-1;i>=0;i--){const d=currentEvents[i];if(!d.detail)continue;
+  if(key.indexOf('tool:')===0&&d.eventType==='TOOL_CALL_DETAIL'&&d.toolCallId===e.toolCallId&&d.status==='END')return d;
+  if(key.indexOf('reply:')===0&&d.eventType==='MODEL_CALL_DETAIL'&&d.replyId===e.replyId)return d}
+ return null;
 }
-function applyEvent(machine,e){
-  machine.lastEvent=e;
-  if(isDelta(e)){pulseBall(machine,e);return;}
-  const r=addNode(machine,e);
-  if(isEnd(e)&&r.node)r.node.done=true;
-  return r;
+function pretty(v){if(v==null||v===''||v==='-')return '未记录';try{const o=JSON.parse(v);return JSON.stringify(o,null,2)}catch(_){return String(v)}}
+function hasText(v){return v!=null&&String(v)!==''&&v!=='-'}
+function detailHtml(e){
+ const d=detailFor(e)||e||{},model=/MODEL/.test(d.eventType||e.eventType||'')||/MODEL/.test(e.eventType||'')||(e.name||'').indexOf('model')>=0;
+ const idRow=model?{label:'模型 ID',value:d.modelId||d.name||e.name}:{label:'工具',value:d.name||e.name};
+ const rows=[{label:'事件',value:e.eventType},{label:'状态',value:e.status},idRow,{label:'replyId',value:e.replyId||d.replyId},{label:'toolCallId',value:e.toolCallId||d.toolCallId},{label:'traceId',value:e.traceId},{label:'sessionId',value:e.sessionId},{label:'耗时',value:hasText(d.durationMs)?d.durationMs+' ms':'未记录'}];
+ const input=pretty(d.input),output=pretty(d.output||e.summary);
+ return '<div class="kv">'+rows.map(r=>'<div><b>'+esc(r.label)+':</b>'+esc(hasText(r.value)?r.value:'未记录')+'</div>').join('')+'</div>'+
+  '<div class="box"><h3>入参 INPUT</h3><pre>'+esc(input)+'</pre></div>'+
+  '<div class="box"><h3>出参 OUTPUT</h3><pre>'+esc(output)+'</pre></div>'+
+  '<div class="box full"><h3>事件上下文</h3><pre>'+esc(JSON.stringify({ts:e.ts,source:e.source,parentSessionId:e.parentSessionId,subagentEvent:e.subagentEvent,subagentSessionId:e.subagentSessionId,summary:e.summary},null,2))+'</pre></div>';
 }
-function svgEl(machine){
-  const nodes=machine.nodes,edges=machine.edges;
-  const edgeSvg=edges.map((ed,i)=>{
-    const a=nodes.find(n=>n.key===ed.from),b=nodes.find(n=>n.key===ed.to);
-    if(!a||!b)return '';
-    const mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
-    const d='M'+(a.x+18)+','+a.y+' Q'+mx+','+(my-28)+' '+(b.x-18)+','+b.y;
-    ed.d=d;
-    return '<path id="edge-'+i+'" class="edge'+(ed.sub?' sub':'')+(ed.flowing?' flowing':'')+'" d="'+d+'"/>';
-  }).join('');
-  const nodeSvg=nodes.map((n,i)=>{
-    const active=(machine.current[n.lane]||machine.current.main)===n.key&&!n.done;
-    const cls='node'+(active?' active':'')+(n.done?' done':'')+(n.err?' err':'')+(n.sub?' sub-node':'');
-    const shape=n.stage.type==='root'?'<circle cx="'+n.x+'" cy="'+n.y+'" r="20"/>':'<rect x="'+(n.x-18)+'" y="'+(n.y-14)+'" width="36" height="28" rx="9"/>';
-    return '<g class="'+cls+'" data-key="'+esc(n.key)+'" onclick="showNode(this.dataset.key)">'+shape+
-      '<text x="'+n.x+'" y="'+(n.y-19)+'" text-anchor="middle">'+esc(n.stage.label)+'</text>'+
-      '<text class="sub" x="'+n.x+'" y="'+(n.y+26)+'" text-anchor="middle">'+esc(short(n.stage.name||'',10))+'</text></g>';
-  }).join('');
-  let activeKey = ballAnim?.toKey;
-  if(!activeKey){
-    const lanes=[...new Set(nodes.map(n=>n.lane))];
-    activeKey=lanes.map(l=>machine.current[l]||machine.current.main).find(k=>k)||nodes[0]?.key;
-  }
-  const ballSvg=nodes.filter(n=>n.key===activeKey&&!n.done).map(n=>{
-    let bx=n.x,by=n.y-2;
-    if(ballAnim){
-      const path=document.getElementById('edge-'+ballAnim.edgeIndex);
-      if(path&&path.getPointAtLength){
-        const len=path.getTotalLength(),p=path.getPointAtLength(len*ballAnim.progress);
-        bx=p.x;by=p.y;
-      }
-    }
-    const pulse=!ballAnim&&isDelta(machine.lastEvent)&&laneOf(machine.lastEvent||{})===n.lane;
-    return '<circle class="ball'+(n.sub?' sub-ball':'')+(pulse?' pulse':'')+'" cx="'+bx+'" cy="'+by+'" r="8"/>';
-  }).join('');
-  return {edgeSvg,nodeSvg,ballSvg};
+function selectEvent(e){selectedEvent=e;if(!e)return;$('detail').innerHTML=detailHtml(e);openPopup(e)}
+function openPopup(e){if(!e)return;$('popTitle').textContent=e.eventType||'EVENT';$('popSub').textContent=(e.name||'-')+' · '+(e.status||'-')+' · '+(e.ts||'');$('popBody').innerHTML=detailHtml(e);$('mask').classList.add('on')}
+function closePopup(){$('mask').classList.remove('on')}
+function copyPopup(){const text=$('popBody').innerText;if(navigator.clipboard)navigator.clipboard.writeText(text).catch(()=>{});$('popSub').textContent='已复制详情到剪贴板'}
+function showRole(role){const list=currentEvents.filter(e=>roleOf(e)===role);if(!list.length){openPopup({eventType:'ROLE',name:role,status:'IDLE',ts:'',summary:'该角色在当前 trace 还没有事件'});return}openPopup(list[list.length-1])}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closePopup()})
+function updateMetrics(){$('sEvents').textContent=currentEvents.length;$('sTools').textContent=machine?machine.nodes.filter(n=>n.stage==='tool'||n.stage==='sub').length:0;$('sDone').textContent=machine?machine.nodes.filter(n=>n.status==='done').length:0;const err=currentEvents.filter(e=>/error|fail/i.test(e.status||'')).length;$('sErr').textContent=err;$('tracePill').textContent='trace: '+(currentTrace||'-').slice(0,12);$('runState').textContent=machine&&machine.head?'running':'waiting';$('liveBadge').textContent=followLatest?'● live':'● paused'}
+function tickClock(){$('runElapsed').textContent=dur(Date.now()-pageStart);if(startAt)$('tagline').textContent='当前 trace 已运行 '+dur(Date.now()-startAt)+' · 节点随 LLM 运行时生长'}
+function clearRoles(){document.querySelectorAll('.acard').forEach(c=>{c.classList.remove('on');const am=c.querySelector('[data-am]');if(am)am.textContent='idle'})}
+function applyEvent(e,animate){
+ if(!currentTrace)currentTrace=e.traceId;if(e.traceId!==currentTrace)return;
+ currentEvents.push(e);const before=machine&&machine.head;machine=makeMachine(currentEvents);
+ const edge=machine.head&&machine.head!==before?machine.edges[machine.edges.length-1]:null;
+ renderFlow(animate?edge:null);renderLog();updateMetrics();
+ const role=roleOf(e);if(role){const card=document.querySelector('[data-role="'+role+'"]');if(card){card.classList.add('on');const am=card.querySelector('[data-am]');if(am)am.textContent=(e.name||e.eventType||'active')+' · '+(e.status||'')}}
+ if(selectedEvent)selectEvent(selectedEvent);
 }
-function draw(machine){
-  const parts=svgEl(machine);
-  document.getElementById('edges').innerHTML=parts.edgeSvg;
-  document.getElementById('nodes').innerHTML=parts.nodeSvg;
-  document.getElementById('balls').innerHTML=parts.ballSvg;
-  window.__machine=machine;
-}
-function animateBall(machine,edgeIndex,toKey,done){
-  if(animFrame)cancelAnimationFrame(animFrame);
-  ballAnim={edgeIndex,toKey,progress:0,start:performance.now(),duration:520};
-  const step=(now)=>{
-    if(!ballAnim)return;
-    ballAnim.progress=Math.min(1,(now-ballAnim.start)/ballAnim.duration);
-    draw(machine);
-    if(ballAnim.progress<1){animFrame=requestAnimationFrame(step)}
-    else{const finished=ballAnim;ballAnim=null;animFrame=null;if(done)done(finished)}
-  };
-  animFrame=requestAnimationFrame(step);
-}
-function showNode(key){
-  const n=(window.__machine?.nodes||[]).find(n=>n.key===key);
-  if(!n)return;
-  const e=n.event||{};
-  document.getElementById('eventDetail').innerHTML='<div class="row active"><div class="meta">'+esc(n.stage.label)+' · '+esc(e.eventType||'')+' · '+esc(e.ts||'')+'</div><div class="meta">lane '+esc(n.lane)+' · trace '+esc(short(e.traceId,12))+'</div><div class="summary">'+esc(e.summary||'')+'</div></div>';
-}
-function renderEvents(events){
-  ballAnim=null;if(animFrame)cancelAnimationFrame(animFrame);animFrame=null;
-  machine=makeMachine();
-  for(const e of events)applyEvent(machine,e);
-  draw(machine);
-  currentEvents=events;
-}
-function replay(){
-  if(replayTimer){clearInterval(replayTimer);replayTimer=null}
-  ballAnim=null;if(animFrame)cancelAnimationFrame(animFrame);animFrame=null;
-  if(!currentEvents.length)return;
-  machine=makeMachine();
-  draw(machine);
-  let i=0;
-  replayTimer=setInterval(()=>{
-    if(i>=currentEvents.length){clearInterval(replayTimer);replayTimer=null;return}
-    const before=machine.edges.length;
-    const res=applyEvent(machine,currentEvents[i++]);
-    if(res?.moved&&machine.edges.length>before){
-      const edgeIndex=machine.edges.length-1;
-      animateBall(machine,edgeIndex,res.node.key);
-    }else{
-      draw(machine);
-    }
-  },520);
-}
-async function loadTrace(trace,pin){
-  if(!trace)return;
-  if(pin)setFollow(false);
-  currentTrace=trace;
-  const r=await fetch('/api/events?traceId='+encodeURIComponent(trace)+'&limit=500');
-  const events=await r.json();
-  document.getElementById('current').textContent='当前 trace：'+short(trace,12)+(followLatest?'（跟随最新）':'');
-  renderEvents(events);
-  [...document.querySelectorAll('.trace')].forEach(el=>el.classList.toggle('active',el.dataset.trace===trace));
-}
-async function loadRecent(){
-  const r=await fetch('/api/events?limit=1000');
-  const events=await r.json();
-  const map=new Map();
-  for(const e of events){const trace=e.traceId||'-';if(!map.has(trace))map.set(trace,[]);map.get(trace).push(e)}
-  const box=document.getElementById('traces');
-  const items=[...map].reverse();
-  box.innerHTML=items.length?items.map(([trace,es])=>'<div class="trace" data-trace="'+esc(trace)+'" onclick="loadTrace(this.dataset.trace,true)"><b>'+esc(short(trace,12))+'</b><span>'+es.length+' 个事件 · '+esc(es[0].ts)+'</span></div>').join(''):'<div class="empty">还没有事件；去飞书发一条消息试试</div>';
-  if(followLatest&&items.length)await loadTrace(items[0][0],false);
-}
-function connect(){
-  const es=new EventSource('/api/stream');
-  es.onmessage=m=>{
-    const e=JSON.parse(m.data);
-    document.getElementById('live').textContent='实时事件：'+e.eventType+' · '+short(e.traceId);
-    if(followLatest)loadRecent();
-    else if(currentTrace===e.traceId&&machine){
-      const before=machine.edges.length;
-      const res=applyEvent(machine,e);
-      if(res?.moved&&machine.edges.length>before){
-        animateBall(machine,machine.edges.length-1,res.node.key,()=>{});
-      }else{
-        draw(machine);
-      }
-    }
-  };
-  es.onerror=()=>{document.getElementById('live').textContent='实时事件：连接断开，可刷新页面重试';es.close()};
-}
-setFollow(true);loadRecent();connect();
+function loadTrace(traceId,animate){currentTrace=traceId;currentEvents=[];machine=null;selectedEvent=null;startAt=Date.now();clearRoles();fetch('/api/events?traceId='+encodeURIComponent(traceId)+'&limit=5000').then(r=>r.json()).then(es=>{es.forEach((e,i)=>applyEvent(e,animate&&i===es.length-1));renderFlow();updateMetrics()}).catch(()=>{});document.querySelectorAll('.trace-row').forEach(n=>n.classList.toggle('on',n.dataset.trace===traceId))}
+function loadRecent(){fetch('/api/events?limit=800').then(r=>r.json()).then(es=>{const traces=new Map();for(const e of es){const id=e.traceId;if(!id||id==='-')continue;let t=traces.get(id);if(!t){t={id,session:e.sessionId||'-',count:0,last:e.ts,name:e.name||'-'};traces.set(id,t)}t.count++;t.last=e.ts}const arr=[...traces.values()].sort((a,b)=>String(b.last).localeCompare(String(a.last)));$('traces').innerHTML=arr.length?arr.map(t=>'<div class="tr '+(t.id===currentTrace?'on':'')+'" data-trace="'+esc(t.id)+'"><b>'+esc(t.id.slice(0,10))+'</b><span>'+esc(t.session)+' · '+t.count+' ev · '+esc(t.name)+'</span><span class="ts">'+esc((t.last||'').slice(11,19))+'</span></div>').join(''):'<div class="empty">暂无事件</div>';$('traces').querySelectorAll('.tr').forEach(n=>n.onclick=()=>{followLatest=false;syncFollow();loadTrace(n.dataset.trace,true)});if(followLatest&&arr.length&&(!currentTrace||arr[0].id!==currentTrace))loadTrace(arr[0].id,false)}).catch(()=>{$('traces').innerHTML='<div class="empty">加载失败</div>'})}
+function syncFollow(){$('followBtn').classList.toggle('on',followLatest);$('pauseBtn').classList.toggle('on',followLatest);$('pauseBtn').textContent=followLatest?'Ⅱ':'▶';$('liveBadge').textContent=followLatest?'● live':'● paused'}
+function replay(){if(!currentTrace)return;if(replayTimer){clearInterval(replayTimer);replayTimer=null}const all=currentEvents.slice();currentEvents=[];machine=null;clearRoles();renderFlow();renderLog();startAt=Date.now();let i=0;replayTimer=setInterval(()=>{if(i>=all.length){clearInterval(replayTimer);replayTimer=null;return}applyEvent(all[i++],true)},520)}
+function toggleFollow(){followLatest=!followLatest;syncFollow();if(followLatest)loadRecent()}
+function connect(){const src=new EventSource('/api/stream');src.onmessage=m=>{try{const e=JSON.parse(m.data);if(!followLatest||!currentTrace){loadRecent();return}applyEvent(e,classify(e)==='advance')}catch(_){}};src.onerror=()=>{}}
+renderAgents();renderFlow();loadRecent();connect();tickClock();setInterval(tickClock,1000);setInterval(()=>{updateMetrics();if(followLatest)loadRecent()},6000);
 </script>
 </body>
 </html>

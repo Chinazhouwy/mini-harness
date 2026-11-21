@@ -33,3 +33,4 @@ app/studio/node_modules/
 app/studio/dist/
 # 前端构建产物拷贝进应用的静态目录（构建脚本生成，不入库）
 app/task-assistant/src/main/resources/static/
+/.archify/

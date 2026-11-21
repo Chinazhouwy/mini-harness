@@ -26,7 +26,9 @@ mvn -f app/feishu/pom.xml clean package -DskipTests
 java -jar app/feishu/target/app-feishu-0.1.0.jar
 ```
 
-启动服务后访问 `http://localhost:8080/monitor.html` 看执行球监控页：每条飞书消息是一个执行球，球停在哪里代表程序正在哪个环节执行；进入下一阶段时页面从当前节点长出箭头，球沿箭头移动。左侧自动列出最近 trace，点左侧可回看历史，点「回放当前」让球按事件顺序重走一遍；`DELTA`/`PROGRESS` 只让当前球脉冲，不生成节点，子 Agent 以紫色分叉球显示。无需输入任何 ID，底部通过 SSE 显示最近事件。查询接口是 `GET /api/events`（最近事件）、`GET /api/events?traceId=...` 或 `GET /api/events?sessionId=...`，实时流是 `GET /api/stream`。事件按天写入 `logs/feishu-events-YYYY-MM-DD.jsonl`，每条飞书消息共享一个 `traceId`；AgentScope 的 Agent、模型、工具、子 Agent 事件通过 `streamEvents()` 接入，监听器也给同一个 `traceId` 写收到消息和发送成功事件。监控页是前端 demo，用事件状态机驱动执行球；事件总线只在单个 JVM 内，服务重启后历史走 JSONL 查询。
+启动服务后访问 `http://localhost:8080/monitor.html` 看深色终端驾驶舱：顶部显示运行状态、已用时间、事件/工具/错误数量；左侧是主 Bot、模型、工具、联网工具与子 Agent 卡片；中央 LIVE FLOW 用发光执行球表示当前环节，进入下一阶段时长出虚线箭头，球沿箭头移动；`DELTA`/`PROGRESS` 只让当前球脉冲，不新增节点，子 Agent 以紫色分叉球显示并在完成后汇回主链路；右侧 EVENT LOG 逐行追加事件，底部 TRACE HISTORY 自动汇总最近 trace，点击可回放历史。无需输入任何 ID，默认跟随最新消息，点「暂停跟随」可固定查看某条 trace。实时流是 `GET /api/stream`（SSE），查询接口是 `GET /api/events?traceId=...`、`GET /api/events?sessionId=...` 或 `GET /api/events?limit=...`（最近事件）。事件按天写入 `logs/feishu-events-YYYY-MM-DD.jsonl`，每条飞书消息共享一个 `traceId`；每条事件带 `replyId`、`toolCallId`、`parentSessionId` 与子 Agent 会话字段，既能按 `traceId` 看一次调用的实时过程，也能按 `sessionId` 回看同一对话的历史。AgentScope 的 Agent、模型、工具、子 Agent 事件通过 `streamEvents()` 接入，监听器也给同一个 `traceId` 写收到消息和发送成功事件。事件总线只在单个 JVM 内，服务重启后历史走 JSONL 查询。
+
+点击左侧角色卡片、中央 LIVE FLOW 节点或右侧日志行，会打开同一个详情浮窗。模型调用显示模型 ID、`replyId`、耗时、入参和出参；工具调用显示工具名、`toolCallId`、耗时、入参和出参；旧事件缺少详情字段时显示「未记录」。`AgentEventStore` 通过 AgentScope 的 `ON_MODEL_CALL` / `ON_ACTING` 中间件把流式 `DELTA` / `PROGRESS` 聚合成 `MODEL_CALL_DETAIL` 和 `TOOL_CALL_DETAIL`，避免把数千条增量事件逐条写入日志；入参与出参最多保留 4000 字符并转成单行，不记录 `GenerateOptions.apiKey`。子 Agent 也挂同一套事件中间件，因此委派链路里的模型/工具详情可以按 `traceId` 一起回看。
 
 日志和中间文件统一锚定在项目根 `/Users/chinazhouwy/doc/MiniHarness`，与从哪里启动无关：日志写到 `logs/feishu-bot.log`，Agent 文件写到 `.feishu-agent-workspace/`。默认从 class/jar 位置向上找 `.git` 定位项目根；也可显式传 `-Dminiharness.home=/path/to/MiniHarness` 覆盖。日志只显示脱敏后的 App ID，不打印 App Secret 或模型密钥。看到“飞书长连接已启动”后，在飞书里给机器人发一条文本即可收到 AI 回复。
 

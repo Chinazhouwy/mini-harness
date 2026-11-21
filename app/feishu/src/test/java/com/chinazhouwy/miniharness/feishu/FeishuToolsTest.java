@@ -24,7 +24,7 @@ class FeishuToolsTest {
         // 只验证官方入口注册后的工具名，不触发真实模型调用。
         OpenAIChatModel model = OpenAIChatModel.builder().apiKey("test-key").baseUrl("https://example.invalid/v1").modelName("test-model").build();
         var webTools = new DeepSeekWebTools("test-key");
-        var spawnAgent = tools.spawnAgent(model, new io.agentscope.core.state.InMemoryAgentStateStore(), webTools);
+        var spawnAgent = tools.spawnAgent(model, new io.agentscope.core.state.InMemoryAgentStateStore(), webTools, new AgentEventStore(Path.of(System.getProperty("java.io.tmpdir"))));
         Toolkit agentToolkit = new Toolkit();
         agentToolkit.registerTool(tools);
         agentToolkit.registerTool(webTools);
