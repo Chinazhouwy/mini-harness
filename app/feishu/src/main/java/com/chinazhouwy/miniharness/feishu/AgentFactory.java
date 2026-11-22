@@ -29,10 +29,17 @@ public class AgentFactory {
     }
 
     public ReActAgent create(Bot bot) {
+        return create(bot, null);
+    }
+
+    public ReActAgent create(Bot bot, ScheduleTaskTool scheduleTask) {
         Toolkit toolkit = new Toolkit();
         toolkit.registerTool(tools);
         toolkit.registerTool(webTools);
         toolkit.registerAgentTool(tools.spawnAgent(model, stateStore, webTools, eventStore));
+        if (scheduleTask != null) {
+            toolkit.registerTool(scheduleTask);
+        }
         return ReActAgent.builder()
                 .name(bot.id())
                 .model(model)
