@@ -6,8 +6,8 @@
     <artifactId>mini-harness</artifactId>
     <version>0.1.0</version>
     <packaging>pom</packaging>
-    <name>MiniHarness</name>
-    <description>三个 Agent 框架的隔离学习环境与自研 Harness 实践</description>
+    <name>feishubot</name>
+    <description>飞书 AI 机器人与 Agent 框架学习模块</description>
 
     <modules>
         <module>miniharness-core</module>
@@ -16,7 +16,7 @@
         <module>study/study-spring-ai</module>
         <module>study/study-agentscope</module>
         <module>study/study-spring-ai-alibaba</module>
-        <module>app/feishu</module>
+        <module>app/feishubot</module>
     </modules>
 
     <!-- 父工程只统一 Java、测试与构建工具，不引入任一框架的 BOM 或运行时依赖。 -->

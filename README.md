@@ -1,4 +1,6 @@
-# MiniHarness：三个 Agent 框架的隔离学习与 Harness 实践
+# feishubot
+
+基于 Spring Boot 和 AgentScope Java 的飞书 AI 机器人，支持长连接收发消息、子 Agent 委派和定时任务。
 
 系统学习 Spring AI、Spring AI Alibaba、AgentScope Java 的功能、API、底层原理与差异，逐步形成自己的 Harness。每次推进一个具体问题，用代码、日志和运行结果对照；不把阅读源码、模拟模型和真实模型验证混为一谈。
 
@@ -16,7 +18,7 @@ mini-harness/
 │   ├── study-agentscope/           # AgentScope 学习测试与 demo
 │   └── study-spring-ai-alibaba/    # Alibaba ReactAgent 学习测试与 demo
 └── app/                            # 应用线：后端 + 前端一起
-    ├── feishu/                     # Spring Boot 飞书 AI 机器人：长连接收消息，调用模型回答
+    ├── feishubot/                  # Spring Boot 飞书 AI 机器人：长连接收消息，调用模型回答
     └── studio/                     # Vue3 前端（独立 npm 工程，只通过 HTTP/SSE 与后端通信）
 ```
 
@@ -25,7 +27,7 @@ mini-harness/
 | `miniharness-core` | 主代码只依赖 JDK，目前只有 `ModelConfig` 配置读取；被适配层与学习模块共用。 |
 | `miniharness-runtime` | **自研内核（v0.1）**：只依赖 JDK+Jackson，不含任何 Agent 框架类型。包含 Task/Run/Node 状态机与预算（core/task）、事件总线与回放（event）、DAG 编译与执行（workflow，含超时/重试/取消）、意图路由（capability）、失败经验→候选→评测→审批→回滚（evolution）、执行策略对比（strategy）、合成金融 Domain Pack（domain/finance）；模型通过 `ModelPort` 端口接入，离线用 Noop/Scripted 实现。设计见 [DESIGN-v0.1](docs/DESIGN-v0.1.md)。 |
 | `studio` | Vue3 + Vite 前端，5 个页面（Chat/Tasks/Run Inspector/Workflow Canvas/Evolution Review）。使用见 [STUDIO-GUIDE](docs/STUDIO-GUIDE.md)。 |
-| `feishu` | Spring Boot 常驻应用：官方 SDK 长连接接收文本消息，经 AgentScope4j 模型生成回答后发回原会话。见 [模块说明](app/feishu/README.md)。 |
+| `feishubot` | Spring Boot 常驻应用，源码位于 `app/feishubot`。官方 SDK 长连接接收文本消息，经 AgentScope 模型生成回答后发回原会话。见 [模块说明](app/feishubot/README.md)。 |
 | `miniharness-spring-ai` | 依赖 core、runtime、Spring AI **2.0.2**、agent-utils **0.13.0**；既有 `HarnessCore` 学习实现，也有把 Spring AI 接到内核 `ModelPort` 的 `SpringAiModelPort` 适配。 |
 | `study/study-spring-ai` | 依赖 Spring AI 适配模块；保留 `HarnessCoreDemo`、`HarnessCoreDemoTest`、手写循环及 Spring AI 学习测试。 |
 | `study/study-agentscope` | 依赖 core、AgentScope **2.1.0-SNAPSHOT**；沿用其 Schema 4.38.0，不再替换 Surefire 运行类路径。新环境需要先取得该快照依赖。 |
@@ -176,12 +178,12 @@ IDE 可直接运行具体测试方法；Maven 的默认标签排除配置不会�
 启动 Spring Boot + AgentScope4j 飞书 AI 机器人：
 
 ```bash
-mvn -pl app/feishu -am test
-mvn -pl app/feishu -am package -DskipTests
-java -jar app/feishu/target/app-feishu-0.1.0.jar
+mvn -pl app/feishubot -am test
+mvn -pl app/feishubot -am package -DskipTests
+java -jar app/feishubot/target/feishubot-0.1.0.jar
 ```
 
-飞书后台、凭证与运行边界见 [app/feishu/README.md](app/feishu/README.md)。运行日志写入项目根目录的 `logs/feishu-bot.log`，会话状态由 AgentScope 按 `chat_id` 写入 `logs/feishu-agent-state/`；这些目录已通过 `.gitignore` 排除。
+飞书后台、凭证与运行边界见 [app/feishubot/README.md](app/feishubot/README.md)。运行日志写入项目根目录的 `logs/feishu-bot.log`，会话状态由 AgentScope 按 `chat_id` 写入 `logs/feishu-agent-state/`；这些目录已通过 `.gitignore` 排除。
 
 ## 学习方向
 
