@@ -1,5 +1,5 @@
 package com.chinazhouwy.miniharness.feishu;
 
-/** 第一步：Bot 就是一个有名字、有人设的东西。 */
-public record Bot(String id, String name, String persona) {
+/** Bot 的 ID 同时用于会话键和工作区目录。 */
+public record Bot(String id, String name) {
 }

@@ -48,6 +48,14 @@ java -jar app/feishu/target/app-feishu-0.1.0.jar
 
 换行、制表等控制字符会转成可见转义。日志不包含 App Secret 或模型密钥。
 
+## Agent 文件
+
+小飞从 `src/main/resources/bots/main/` 读取 `AGENTS.md`（规则）、`SOUL.md`（角色）、`USER.md`（偏好）和 `MEMORY.md`（长期记忆）。
+
+初始规则和角色来自原有提示词，偏好和记忆先留空，可手动编辑。文件随应用打包，有内容的文件会在创建小飞时读进提示词。
+
+`spawn_agent` 为每次委派创建临时助手，用内置提示词执行任务并返回结果。子助手的会话由 AgentScope 保存，传回原来的 `session_id` 可以追问。
+
 ## 已知边界
 
 - 只处理 `text` 消息；图片、富文本等事件会忽略并在日志里说明。
