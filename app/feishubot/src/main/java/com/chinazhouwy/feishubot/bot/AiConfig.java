@@ -33,7 +33,8 @@ public class AiConfig {
                                      FeishuTools tools,
                                      DeepSeekWebTools webTools,
                                      AgentEventStore eventStore,
+                                     AgentWorkspace workspace,
                                      @Value("${feishu.state.dir:logs/feishu-agent-state}") String stateDir) {
-        return new AgentFactory(model, stateDir, tools, webTools, eventStore);
+        return new AgentFactory(model, stateDir, tools, webTools, eventStore, workspace);
     }
 }

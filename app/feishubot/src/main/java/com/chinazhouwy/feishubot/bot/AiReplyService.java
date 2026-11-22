@@ -26,14 +26,16 @@ public class AiReplyService {
     private final AgentEventStore eventStore;
     private final BotTaskScheduler scheduler;
     private final FeishuSender sender;
+    private final MemoryEvolution evolution;
 
     public AiReplyService(AgentFactory agentFactory, BotRegistry botRegistry, AgentEventStore eventStore,
-                          BotTaskScheduler scheduler, FeishuSender sender) {
+                          BotTaskScheduler scheduler, FeishuSender sender, MemoryEvolution evolution) {
         this.agentFactory = agentFactory;
         this.botRegistry = botRegistry;
         this.eventStore = eventStore;
         this.scheduler = scheduler;
         this.sender = sender;
+        this.evolution = evolution;
     }
 
     /** 由监听器创建一次上下文，保证收到、Agent 调用、发送同属一个 traceId。 */
@@ -45,7 +47,12 @@ public class AiReplyService {
     public String reply(String chatId, String userText, RuntimeContext context) {
         Bot bot = botRegistry.defaultBot();
         var scheduleTask = new ScheduleTaskTool(scheduler, bot.id(), chatId, this::runScheduled);
-        return run(bot, userText, context, scheduleTask);
+        return run(bot, chatId, userText, context, scheduleTask);
+    }
+
+    public void recordCompletedReply(String chatId, String userText, String answer, RuntimeContext context) {
+        evolution.record(botRegistry.defaultBot().id(), chatId,
+                (String) context.get("feishu.traceId"), userText, answer);
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -58,7 +65,7 @@ public class AiReplyService {
         eventStore.appEvent(context, "SCHEDULED_TASK", "START", task.taskId(), task.instruction());
         try {
             Bot bot = botRegistry.requireBot(task.botId());
-            String answer = run(bot, task.instruction(), context, null);
+            String answer = run(bot, task.chatId(), task.instruction(), context, null);
             sender.sendText(task.chatId(), answer);
             eventStore.appEvent(context, "MESSAGE_SENT", "OK", "feishu", answer);
             eventStore.appEvent(context, "SCHEDULED_TASK", "OK", task.taskId(), null);
@@ -68,14 +75,13 @@ public class AiReplyService {
         }
     }
 
-    private String run(Bot bot, String userText, RuntimeContext context, ScheduleTaskTool scheduleTask) {
+    private String run(Bot bot, String chatId, String userText, RuntimeContext context, ScheduleTaskTool scheduleTask) {
         String sessionId = context.getSessionId();
         log.info("==== 发给模型的请求开始 ====");
         log.info("bot={} name={} sessionId={} userId={}", bot.id(), bot.name(), sessionId, "feishu-user");
-        log.info("systemPrompt={}", agentFactory.systemPrompt(bot));
         log.info("userMessage={}", display(userText));
         log.info("==== 发给模型的请求结束 ====");
-        try (var agent = agentFactory.create(bot, scheduleTask)) {
+        try (var agent = agentFactory.create(bot, chatId, scheduleTask)) {
             String answer = agent.streamEvents(userText, context)
                     .doOnNext(event -> eventStore.agentEvent(context, event))
                     .filter(AgentResultEvent.class::isInstance)

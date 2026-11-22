@@ -42,7 +42,7 @@ java -jar app/feishubot/target/feishubot-0.1.0.jar
 | `bot` | Bot 注册、Agent 创建、提示词和回复执行 |
 | `messaging` | 飞书凭证、长连接、消息解析和发送 |
 | `schedule` | 定时任务定义、调度和创建工具 |
-| `tool` | 文件、命令、联网和临时子 Agent 工具 |
+| `tool` | 文件、联网和临时子 Agent 工具 |
 | `monitor` | 执行事件、模型请求日志和监控接口 |
 
 ## 日志里能看到什么
@@ -63,11 +63,17 @@ java -jar app/feishubot/target/feishubot-0.1.0.jar
 
 小飞从 `src/main/resources/bots/main/` 读取 `AGENTS.md`（规则）、`SOUL.md`（角色）、`USER.md`（偏好）和 `MEMORY.md`（长期记忆）。
 
-初始规则和角色来自原有提示词，偏好和记忆先留空，可手动编辑。文件随应用打包，有内容的文件会在创建小飞时读进提示词。
+随应用打包的四份文件提供初始内容。后台整理后的版本保存在 `data/feishubot/evolution/`，按 Bot 和私聊分别保存。创建 Agent 时读取该私聊最新的版本，缺省时使用初始内容。
 
 问「你现在有哪些工具」时，`list_tools` 从当前 Agent 读取工具名称和用途。
 
 `spawn_agent` 为每次委派创建临时助手，用内置提示词执行任务并返回结果。子助手的会话由 AgentScope 保存，传回原来的 `session_id` 可以追问。
+
+## 后台记忆整理
+
+私聊收到回复后，待整理记录会写入 `data/feishubot/evolution/pending/`。后台默认每 5 分钟检查一次（可通过 `feishu.evolution.interval-ms` 调整），对已空闲至少 1 分钟的私聊提炼长期规则、角色、偏好和事实。后台模型输出待更新内容，应用校验后保存，成功后移除待处理记录。后台任务只在 Bot 服务运行时执行。
+
+普通聊天、子 Agent 和用户创建的定时任务使用受限的工作区工具。四个文件由服务内部读写，普通工具拒绝这些文件名和符号链接。普通 Bot 的任意命令入口已撤下。
 
 ## 定时任务
 
@@ -82,7 +88,7 @@ java -jar app/feishubot/target/feishubot-0.1.0.jar
 - 只处理 `text` 消息；图片、富文本等事件会忽略并在日志里说明。
 - AI 会话按飞书 `chat_id` 存在 AgentScope 的 `JsonFileAgentStateStore` 中，默认目录 `logs/feishu-agent-state`，重启后能接续。
 - 每次 `write` 会追加一条记录到独立文件 `logs/feishu-write-record.log`，包含时间、`sessionId`、相对路径、绝对 `fileUrl` 和写入结果，方便核对 Agent 生成的中间文件。
-- Agent 注册了 Pi 风格四个工具：`read`、`write`、`edit`、`bash`，另在 `FeishuTools` 内声明 `spawnAgent(...)`，底层交给 AgentScope 官方 `SubAgentTool`。文件操作复用 AgentScope Harness 的 `FilesystemTool`，限制在项目根下的 `.feishu-agent-workspace/`；命令执行复用 AgentScope Core 的 `ShellCommandTool`，bash 工作目录也固定为项目根，放开命令白名单，只拦命令串联、越界相对路径等违规写法。`spawn_agent` 用官方 `SubAgentProvider` 每次新建子 Agent、`SubAgentConfig` 管理工具名与持久化会话；子 Agent 暴露 Pi 四工具 + DeepSeek 联网工具（`web_search`、`web_fetch`），并复用同一个 `JsonFileAgentStateStore`；为避免递归委派，子 Agent 不再挂 `spawn_agent`。官方协议参数是必填 `message` 和可选 `session_id`：新建任务只传 `message`，返回文本里的 `session_id` 可用于追问同一子 Agent。
+- Agent 的 `read`、`write`、`edit` 复用 AgentScope Harness 的 `FilesystemTool`，限制在项目根下的 `.feishu-agent-workspace/`。`spawn_agent` 复用 AgentScope 的 `SubAgentTool`。子 Agent 使用同样的文件工具和 DeepSeek 联网工具，可传回原有的 `session_id` 追问。
 - 另注册 DeepSeek 联网工具 `web_search`、`web_fetch`，直接调用 DeepSeek 官方 Search/Fetch 接口；鉴权复用 `config/openrouter.local.properties` 的 `miniharness.api.key`，不另存密钥。Search 按成功请求计费，Fetch 按成功抓取的网页计费；失败、空结果不计费。
 - 飞书要求事件处理尽快返回，所以消息处理提交到共享虚拟线程执行器 `feishu-ai-worker-N`。
 - 关闭 Spring 容器时会停止长连接并关闭线程池。

@@ -1,66 +1,76 @@
 package com.chinazhouwy.feishubot.tool;
 
-import com.chinazhouwy.feishubot.ProjectPaths;
+import com.chinazhouwy.feishubot.bot.AgentWorkspace;
 import com.chinazhouwy.feishubot.monitor.AgentEventStore;
 
 import io.agentscope.core.message.ToolResultBlock;
+import io.agentscope.core.message.ToolResultState;
+import io.agentscope.core.state.InMemoryAgentStateStore;
 import io.agentscope.core.tool.Toolkit;
 import io.agentscope.extensions.model.openai.OpenAIChatModel;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** 验证 Pi 四工具、官方注册的 spawn_agent，以及一次最小读写链路。 */
 class FeishuToolsTest {
+    @TempDir
+    Path home;
+
     @Test
-    void registersAndRunsPiStyleTools() {
-        FeishuTools tools = new FeishuTools();
+    void registersAndRunsWorkspaceTools() {
+        FeishuTools tools = new FeishuTools(home);
         Toolkit toolkit = new Toolkit();
         toolkit.registerTool(tools);
-        assertThat(toolkit.getToolNames()).containsExactlyInAnyOrder("read", "write", "edit", "bash");
+        assertThat(toolkit.getToolNames()).containsExactlyInAnyOrder("read", "write", "edit");
 
-        // 只验证官方入口注册后的工具名，不触发真实模型调用。
-        OpenAIChatModel model = OpenAIChatModel.builder().apiKey("test-key").baseUrl("https://example.invalid/v1").modelName("test-model").build();
+        OpenAIChatModel model = OpenAIChatModel.builder()
+                .apiKey("test-key").baseUrl("https://example.invalid/v1").modelName("test-model").build();
         var webTools = new DeepSeekWebTools("test-key");
-        var spawnAgent = tools.spawnAgent(model, new io.agentscope.core.state.InMemoryAgentStateStore(), webTools, new AgentEventStore(Path.of(System.getProperty("java.io.tmpdir"))));
-        Toolkit agentToolkit = new Toolkit();
-        agentToolkit.registerTool(tools);
-        agentToolkit.registerTool(webTools);
-        agentToolkit.registerAgentTool(spawnAgent);
-        assertThat(agentToolkit.getToolNames()).contains("spawn_agent", "read", "write", "edit", "bash", "web_search", "web_fetch");
+        toolkit.registerTool(webTools);
+        toolkit.registerAgentTool(tools.spawnAgent(model, new InMemoryAgentStateStore(), webTools,
+                new AgentEventStore(home.resolve("logs"))));
+        assertThat(toolkit.getToolNames()).contains("spawn_agent", "web_search", "web_fetch").doesNotContain("bash");
 
-        String file = "pi-" + UUID.randomUUID() + ".txt";
-        try {
-            assertThat(output(tools.write(null, file, "hello pi"))).contains("Written to");
-            assertThat(output(tools.read(null, file, null, null, null, null))).contains("hello pi");
-            assertThat(output(tools.edit(null, file, "pi", "agent", false))).contains("Edited");
-            assertThat(output(tools.read(null, file, null, null, null, null))).contains("hello agent");
+        String file = "notes.txt";
+        assertThat(output(tools.write(null, file, "hello pi"))).contains("Written to");
+        assertThat(output(tools.read(null, file, null, null, null, null))).contains("hello pi");
+        assertThat(output(tools.edit(null, file, "pi", "agent", false))).contains("Edited");
+        assertThat(output(tools.read(null, file, null, null, null, null))).contains("hello agent");
+    }
 
-            // 已放开命令白名单：date 这类普通命令可以直接执行。
-            assertThat(output(tools.bash("date", 5).block(Duration.ofSeconds(10)))).contains("<returncode>0</returncode>");
-
-            ToolResultBlock bash = tools.bash("echo pi-ok", 5).block(Duration.ofSeconds(10));
-            assertThat(bash).isNotNull();
-            assertThat(output(bash)).contains("pi-ok");
-
-            // 仍然拦截明显违规写法（多条命令串联）。
-            assertThat(output(tools.bash("echo one && echo two", 5).block(Duration.ofSeconds(10))))
-                    .contains("SecurityError", "multiple command separators");
-        } finally {
-            try {
-                Files.deleteIfExists(ProjectPaths.home().resolve(".feishu-agent-workspace").resolve(file));
-            } catch (Exception ignored) {
-                // 清理失败不影响本次工具行为验证。
-            }
+    @Test
+    void deniesProtectedMarkdownAndAliasesOutsideTheWorkspace() throws Exception {
+        FeishuTools tools = new FeishuTools(home);
+        Path root = Files.createDirectories(home.resolve(".feishu-agent-workspace"));
+        for (String name : AgentWorkspace.FILES) {
+            Path path = root.resolve(name);
+            Files.writeString(path, "protected");
+            assertDenied(tools, name);
+            assertDenied(tools, "nested/" + name.toLowerCase(java.util.Locale.ROOT));
+            assertThat(Files.readString(path)).isEqualTo("protected");
         }
+
+        Path protectedDirectory = Files.createDirectories(home.resolve("data/feishubot/evolution"));
+        Path protectedFile = Files.writeString(protectedDirectory.resolve("USER.md"), "private");
+        Files.createSymbolicLink(root.resolve("alias.txt"), protectedFile);
+        Files.createSymbolicLink(root.resolve("linked-directory"), protectedDirectory);
+        assertDenied(tools, "alias.txt");
+        assertDenied(tools, "linked-directory/ordinary.txt");
+        assertThat(Files.readString(protectedFile)).isEqualTo("private");
+        assertThat(protectedDirectory.resolve("ordinary.txt")).doesNotExist();
+    }
+
+    private void assertDenied(FeishuTools tools, String path) {
+        assertThat(tools.read(null, path, null, null, null, null).getState()).isEqualTo(ToolResultState.ERROR);
+        assertThat(tools.write(null, path, "changed").getState()).isEqualTo(ToolResultState.ERROR);
+        assertThat(tools.edit(null, path, "protected", "changed", false).getState()).isEqualTo(ToolResultState.ERROR);
     }
 
     private static String output(ToolResultBlock result) {
-        return result == null ? "" : result.getOutput().toString();
+        return result.getOutput().toString();
     }
 }

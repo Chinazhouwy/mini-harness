@@ -151,6 +151,19 @@ public class AgentEventStore {
                 .toList();
     }
 
+    /** 后台复盘只读取指定对话的工具结果。 */
+    public List<ToolOutcome> toolOutcomes(Set<String> traceIds) {
+        return read().stream()
+                .filter(event -> traceIds.contains(event.get("traceId")))
+                .filter(event -> "TOOL_CALL_DETAIL".equals(event.get("eventType"))
+                        && !"START".equals(event.get("status")))
+                .map(event -> new ToolOutcome(str(event.get("traceId")), str(event.get("name")),
+                        str(event.get("status")), str(event.get("summary"))))
+                .toList();
+    }
+
+    public record ToolOutcome(String traceId, String tool, String status, String summary) {}
+
     /** 查询同一 bot:chatId 的历史事件；可用于列出会话下所有 trace。 */
     public List<Map<String, Object>> bySessionId(String sessionId) {
         return read().stream()

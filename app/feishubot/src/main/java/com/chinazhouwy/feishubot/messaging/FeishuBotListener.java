@@ -111,6 +111,10 @@ public class FeishuBotListener {
             sender.sendText(chatId, answer);
             eventStore.appEvent(traceContext, "MESSAGE_SENT", "OK", "feishu", answer);
             log.info("回复发送成功 messageId={} chatId={}", message.getMessageId(), chatId);
+            // 飞书的 p2p 是单聊，group 是群聊。只有单聊的回复会进入后台记忆整理队列。
+            if ("p2p".equals(message.getChatType())) {
+                aiReplyService.recordCompletedReply(chatId, text, answer, traceContext);
+            }
         } catch (Exception e) {
             log.error("处理消息失败 {}", e.getMessage(), e);
         }

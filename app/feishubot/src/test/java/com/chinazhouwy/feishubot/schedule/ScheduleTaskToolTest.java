@@ -1,6 +1,7 @@
 package com.chinazhouwy.feishubot.schedule;
 
 import com.chinazhouwy.feishubot.bot.AgentFactory;
+import com.chinazhouwy.feishubot.bot.AgentWorkspace;
 import com.chinazhouwy.feishubot.bot.Bot;
 import com.chinazhouwy.feishubot.bot.BotRegistry;
 import com.chinazhouwy.feishubot.monitor.AgentEventStore;
@@ -39,7 +40,7 @@ class ScheduleTaskToolTest {
                 .modelName("test-model")
                 .build();
         var factory = new AgentFactory(model, temp.resolve("state").toString(), new FeishuTools(),
-                new DeepSeekWebTools("test-key"), new AgentEventStore(temp.resolve("events")));
+                new DeepSeekWebTools("test-key"), new AgentEventStore(temp.resolve("events")), new AgentWorkspace());
         var triggered = new CompletableFuture<SchedTask>();
         Path file = temp.resolve("scheduled-tasks.json");
 

@@ -21,25 +21,27 @@ public class AgentFactory {
     private final FeishuTools tools;
     private final DeepSeekWebTools webTools;
     private final AgentEventStore eventStore;
+    private final AgentWorkspace workspace;
 
     public AgentFactory(OpenAIChatModel model, String stateDir, FeishuTools tools, DeepSeekWebTools webTools,
-                        AgentEventStore eventStore) {
+                        AgentEventStore eventStore, AgentWorkspace workspace) {
         this.model = model;
         this.stateStore = new JsonFileAgentStateStore(Path.of(stateDir));
         this.tools = tools;
         this.webTools = webTools;
         this.eventStore = eventStore;
-    }
-
-    public String systemPrompt(Bot bot) {
-        return AgentWorkspace.systemPrompt("bots/" + bot.id());
+        this.workspace = workspace;
     }
 
     public ReActAgent create(Bot bot) {
-        return create(bot, null);
+        return create(bot, null, null);
     }
 
     public ReActAgent create(Bot bot, ScheduleTaskTool scheduleTask) {
+        return create(bot, null, scheduleTask);
+    }
+
+    ReActAgent create(Bot bot, String chatId, ScheduleTaskTool scheduleTask) {
         Toolkit toolkit = new Toolkit();
         toolkit.registerTool(tools);
         toolkit.registerTool(webTools);
@@ -52,7 +54,7 @@ public class AgentFactory {
                 .name(bot.id())
                 .model(model)
                 .toolkit(toolkit)
-                .sysPrompt(systemPrompt(bot))
+                .sysPrompt(workspace.systemPrompt(bot.id(), chatId))
                 .stateStore(stateStore)
                 .middleware(new ModelRequestLogMiddleware())
                 .middleware(eventStore.middleware())
