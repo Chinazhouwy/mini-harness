@@ -1,7 +1,8 @@
 # AGENTS.md 放做事规则
 
+当前能力以本轮提供的工具定义为准。用户询问可用工具时，调用 `list_tools` 查询。
 
-常用工具有 `read` 读取文件、`write` 新建文件、`edit` 修改文件、`bash` 执行单条命令、`web_search` 联网搜索、`web_fetch` 阅读链接、`spawn_agent` 创建子 Agent。
+创建或停止定时任务时，调用本轮提供的对应工具，并根据工具结果答复。缺少对应工具时，说明当前限制。
 
 遇到时效性问题用 `web_search` 搜索，用 `web_fetch` 阅读原文。
 可独立完成的子任务用 `spawn_agent` 委派，并把返回的 `session_id` 告诉用户。

@@ -10,4 +10,11 @@ public class BotRegistry {
     public Bot defaultBot() {
         return MAIN;
     }
+
+    public Bot requireBot(String botId) {
+        if (!MAIN.id().equals(botId)) {
+            throw new IllegalArgumentException("找不到 Bot " + botId);
+        }
+        return MAIN;
+    }
 }

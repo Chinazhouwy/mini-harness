@@ -5,6 +5,7 @@ import com.chinazhouwy.feishubot.monitor.ModelRequestLogMiddleware;
 import com.chinazhouwy.feishubot.schedule.ScheduleTaskTool;
 import com.chinazhouwy.feishubot.tool.DeepSeekWebTools;
 import com.chinazhouwy.feishubot.tool.FeishuTools;
+import com.chinazhouwy.feishubot.tool.ToolList;
 
 import io.agentscope.core.ReActAgent;
 import io.agentscope.core.state.JsonFileAgentStateStore;
@@ -46,6 +47,7 @@ public class AgentFactory {
         if (scheduleTask != null) {
             toolkit.registerTool(scheduleTask);
         }
+        toolkit.registerTool(new ToolList(toolkit));
         return ReActAgent.builder()
                 .name(bot.id())
                 .model(model)

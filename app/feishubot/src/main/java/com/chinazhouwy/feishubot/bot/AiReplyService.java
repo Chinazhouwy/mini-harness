@@ -10,6 +10,8 @@ import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.event.AgentResultEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -42,22 +44,27 @@ public class AiReplyService {
 
     public String reply(String chatId, String userText, RuntimeContext context) {
         Bot bot = botRegistry.defaultBot();
-        var scheduleTask = new ScheduleTaskTool(scheduler, bot.id(),
-                (task, instruction) -> runScheduled(bot, chatId, task, instruction));
+        var scheduleTask = new ScheduleTaskTool(scheduler, bot.id(), chatId, this::runScheduled);
         return run(bot, userText, context, scheduleTask);
     }
 
-    private void runScheduled(Bot bot, String chatId, SchedTask task, String instruction) {
-        RuntimeContext context = eventStore.newContext(bot.id() + ":task:" + task.taskId(), null);
-        eventStore.appEvent(context, "SCHEDULED_TASK", "START", task.taskId(), instruction);
+    @EventListener(ApplicationReadyEvent.class)
+    public void restoreScheduledTasks() {
+        scheduler.restore(this::runScheduled);
+    }
+
+    private void runScheduled(SchedTask task) {
+        RuntimeContext context = eventStore.newContext(task.botId() + ":task:" + task.taskId(), null);
+        eventStore.appEvent(context, "SCHEDULED_TASK", "START", task.taskId(), task.instruction());
         try {
-            String answer = run(bot, instruction, context, null);
-            sender.sendText(chatId, answer);
+            Bot bot = botRegistry.requireBot(task.botId());
+            String answer = run(bot, task.instruction(), context, null);
+            sender.sendText(task.chatId(), answer);
             eventStore.appEvent(context, "MESSAGE_SENT", "OK", "feishu", answer);
             eventStore.appEvent(context, "SCHEDULED_TASK", "OK", task.taskId(), null);
         } catch (Exception e) {
             eventStore.appEvent(context, "SCHEDULED_TASK", "FAILED", task.taskId(), e.getMessage());
-            log.error("定时任务执行失败 bot={} taskId={}", bot.id(), task.taskId(), e);
+            log.error("定时任务执行失败 bot={} taskId={}", task.botId(), task.taskId(), e);
         }
     }
 

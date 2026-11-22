@@ -6,6 +6,7 @@ import io.agentscope.core.event.AgentEvent;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.middleware.MiddlewareBase;
 import io.agentscope.core.middleware.ModelCallInput;
+import io.agentscope.core.model.ToolSchema;
 import io.agentscope.core.util.JsonUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,8 +41,9 @@ public class ModelRequestLogMiddleware implements MiddlewareBase {
             Function<ModelCallInput, Flux<AgentEvent>> next) {
         long no = REQUEST_NO.incrementAndGet();
         List<Msg> messages = input.messages();
-        log.info("==== 真实模型请求 #{} 开始 sessionId={} userId={} 消息数={} 工具数={} ====",
-                no, ctx.getSessionId(), ctx.getUserId(), messages.size(), input.tools().size());
+        var toolNames = input.tools().stream().map(ToolSchema::getName).sorted().toList();
+        log.info("==== 真实模型请求 #{} 开始 sessionId={} userId={} 消息数={} 工具数={} 工具={} ====",
+                no, ctx.getSessionId(), ctx.getUserId(), messages.size(), toolNames.size(), toolNames);
         for (int i = 0; i < messages.size(); i++) {
             Msg msg = messages.get(i);
             log.info("请求 #{} 消息[{}] role={} content={}", no, i, msg.getRole(), display(msg));
