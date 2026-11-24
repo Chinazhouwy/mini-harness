@@ -3,288 +3,904 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>feishubot · Terminal Cockpit</title>
+<title>feishubot · Mission Control</title>
 <style>
-:root{--bg:#0b0c10;--win:#14161c;--panel:#171a21;--panel2:#1c2029;--line:#252a35;--line2:#333a49;--text:#e8ebf2;--muted:#8b93a5;--dim:#565e70;--green:#39ff9a;--cyan:#57d9ff;--purple:#b083ff;--amber:#ffc061;--red:#ff5f6d;--glow:0 0 14px rgba(57,255,154,.35)}
-*{box-sizing:border-box}
-body{margin:0;background:#05060a;color:var(--text);font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;height:100vh;overflow:hidden;padding:12px}
-body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:99;background:repeating-linear-gradient(0deg,rgba(255,255,255,.012) 0,rgba(255,255,255,.012) 1px,transparent 1px,transparent 3px);opacity:.5}
-.window{height:100%;border:1px solid #2b3040;border-radius:16px;background:var(--win);box-shadow:0 24px 80px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.04);display:flex;flex-direction:column;overflow:hidden;position:relative}
-.titlebar{height:32px;flex:none;display:flex;align-items:center;padding:0 14px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#191c23,#12141a)}
-.lights{display:flex;gap:7px}.lights i{width:10px;height:10px;border-radius:50%;display:block}
-.lights i:nth-child(1){background:#ff5f57}.lights i:nth-child(2){background:#febc2e}.lights i:nth-child(3){background:#28c840}
-.titlebar .center{flex:1;text-align:center;color:var(--dim);font-size:10px;letter-spacing:.12em}
-.titlebar .live{color:var(--green);font-size:10px;letter-spacing:.1em;border:1px solid rgba(57,255,154,.3);border-radius:20px;padding:2px 8px}
-.top{display:grid;grid-template-columns:minmax(320px,1.4fr) minmax(180px,.8fr) minmax(260px,1fr);gap:14px;padding:14px 18px 10px;border-bottom:1px solid var(--line)}
-.ident{display:flex;align-items:center;gap:14px}
-.pause{width:74px;height:74px;flex:none;border-radius:50%;border:1px solid #3a4150;background:radial-gradient(circle at 35% 30%,#2a2f3b,#111319);display:grid;place-items:center;cursor:pointer;color:var(--text);font-size:24px;box-shadow:inset 0 2px 6px rgba(255,255,255,.06),0 6px 18px rgba(0,0,0,.5);transition:.2s}
-.pause:hover{border-color:var(--green);color:var(--green)}
-.pause.on{color:var(--amber);border-color:rgba(255,192,97,.5)}
-.ident h1{margin:0;font-size:23px;letter-spacing:.02em;color:var(--amber);font-weight:600;text-shadow:0 0 18px rgba(255,192,97,.18)}
-.ver{font-size:9px;color:var(--muted);border:1px dashed #3a4150;border-radius:4px;padding:1px 6px;vertical-align:middle;margin-left:8px;letter-spacing:.08em}
-.runline{margin-top:3px;color:var(--muted);font-size:11px}.runline .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--amber);box-shadow:0 0 8px var(--amber);margin-right:6px;animation:blink 1.2s infinite}
-.runline b{color:var(--text);font-weight:500}
-@keyframes blink{50%{opacity:.3}}
-.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
-.chip{font-size:9px;letter-spacing:.08em;color:var(--purple);border:1px solid rgba(176,131,255,.35);border-radius:3px;padding:2px 7px;background:rgba(176,131,255,.05)}
-.tagline{align-self:end;color:var(--dim);font-size:10px;font-style:italic;line-height:1.6}
-.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:4px 18px;align-content:center;text-align:right}
-.stat label{display:block;color:var(--dim);font-size:9px;letter-spacing:.14em;text-transform:uppercase}
-.stat b{font-size:23px;font-weight:500;line-height:1.15;font-variant-numeric:tabular-nums}
-.stat b.g{color:var(--green)}.stat b.r{color:var(--red)}.stat b.c{color:var(--cyan)}.stat b.a{color:var(--amber)}
-.ctrl{display:flex;gap:6px;padding:7px 14px 0;align-items:center}
-.ctrl button{background:#171b23;color:var(--muted);border:1px solid var(--line2);border-radius:4px;padding:3px 9px;font:inherit;font-size:9px;cursor:pointer;letter-spacing:.06em}
-.ctrl button:hover{color:var(--text);border-color:#4a5365}
-.ctrl button.on{color:var(--green);border-color:rgba(57,255,154,.45)}
-.ctrl .spacer{flex:1}
-.ctrl .tp{color:var(--dim);font-size:9px}
-.body{flex:1;min-height:0;display:grid;grid-template-columns:212px minmax(420px,1fr) 310px;gap:10px;padding:10px 12px}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;min-height:0;display:flex;flex-direction:column;overflow:hidden}
-.pt{height:28px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 10px;border-bottom:1px solid var(--line);color:var(--muted);font-size:10px;letter-spacing:.14em}.pt span:last-child{color:var(--dim);font-size:9px;letter-spacing:.06em}
-.agents{padding:8px;overflow:auto;display:flex;flex-direction:column;gap:6px}
-.acard{border:1px solid var(--line);border-radius:6px;background:var(--panel2);padding:8px 9px;opacity:.5;transition:.25s}
-.acard.on{opacity:1;border-color:rgba(57,255,154,.45);box-shadow:var(--glow)}
-.acard.on[data-role="sub"]{border-color:rgba(176,131,255,.55);box-shadow:0 0 14px rgba(176,131,255,.25)}
-.acard.on[data-role="web"]{border-color:rgba(87,217,255,.5);box-shadow:0 0 14px rgba(87,217,255,.22)}
-.arow{display:flex;align-items:center;gap:7px}
-.aico{width:22px;height:22px;flex:none;border-radius:5px;display:grid;place-items:center;font-size:12px;background:#222732;border:1px solid #333a49;color:var(--muted)}
-.acard.on .aico{color:#0b0c10;background:var(--green);border-color:var(--green)}
-.acard.on[data-role="sub"] .aico{background:var(--purple);border-color:var(--purple)}
-.acard.on[data-role="web"] .aico{background:var(--cyan);border-color:var(--cyan)}
-.aname{font-size:11px;font-weight:600;letter-spacing:.04em;flex:1}
-.badge{font-size:8px;letter-spacing:.1em;padding:1px 6px;border-radius:3px;border:1px solid #3a4150;color:var(--dim)}
-.acard.on .badge{color:var(--green);border-color:rgba(57,255,154,.5)}
-.ad{color:var(--dim);font-size:9px;margin-top:4px;line-height:1.45}
-.am{color:var(--muted);font-size:9px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.acard.on .am{color:var(--green)}
-.flow-wrap{position:relative;flex:1;min-height:0;overflow:hidden;background:radial-gradient(circle at 50% 45%,rgba(57,255,154,.04),transparent 55%),linear-gradient(rgba(255,255,255,.012) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.012) 1px,transparent 1px);background-size:auto,26px 26px,26px 26px}
-.flow{position:absolute;inset:0;width:100%;height:100%}
-.flow .edge{fill:none;stroke:#313847;stroke-width:1.4;stroke-dasharray:4 6;marker-end:url(#arrow)}
-.flow .edge.sub{stroke:#5b4682}.flow .edge.live{stroke:var(--green);stroke-width:2;filter:drop-shadow(0 0 5px rgba(57,255,154,.55));animation:dash .8s linear infinite}
-.flow .edge.sub.live{stroke:var(--purple);filter:drop-shadow(0 0 6px rgba(176,131,255,.5))}
-@keyframes dash{to{stroke-dashoffset:-20}}
-.flow .nrect{fill:#151922;stroke:#39414f;stroke-width:1.4;stroke-dasharray:5 5}
-.flow .node.active .nrect{stroke:var(--green);stroke-dasharray:none;filter:drop-shadow(0 0 8px rgba(57,255,154,.4))}
-.flow .node.sub.active .nrect{stroke:var(--purple);filter:drop-shadow(0 0 9px rgba(176,131,255,.5))}
-.flow .node.done .nrect{stroke:#2c6b4c;stroke-dasharray:none}
-.flow .node.err .nrect{stroke:var(--red);stroke-dasharray:none}
-.flow .nt1{fill:var(--text);font-size:11px;font-weight:600}
-.flow .nt2{fill:var(--dim);font-size:8px;letter-spacing:.06em}
-.flow .halo{fill:none;stroke:rgba(57,255,154,.35);stroke-width:1;stroke-dasharray:3 5}
-.flow .stagelabel{fill:var(--green);font-size:9px;letter-spacing:.14em}
-.ring{fill:var(--green);filter:drop-shadow(0 0 10px var(--green))}.ring.sub{fill:var(--purple);filter:drop-shadow(0 0 10px var(--purple))}
-.ring-o{fill:none;stroke:var(--green);stroke-width:1.5;opacity:.5}.ring-o.sub{stroke:var(--purple)}
-@keyframes pulse{0%{r:6;opacity:1}100%{r:10;opacity:.55}}
-.flow-empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--dim);letter-spacing:.14em;font-size:11px}
-.log{overflow:auto;padding:4px 8px 8px;flex:1}
-.log .cmd{color:var(--dim);font-size:9px;padding:2px 0 6px;border-bottom:1px dashed var(--line);margin-bottom:4px}
-.line{padding:3px 2px;border-bottom:1px solid rgba(255,255,255,.022);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;display:flex;gap:6px;align-items:baseline}
-.line:hover{background:rgba(255,255,255,.03)}
-.line .t{color:var(--dim);font-size:9px;flex:none}
-.line .tag{font-size:8px;letter-spacing:.04em;padding:0 4px;border-radius:2px;flex:none;border:1px solid #333a49;color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis}
-.line .tag.adv{color:var(--green);border-color:rgba(57,255,154,.35)}
-.line .tag.sub{color:var(--purple);border-color:rgba(176,131,255,.4)}
-.line .tag.err{color:var(--red);border-color:rgba(255,95,109,.4)}
-.line .nm{color:var(--text);overflow:hidden;text-overflow:ellipsis}
-.line .st{color:var(--dim);font-size:9px;margin-left:auto;flex:none}
-.bottom{height:132px;flex:none;display:grid;grid-template-columns:1.15fr 1fr;gap:10px;padding:0 12px 12px;position:relative}
-.traces,.detail{overflow:auto;padding:6px 9px}
-.tr{padding:4px 6px;border-bottom:1px solid rgba(255,255,255,.03);cursor:pointer;display:flex;gap:10px;align-items:baseline;white-space:nowrap}
-.tr:hover,.tr.on{background:rgba(57,255,154,.06)}
-.tr b{color:var(--cyan);font-weight:500;font-size:10px}.tr span{color:var(--muted);overflow:hidden;text-overflow:ellipsis;font-size:10px}.tr .ts{color:var(--dim);font-size:9px;margin-left:auto}
-.dr{padding:3px 0;border-bottom:1px solid rgba(255,255,255,.03);color:var(--muted);white-space:pre-wrap;word-break:break-word;font-size:10px}.dr b{color:var(--text);font-weight:500}
-.empty{color:var(--dim);padding:12px;font-size:10px}
-.wm{position:absolute;right:16px;bottom:6px;color:#3a4150;font-size:9px;letter-spacing:.14em;pointer-events:none}
-.mask{position:fixed;inset:0;background:rgba(3,4,8,.66);backdrop-filter:blur(3px);z-index:120;display:none;align-items:center;justify-content:center;padding:24px}
-.mask.on{display:flex}
-.popup{width:min(860px,94vw);max-height:86vh;background:#11141b;border:1px solid #39414f;border-radius:12px;box-shadow:0 30px 100px rgba(0,0,0,.75),0 0 30px rgba(57,255,154,.08);display:flex;flex-direction:column;overflow:hidden}
-.popup .ph{height:38px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#1b1f28,#14171e)}
-.popup .ph b{color:var(--amber);font-size:13px;font-weight:600}.popup .ph span{color:var(--dim);font-size:10px;letter-spacing:.1em}.popup .ph .sp{flex:1}.popup .ph button{background:#1c2029;color:var(--muted);border:1px solid var(--line2);border-radius:4px;cursor:pointer;font:inherit;padding:3px 10px}.popup .ph button:hover{color:var(--text);border-color:#4a5365}
-.popup .pb{overflow:auto;padding:12px 14px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.popup .kv{grid-column:1/-1;border:1px solid var(--line);border-radius:7px;padding:8px 10px;background:#151922;display:flex;flex-wrap:wrap;gap:8px 22px}
-.popup .kv div{font-size:10px;color:var(--muted)}.popup .kv b{color:var(--text);font-weight:500;margin-right:6px}
-.popup .box{border:1px solid var(--line);border-radius:7px;background:#10131a;display:flex;flex-direction:column;min-height:140px;max-height:360px;overflow:hidden}
-.popup .box h3{margin:0;padding:6px 9px;font-size:10px;font-weight:500;letter-spacing:.1em;color:var(--green);border-bottom:1px solid var(--line);background:#171b23}
-.popup .box pre{margin:0;padding:9px;white-space:pre-wrap;word-break:break-word;color:var(--muted);font:10px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow:auto;flex:1}
-.popup .full{grid-column:1/-1}
-@media(max-width:700px){.popup .pb{grid-template-columns:1fr}}
+:root {
+  color-scheme: dark;
+  --bg: #0b1019;
+  --panel: #111a27;
+  --line: #2b3b50;
+  --text: #eeeadd;
+  --muted: #9caec4;
+  --dim: #74869e;
+  --green: #a3dfb6;
+  --cyan: #89d9ed;
+  --amber: #f1b88c;
+  --purple: #c1a8f0;
+  --red: #ff9586;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 14px;
+  color: var(--text);
+  background: radial-gradient(ellipse at 50% 0, #29394d, #0b111b 75%);
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, "PingFang SC", monospace;
+}
+button, input { font: inherit; color: inherit; background: transparent; border: 1px solid var(--line); }
+button { cursor: pointer; border-radius: 5px; padding: 7px 12px; transition: background .18s, border-color .18s; }
+button:disabled { opacity: .4; cursor: default; }
+button:hover:not(:disabled) { border-color: var(--cyan); background: #89d9ed0d; }
+button.on { color: var(--cyan); border-color: #89d9ed55; background: #89d9ed0c; }
+:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+.shell {
+  height: calc(100dvh - 28px);
+  min-height: 760px;
+  display: grid;
+  grid-template-columns: 236px minmax(0, 1fr);
+  border: 1px solid #586a7e;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--bg);
+  box-shadow: 0 0 0 3px #202c3b, 0 0 0 4px #354459, 0 22px 70px #0006;
+}
+.sidebar { border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; background: linear-gradient(180deg, #182333, #0d1420 65%); }
+.brand { height: 96px; padding: 22px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); }
+.brand-mark { width: 37px; height: 37px; display: grid; place-items: center; color: var(--amber); border: 1px solid #f1b88c66; border-radius: 50%; font-size: 25px; box-shadow: inset 0 0 16px #f1b88c0c, 0 0 18px #f1b88c09; }
+.brand b { display: block; font-size: 19px; letter-spacing: -1px; }
+.brand small { color: var(--muted); font-size: 9px; letter-spacing: 2px; }
+.side-head { display: flex; align-items: center; justify-content: space-between; padding: 22px 18px 12px; color: var(--muted); font-size: 10px; letter-spacing: 1.5px; }
+.count { color: var(--amber); font-variant-numeric: tabular-nums; }
+.search { margin: 0 12px 14px; width: calc(100% - 24px); padding: 10px; border-radius: 5px; background: #090f19; font-size: 10px; }
+.search::placeholder { color: var(--dim); }
+.traces { flex: 1; min-height: 0; overflow: auto; padding: 0 9px; }
+.trace { width: 100%; text-align: left; padding: 13px 11px; border-color: transparent; margin-bottom: 5px; display: block; }
+.trace.on { background: linear-gradient(90deg, #26435685, #152231); border-color: #89d9ed38; box-shadow: inset 2px 0 var(--cyan); color: var(--text); }
+.trace-top { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; }
+.trace-top b { font-weight: 500; flex: 1; font-size: 11px; }
+.trace-top time { color: var(--dim); font-size: 9px; }
+.trace-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #d2d9e2; font-size: 12px; }
+.trace-meta { display: block; margin-top: 6px; color: var(--dim); font-size: 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status-dot { width: 6px; height: 6px; display: inline-block; border-radius: 50%; background: var(--cyan); flex-shrink: 0; }
+.status-dot.done { background: var(--green); }
+.status-dot.error { background: var(--red); }
+.side-foot { border-top: 1px solid var(--line); margin-top: 12px; padding: 16px 18px; display: flex; align-items: center; justify-content: space-between; font-size: 9px; color: var(--dim); }
+.connection { display: flex; align-items: center; gap: 7px; }
+.connection[data-state="connected"] { color: var(--green); }
+.connection[data-state="error"] { color: var(--red); }
+.connection .status-dot { background: currentColor; box-shadow: 0 0 8px currentColor; }
+.main { min-width: 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 290px; grid-template-rows: 96px auto auto minmax(0, 1fr) 28px; background: linear-gradient(150deg, #15213188, transparent 45%); }
+.header, .toolbar, .footer { grid-column: 1 / -1; }
+.header { min-height: 96px; flex-shrink: 0; border-bottom: 1px solid var(--line); padding: 17px 25px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.eyebrow { color: var(--dim); letter-spacing: 2px; font-size: 9px; margin-bottom: 6px; }
+h1 { margin: 0; font-size: 25px; font-weight: 500; letter-spacing: -1px; }
+.header-right { display: flex; align-items: center; gap: 18px; }
+.clock-label { color: var(--muted); font-size: 8px; letter-spacing: 1.5px; margin-bottom: 5px; }
+.clock { position: relative; width: 220px; height: 46px; padding: 6px 10px; color: #ff9879; background: #080c12; border: 1px solid #5a4339; border-radius: 5px; box-shadow: inset 0 2px 9px #000, 0 1px 0 #ffffff0a; }
+.clock svg { display: block; width: 100%; height: 100%; filter: drop-shadow(0 0 3px #ff987958); }
+.clock-value { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.run-state { color: var(--cyan); border: 1px solid #89d9ed4d; border-radius: 4px; padding: 7px 11px; font-size: 10px; letter-spacing: 1px; background: #89d9ed08; white-space: nowrap; }
+.run-state::before { content: ''; display: inline-block; width: 5px; height: 5px; border-radius: 50%; margin-right: 7px; background: currentColor; box-shadow: 0 0 8px currentColor; }
+.run-state[data-state="done"] { color: var(--green); border-color: #a3dfb64d; background: #a3dfb608; }
+.run-state[data-state="error"] { color: var(--red); border-color: #ff95864d; background: #ff958608; }
+.toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; padding: 12px 25px; }
+.toolbar button { font-size: 10px; }
+.toolbar .trace-id { margin-left: auto; color: var(--dim); font-size: 9px; }
+.overview { grid-column: 1; grid-row: 3; display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, 90px); border-bottom: 1px solid var(--line); margin: 0 25px 14px; }
+.mission { padding: 5px 0 14px; min-width: 0; }
+.mission-title { font-size: 15px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin: 5px 0; }
+.session { font-size: 9px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.metric { border-left: 1px solid var(--line); margin: 3px 0 14px; padding: 0 15px; display: flex; flex-direction: column; justify-content: center; }
+.metric span { color: var(--dim); font-size: 9px; letter-spacing: 1px; }
+.metric b { color: var(--text); font-size: 23px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.metric:last-child b { color: var(--red); }
+.workspace { grid-column: 1; grid-row: 4; flex: 1; min-height: 0; margin: 0 25px 14px; display: flex; flex-direction: column; gap: 12px; }
+.panel { min-width: 0; min-height: 0; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; background: #101926; }
+.panel-head { height: 34px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 13px; border-bottom: 1px solid var(--line); background: linear-gradient(90deg, #20304455, transparent); }
+.panel-head h2 { font-size: 10px; letter-spacing: 1.5px; font-weight: 500; margin: 0; color: #c9d3df; }
+.panel-head h2::before { content: '⌜'; color: var(--amber); margin-right: 7px; }
+.panel-head span { font-size: 9px; color: var(--dim); }
+.workspace > .panel:first-child { flex-shrink: 0; }
+.workspace > .panel:first-child .panel-head { display: none; }
+.workspace > .panel:last-child { flex: 1; }
+.roles { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); padding: 5px; gap: 4px; }
+.role { position: relative; min-width: 0; text-align: left; border-color: transparent; padding: 9px 7px; border-radius: 4px; }
+.role::after { content: ''; position: absolute; bottom: 0; left: 7px; right: 7px; height: 2px; background: var(--line); }
+.role.active { border-color: color-mix(in srgb, var(--node-color) 35%, transparent); background: color-mix(in srgb, var(--node-color) 7%, transparent); }
+.role.active::after { background: var(--node-color); box-shadow: 0 0 8px var(--node-color); }
+.role.done::after { background: color-mix(in srgb, var(--node-color) 50%, transparent); }
+.role.error::after { background: var(--red); }
+.role-row { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 1px 5px; align-items: center; }
+.role-icon { grid-row: 1 / 3; font-size: 20px; color: var(--node-color); }
+.role-name { font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.role-state { grid-column: 2; color: var(--dim); font-size: 8px; }
+.role.active .role-state { color: var(--node-color); }
+.role.error .role-state { color: var(--red); }
+.role-meta { display: none; }
+.flow-wrap { position: relative; isolation: isolate; flex: 1; min-height: 0; overflow: auto; background-color: #0c1420; background-image: radial-gradient(ellipse at 50% 45%, #2a425b40, transparent 65%), linear-gradient(#47617b12 1px, transparent 1px), linear-gradient(90deg, #47617b12 1px, transparent 1px), radial-gradient(#6e8cae50 .7px, transparent .7px); background-size: 100% 100%, 72px 72px, 72px 72px, 18px 18px; }
+.flow-wrap::after { content: ''; position: sticky; display: block; height: 0; bottom: 0; left: 0; width: 100%; box-shadow: 0 -15px 35px 10px #0c1420; pointer-events: none; }
+.flow { display: block; width: 100%; min-width: 600px; }
+.flow-empty { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; color: var(--dim); gap: 10px; }
+.flow-empty::before { content: '◎'; font-size: 62px; line-height: 1.5; color: #89d9ed42; text-shadow: 0 0 32px #89d9ed1c; }
+.flow-empty b { color: var(--muted); font-size: 14px; font-weight: 400; }
+.flow-empty span { font-size: 11px; }
+.edge { fill: none; stroke: var(--edge-color); stroke-opacity: .35; stroke-width: 1.3; marker-end: url(#arrow); }
+.edge.live { stroke-opacity: .6; }
+.edge-trail { fill: none; stroke: var(--edge-color); stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 10 90; filter: drop-shadow(0 0 4px var(--edge-color)); animation: travel 1.8s linear infinite; }
+@keyframes travel { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+.edge-port { cursor: pointer; color: var(--cyan); outline: none; }
+.edge-port.output { color: var(--amber); }
+.edge-port circle { fill: #101c2b; stroke: currentColor; stroke-opacity: .7; }
+.edge-port .port-hit { fill: transparent; stroke: none; }
+.edge-port path { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.edge-port text { fill: currentColor; font-size: 8px; paint-order: stroke; stroke: #0c1420; stroke-width: 4px; }
+.edge-port:hover circle, .edge-port:focus-visible circle, .edge-port.selected circle { stroke-opacity: 1; fill: #293d50; filter: drop-shadow(0 0 4px currentColor); }
+.edge-trail, .edge-label { pointer-events: none; }
+.edge-label { fill: var(--muted); font-size: 9px; paint-order: stroke; stroke: #0c1420; stroke-width: 5px; stroke-linejoin: round; }
+.node { cursor: pointer; outline: none; color: var(--node-color); }
+.node-ticks { fill: none; stroke: currentColor; stroke-opacity: .23; stroke-width: 2; stroke-dasharray: 1 11; }
+.node-track { fill: none; stroke: currentColor; stroke-opacity: .13; stroke-width: 1; }
+.node-orbit { fill: none; stroke: currentColor; stroke-opacity: .5; stroke-width: 1.5; stroke-dasharray: 20 80; transform-box: fill-box; transform-origin: center; transform: rotate(-90deg); }
+.node-halo { fill: currentColor; opacity: .03; }
+.node-ring { fill: #111f30; stroke: currentColor; stroke-opacity: .5; stroke-width: 1.2; transform-box: fill-box; transform-origin: center; }
+.node.active .node-ring { stroke-opacity: 1; filter: drop-shadow(0 0 9px currentColor); animation: breathe 1.8s ease-in-out infinite; }
+.node.active .node-halo { animation: halo 1.8s ease-in-out infinite; }
+.node.active .node-orbit { stroke-opacity: 1; animation: orbit 6s linear infinite; }
+.node.done .node-orbit { stroke-dasharray: 100; stroke-opacity: .6; }
+.node.error { color: var(--red); }
+.node.selected .node-track, .node:hover .node-track, .node:focus-visible .node-track { stroke: var(--text); stroke-opacity: .9; stroke-width: 1.5; }
+.node.selected .node-ring { fill: #1e3045; }
+@keyframes breathe { 0%, 100% { transform: scale(.95); } 50% { transform: scale(1.05); } }
+@keyframes halo { 0%, 100% { opacity: .03; } 50% { opacity: .1; } }
+@keyframes orbit { from { transform: rotate(-90deg); } to { transform: rotate(270deg); } }
+.node-icon { fill: currentColor; font-size: 29px; }
+.node-title { fill: var(--text); font-size: 12px; }
+.node-meta { fill: var(--dim); font-size: 9px; }
+.node-state { fill: currentColor; font-size: 9px; letter-spacing: 1px; }
+.node.done .node-state { fill: var(--green); }
+.flow-foot { padding: 8px 13px; border-top: 1px solid var(--line); color: var(--dim); font-size: 9px; display: flex; justify-content: space-between; gap: 12px; }
+.legend { display: flex; gap: 13px; }
+.legend i { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: var(--green); margin-right: 5px; }
+.legend i.cyan { background: var(--cyan); }
+.legend i.red { background: var(--red); }
+.lower { grid-column: 2; grid-row: 3 / 5; min-height: 0; margin: 0 18px 14px 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1.3fr); gap: 12px; }
+.log { flex: 1; min-height: 0; overflow: auto; padding: 5px 0; background: #0d1520; }
+.log-line { width: 100%; display: flex; align-items: baseline; gap: 10px; text-align: left; border: 0; border-radius: 0; padding: 5px 13px; white-space: nowrap; }
+.log-line.selected { background: #f1b88c0b; box-shadow: inset 2px 0 var(--amber); }
+.log-line time { color: var(--dim); font-size: 9px; flex-shrink: 0; }
+.log-type { color: var(--muted); font-size: 9px; width: 92px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; }
+.log-type.advance { color: var(--green); }
+.log-type.error { color: var(--red); }
+.log-type.sub { color: var(--purple); }
+.log-name { font-size: 10px; overflow: hidden; text-overflow: ellipsis; }
+.log-status { color: var(--dim); margin-left: auto; font-size: 9px; flex-shrink: 0; }
+.inspector { flex: 1; min-height: 0; overflow: auto; padding: 12px 14px; background: #0d1520; }
+.detail-meta { display: flex; flex-wrap: wrap; gap: 6px 15px; margin-bottom: 12px; color: var(--muted); font-size: 10px; word-break: break-all; }
+.detail-meta b { font-weight: 400; color: var(--dim); margin-right: 7px; }
+.detail-label { color: var(--amber); font-size: 9px; letter-spacing: 1px; margin: 13px 0 6px; }
+pre { margin: 0; color: #c9d4e1; font: 11px/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.empty { padding: 22px 14px; color: var(--dim); font-size: 11px; }
+.error-message { color: var(--red); }
+.footer { height: 28px; padding: 0 25px; flex-shrink: 0; display: flex; justify-content: space-between; gap: 12px; font-size: 9px; color: var(--dim); border-top: 1px solid var(--line); align-items: center; background: #101a27; }
+.footer #notice { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dialog { width: min(960px, 94vw); max-height: 86dvh; padding: 0; background: var(--panel); color: var(--text); border: 1px solid #52627a; border-radius: 9px; box-shadow: 0 24px 100px #0009; }
+.dialog::backdrop { background: #050a12b8; backdrop-filter: blur(4px); }
+.dialog-head { padding: 14px 18px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--line); }
+.dialog-head b { flex: 1; font-weight: 500; font-size: 12px; }
+.dialog-head button { padding: 4px 10px; font-size: 10px; }
+.dialog-body { padding: 18px; overflow: auto; max-height: calc(86dvh - 65px); }
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-thumb { background: #3d5068; border-radius: 5px; }
+@media (min-width: 1600px) { .shell { grid-template-columns: 260px minmax(0, 1fr); } .main { grid-template-columns: minmax(0, 1fr) 340px; } }
+@media (max-width: 1150px) {
+  .shell { height: auto; grid-template-columns: 210px minmax(0, 1fr); min-height: 850px; }
+  .main { display: flex; flex-direction: column; }
+  .workspace > .panel:last-child { flex: none; height: 400px; }
+  .lower { height: 210px; flex-shrink: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); }
+  .header, .toolbar { padding-left: 18px; padding-right: 18px; }
+  .overview, .workspace, .lower { margin-left: 18px; margin-right: 18px; }
+  .overview { grid-template-columns: minmax(0, 1fr) repeat(3, 68px); }
+  .metric { padding: 0 10px; }
+  .roles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .log-type { width: 95px; }
+  .clock { width: 180px; height: 42px; }
+  .run-state { font-size: 9px; padding: 6px; }
+}
+@media (max-width: 850px) {
+  body { padding: 8px; }
+  .shell { height: auto; min-height: calc(100dvh - 16px); grid-template-columns: 1fr; }
+  .sidebar { border-right: 0; border-bottom: 1px solid var(--line); }
+  .brand { height: 65px; padding: 13px 18px; }
+  .side-head { padding: 12px 18px; }
+  .search { margin-bottom: 8px; }
+  .traces { max-height: 150px; }
+  .side-foot { display: none; }
+  .header { min-height: 90px; }
+  .workspace > .panel:last-child { min-height: 380px; }
+  .lower { height: auto; grid-template-columns: 1fr; }
+  .lower > .panel { height: 250px; }
+  .toolbar .trace-id { display: none; }
+  .overview { grid-template-columns: repeat(3, 1fr); }
+  .mission { grid-column: 1 / -1; }
+  .metric { border-left: 0; }
+  .metric + .metric { border-left: 1px solid var(--line); }
+  .header-right { gap: 10px; }
+  .footer span:last-child { display: none; }
+}
+@media (max-width: 480px) {
+  h1 { font-size: 19px; }
+  .run-state { display: none; }
+  .clock { width: 135px; height: 36px; padding: 4px 7px; }
+  .clock-label { font-size: 7px; letter-spacing: 0; }
+  .roles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .flow-foot > span:last-child { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
 </style>
 </head>
 <body>
-<div class="window">
-<div class="titlebar">
-  <div class="lights"><i></i><i></i><i></i></div>
-  <div class="center">feishubot · TERMINAL COCKPIT</div>
-  <div class="live" id="liveBadge">● live</div>
-</div>
-<div class="top">
-  <div class="ident">
-    <div class="pause on" id="pauseBtn" onclick="toggleFollow()" title="暂停 / 恢复跟随最新">Ⅱ</div>
-    <div>
-      <h1>feishubot Terminal<span class="ver">v0.1-night</span></h1>
-      <div class="runline"><span class="dot"></span><b id="runState">running</b> · <span id="runElapsed">00:00:00</span></div>
-      <div class="chips"><span class="chip">TRACE</span><span class="chip">STREAM</span><span class="chip">SPAWN</span><span class="chip">JSONL</span></div>
+<div class="shell">
+  <aside class="sidebar" aria-label="历史任务" data-i18n-aria-label="历史任务">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">⌁</span><div><b>feishubot</b><small data-i18n="任务监控">任务监控</small></div></div>
+    <div class="side-head"><span data-i18n="历史任务">历史任务</span><span id="traceCount" class="count">00</span></div>
+    <input id="search" class="search" type="search" placeholder="搜索消息 / 链路 / 会话" data-i18n-placeholder="搜索消息 / 链路 / 会话" aria-label="搜索历史任务" data-i18n-aria-label="搜索历史任务">
+    <div id="traces" class="traces"><div class="empty" data-i18n="正在读取事件记录…">正在读取事件记录…</div></div>
+    <div class="side-foot"><span id="connection" class="connection" data-state="connecting"><i class="status-dot"></i><span id="connectionText">连接中</span></span><span>SSE / JSONL</span></div>
+  </aside>
+  <main class="main">
+    <header class="header">
+      <div><div class="eyebrow" data-i18n="智能体运行监控">智能体运行监控</div><h1 data-i18n="任务控制台">任务控制台</h1></div>
+      <div class="header-right"><div><div class="clock-label" data-i18n="任务耗时">任务耗时</div><div class="clock"><span id="elapsed" class="clock-value">00:00:00</span><svg id="clockDisplay" viewBox="0 0 254 52" aria-hidden="true"></svg></div></div><span id="runState" class="run-state" data-state="idle">WAITING</span></div>
+    </header>
+    <div class="toolbar">
+      <button id="followBtn" class="on" aria-pressed="true">● 跟随最新</button>
+      <button id="refreshBtn" data-i18n="↻ 刷新列表">↻ 刷新列表</button>
+      <button id="replayBtn" disabled>▷ 回放当前</button>
+      <button id="languageBtn" aria-label="切换到英文">English</button>
+      <span id="traceId" class="trace-id">TRACE —</span>
     </div>
-  </div>
-  <div class="tagline" id="tagline">每次调用都有据可查 · 节点随 LLM 运行时生长</div>
-  <div class="stats">
-    <div class="stat"><label>events</label><b class="c" id="sEvents">0</b></div>
-    <div class="stat"><label>tools</label><b id="sTools">0</b></div>
-    <div class="stat"><label>completed</label><b class="g" id="sDone">0</b></div>
-    <div class="stat"><label>errors</label><b class="r" id="sErr">0</b></div>
-  </div>
+    <section class="overview" aria-label="当前任务概览" data-i18n-aria-label="当前任务概览">
+      <div class="mission"><div class="eyebrow" data-i18n="当前任务">当前任务</div><div id="missionTitle" class="mission-title" data-i18n="等待飞书消息">等待飞书消息</div><div id="session" class="session">SESSION —</div></div>
+      <div class="metric"><span data-i18n="事件数">事件数</span><b id="sEvents">0</b></div>
+      <div class="metric"><span data-i18n="工具调用">工具调用</span><b id="sTools">0</b></div>
+      <div class="metric"><span data-i18n="错误数">错误数</span><b id="sErrors">0</b></div>
+    </section>
+    <div class="workspace">
+      <section class="panel"><div class="panel-head"><h2 data-i18n="执行阶段">执行阶段</h2><span id="roleCount">0 / 7</span></div><div id="roles" class="roles"></div></section>
+      <section class="panel">
+        <div class="panel-head"><h2 data-i18n="执行流程">执行流程</h2><span id="flowPhase" data-i18n="等待事件">等待事件</span></div>
+        <div id="flowWrap" class="flow-wrap">
+          <svg id="flow" class="flow" viewBox="0 0 740 280" role="group" aria-label="按事件发生顺序排列的执行流" data-i18n-aria-label="按事件发生顺序排列的执行流"><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#60768e"/></marker></defs><g id="edges"></g><g id="nodes"></g></svg>
+          <div id="flowEmpty" class="flow-empty"><b data-i18n="尚未选择任务">尚未选择任务</b><span data-i18n="从左侧选择一条链路，查看执行过程">从左侧选择一条链路，查看执行过程</span></div>
+        </div>
+        <div class="flow-foot"><span class="legend"><span><i></i><span data-i18n="完成">完成</span></span><span><i class="cyan"></i><span data-i18n="进行中">进行中</span></span><span><i class="red"></i><span data-i18n="错误">错误</span></span></span><span data-i18n="事件时序 · 点击节点查看详情">事件时序 · 点击节点查看详情</span></div>
+      </section>
+    </div>
+    <div class="lower">
+      <section class="panel"><div class="panel-head"><h2 data-i18n="事件流">事件流</h2><span id="logCount">0 events</span></div><div id="log" class="log"><div class="empty" data-i18n="等待事件">等待事件</div></div></section>
+      <section class="panel"><div class="panel-head"><h2 data-i18n="详情检查">详情检查</h2><button id="expandBtn" disabled style="padding:2px 7px;font-size:9px" data-i18n="展开 ↗">展开 ↗</button></div><div id="inspector" class="inspector"><div class="empty" data-i18n="选择一个节点、阶段或事件查看调用详情">选择一个节点、阶段或事件查看调用详情</div></div></section>
+    </div>
+    <footer class="footer"><span id="notice" role="status" data-i18n="等待连接事件流">等待连接事件流</span><span data-i18n="运行事件监控">运行事件监控</span></footer>
+  </main>
 </div>
-<div class="ctrl">
-  <button id="followBtn" class="on" onclick="toggleFollow()">跟随最新</button>
-  <button onclick="loadRecent()">刷新列表</button>
-  <button onclick="replay()">回放当前</button>
-  <span class="spacer"></span>
-  <span class="tp" id="tracePill">trace: -</span>
-</div>
-<div class="body">
-  <section class="panel"><div class="pt"><span>AGENTS</span><span id="agentCount">7 online</span></div><div id="agents" class="agents"></div></section>
-  <section class="panel"><div class="pt"><span>LIVE FLOW</span><span id="flowPhase">等待事件</span></div><div class="flow-wrap"><svg id="flow" class="flow" viewBox="0 0 900 420" preserveAspectRatio="xMidYMid meet"><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#4a5365"/></marker></defs><g id="edges"></g><g id="nodes"></g><g id="runnerG" style="display:none"><circle id="ringOut" class="ring-o" r="14" cx="0" cy="0"></circle><circle id="runner" class="ring pulse" r="6" cx="0" cy="0"></circle></g></svg><div id="flowEmpty" class="flow-empty">NO ACTIVE TRACE</div></div></section>
-  <section class="panel"><div class="pt"><span>EVENT LOG</span><span>latest last</span></div><div id="log" class="log"><div class="cmd">$ tail -f logs/feishu-events-*.jsonl</div><div id="logLines"></div></div></section>
-</div>
-<div class="bottom">
-  <section class="panel"><div class="pt"><span>TRACE HISTORY</span><span>reading the log · 按 sessionId 聚合</span></div><div id="traces" class="traces"><div class="empty">加载中...</div></div></section>
-  <section class="panel"><div class="pt"><span>EVENT DETAIL</span><span>点卡片 / 节点 / 日志查看浮窗</span></div><div id="detail" class="detail"><div class="empty">等待选择事件</div></div></section>
-  <div class="wm">feishubot</div>
-</div>
-<div id="mask" class="mask" onclick="if(event.target===this)closePopup()">
- <div class="popup">
-  <div class="ph"><b id="popTitle">EVENT DETAIL</b><span id="popSub">点击卡片 / 节点 / 日志查看调用详情</span><span class="sp"></span><button onclick="copyPopup()">复制</button><button onclick="closePopup()">关闭 ✕</button></div>
-  <div class="pb" id="popBody"></div>
- </div>
-</div>
-</div>
+<dialog id="dialog" class="dialog" aria-labelledby="dialogTitle">
+  <div class="dialog-head"><b id="dialogTitle" data-i18n="事件详情">事件详情</b><button id="copyBtn" data-i18n="复制">复制</button><button id="closeBtn" aria-label="关闭详情" data-i18n-aria-label="关闭详情" data-i18n="关闭 ✕">关闭 ✕</button></div>
+  <div id="dialogBody" class="dialog-body"></div>
+</dialog>
 <script>
-const $=id=>document.getElementById(id),NS='http://www.w3.org/2000/svg';
-const NODE_W=132,NODE_H=48,ROW_GAP=96;
-const pageStart=Date.now();
-let followLatest=true,currentTrace=null,currentEvents=[],machine=null,replayTimer=null,animation=null,startAt=0,selectedEvent=null;
-const short=v=>!v||v==='-'?'':String(v).slice(0,8);
-const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const svg=(tag,attrs)=>{const n=document.createElementNS(NS,tag);for(const k in attrs)n.setAttribute(k,attrs[k]);return n};
-const dur=ms=>{const s=Math.floor(ms/1000),p=n=>String(n).padStart(2,'0');return p(Math.floor(s/3600))+':'+p(Math.floor(s%3600/60))+':'+p(s%60)};
-const ROLES=[
- {r:'entry',ico:'✦',name:'飞书入口',badge:'MSG',d:'接收 im.message.receive_v1 文本事件'},
- {r:'agent',ico:'◈',name:'主 Agent',badge:'REASON',d:'ReActAgent 推理循环 · streamEvents'},
- {r:'model',ico:'◉',name:'模型推理',badge:'LLM',d:'OpenAIChatModel · 每轮真实请求'},
- {r:'tool',ico:'⬡',name:'工具调用',badge:'TOOL',d:'read / write / edit / bash'},
- {r:'web',ico:'◎',name:'联网工具',badge:'WEB',d:'web_search / web_fetch'},
- {r:'sub',ico:'✧',name:'子 Agent',badge:'SPAWN',d:'spawn_agent 委派任务'},
- {r:'send',ico:'➤',name:'回复发送',badge:'SEND',d:'sendText 回原会话'}
+const $ = id => document.getElementById(id);
+const NS = 'http://www.w3.org/2000/svg';
+let language = localStorage.getItem('feishubot.language') === 'en' ? 'en' : 'zh';
+const english = {
+  "任务控制台": "Mission Control",
+  "任务监控": "Mission Control",
+  "历史任务": "Task history",
+  "智能体运行监控": "Agent observability",
+  "任务耗时": "Elapsed time",
+  "当前任务": "Current task",
+  "事件数": "Events",
+  "工具调用": "Tool calls",
+  "错误数": "Errors",
+  "执行阶段": "Stages",
+  "执行流程": "Execution flow",
+  "事件流": "Event stream",
+  "详情检查": "Inspector",
+  "运行事件监控": "Runtime telemetry",
+  "搜索消息 / 链路 / 会话": "Search messages / traces / sessions",
+  "搜索历史任务": "Search task history",
+  "正在读取事件记录…": "Loading events…",
+  "连接中": "Connecting",
+  "实时连接": "Connected",
+  "重连中": "Reconnecting",
+  "当前任务概览": "Current task overview",
+  "按事件发生顺序排列的执行流": "Execution flow in event order",
+  "尚未选择任务": "No task selected",
+  "从左侧选择一条链路，查看执行过程": "Select a trace on the left to inspect its execution",
+  "完成": "Completed",
+  "进行中": "Running",
+  "错误": "Error",
+  "事件时序 · 点击节点查看详情": "Event sequence · Select a node for details",
+  "等待事件": "Waiting for events",
+  "尚无事件": "No events yet",
+  "展开 ↗": "Expand ↗",
+  "选择一个节点、阶段或事件查看调用详情": "Select a node, stage or event to inspect details",
+  "等待连接事件流": "Waiting for the event stream",
+  "事件详情": "Event details",
+  "复制": "Copy",
+  "关闭 ✕": "Close ✕",
+  "关闭详情": "Close details",
+  "跟随最新": "Follow latest",
+  "↻ 刷新列表": "↻ Refresh",
+  "停止回放": "Stop replay",
+  "回放当前": "Replay trace",
+  "会话": "Session",
+  "链路": "Trace",
+  "节点": "nodes",
+  "条事件": "events",
+  "最近 300 / {count}": "Latest 300 / {count}",
+  "没有匹配的任务": "No matching tasks",
+  "暂无事件记录": "No recorded events",
+  "历史加载失败，请刷新重试": "History failed to load. Please refresh.",
+  "等待中": "Waiting",
+  "运行中": "Running",
+  "发送中": "Sending",
+  "已完成": "Completed",
+  "失败": "Failed",
+  "回放中": "Replaying",
+  "任务 {id}": "Task {id}",
+  "等待飞书消息": "Waiting for a Feishu message",
+  "正在读取任务…": "Loading task…",
+  "飞书入口": "Feishu entry",
+  "消息接收": "Message received",
+  "主 Agent": "Main agent",
+  "ReAct 推理循环": "ReAct reasoning loop",
+  "模型推理": "Model inference",
+  "模型请求工具": "Model requests tools",
+  "执行工具": "Execute tool",
+  "返回结果": "Tool result",
+  "LLM 请求": "LLM requests",
+  "工作区与任务工具": "Workspace and task tools",
+  "联网检索": "Web research",
+  "搜索与网页读取": "Search and fetch",
+  "子 Agent": "Subagent",
+  "任务委派": "Task delegation",
+  "回复发送": "Reply delivery",
+  "回到飞书会话": "Return to Feishu chat",
+  "飞书消息": "Feishu message",
+  "消息发送": "Message delivery",
+  "回复生成": "Reply generation",
+  "定时任务": "Scheduled task",
+  "运行": "Running",
+  "已记录": "Recorded",
+  "未记录": "Not recorded",
+  "事件": "Event",
+  "名称": "Name",
+  "状态": "Status",
+  "耗时": "Duration",
+  "回复 ID": "Reply ID",
+  "工具调用 ID": "Tool call ID",
+  "输入": "Input",
+  "入参": "Input",
+  "出参": "Output",
+  "输出 / 摘要": "Output / summary",
+  "上下文": "Context",
+  "已复制": "Copied",
+  "复制失败": "Copy failed",
+  "已读取最近 800 条以内事件 · {count} 条链路": "Loaded up to 800 recent events · {count} traces",
+  "读取历史失败 · {error}": "History load failed · {error}",
+  "正在读取链路 {id}": "Loading trace {id}",
+  "链路 {id} · {count} 条事件": "Trace {id} · {count} events",
+  "读取链路失败 · {error}": "Trace load failed · {error}",
+  "当前链路尚无「{role}」事件": "No {role} events in this trace",
+  "回放已停止 · 已恢复完整事件": "Replay stopped · All events restored",
+  "回放完成": "Replay complete",
+  "回放 {index} / {count}": "Replay {index} / {count}",
+  "事件流已连接": "Event stream connected",
+  "事件解析失败 · {error}": "Event parsing failed · {error}",
+  "事件流断开 · 正在自动重连": "Event stream disconnected · Reconnecting",
+  "复制失败 · {error}": "Copy failed · {error}",
+  "收到消息": "Message received",
+  "智能体开始": "Agent started",
+  "智能体结果": "Agent result",
+  "智能体结束": "Agent ended",
+  "模型调用开始": "Model call started",
+  "模型调用结束": "Model call ended",
+  "模型调用详情": "Model call details",
+  "模型工具请求开始": "Model tool request started",
+  "模型工具请求结束": "Model tool request ended",
+  "工具结果开始": "Tool result started",
+  "工具结果结束": "Tool result ended",
+  "工具调用详情": "Tool call details",
+  "子智能体事件": "Subagent event",
+  "文本开始": "Text started",
+  "文本增量": "Text delta",
+  "文本结束": "Text ended",
+  "思考开始": "Thinking started",
+  "思考增量": "Thinking delta",
+  "思考结束": "Thinking ended",
+  "开始": "Started",
+  "结束": "Ended",
+  "成功": "Succeeded",
+  "结果": "Result",
+  "已允许": "Allowed",
+  "已取消": "Cancelled"
+};
+function tr(text, values = {}) {
+  let result = language === 'en' && Object.hasOwn(english, text) ? english[text] : text;
+  for (const [key, value] of Object.entries(values)) result = result.replaceAll('{' + key + '}', value);
+  return result;
+}
+let noticeText = '等待连接事件流', noticeValues = {};
+function setNotice(text, values = {}) {
+  noticeText = text; noticeValues = values;
+  $('notice').textContent = tr(text, values);
+}
+function applyLanguage() {
+  document.documentElement.lang = language === 'en' ? 'en' : 'zh-CN';
+  document.title = 'feishubot · ' + tr('任务控制台');
+  document.querySelectorAll('[data-i18n]').forEach(element => element.textContent = tr(element.dataset.i18n));
+  for (const attribute of ['placeholder', 'aria-label']) {
+    document.querySelectorAll('[data-i18n-' + attribute + ']').forEach(element => element.setAttribute(attribute, tr(element.getAttribute('data-i18n-' + attribute))));
+  }
+  $('languageBtn').textContent = language === 'en' ? '中文' : 'English';
+  $('languageBtn').setAttribute('aria-label', language === 'en' ? 'Switch to Chinese' : '切换到英文');
+  $('connectionText').textContent = tr({connected:'实时连接', error:'重连中', connecting:'连接中'}[$('connection').dataset.state]);
+  setNotice(noticeText, noticeValues);
+}
+const eventLabels = {
+  MESSAGE_RECEIVED:'收到消息', MESSAGE_SENT:'消息发送', AGENT_REPLY:'回复生成', SCHEDULED_TASK:'定时任务',
+  AGENT_START:'智能体开始', AGENT_RESULT:'智能体结果', AGENT_END:'智能体结束',
+  MODEL_CALL_START:'模型调用开始', MODEL_CALL_END:'模型调用结束', MODEL_CALL_DETAIL:'模型调用详情',
+  TOOL_CALL_START:'模型工具请求开始', TOOL_CALL_END:'模型工具请求结束', TOOL_RESULT_START:'工具结果开始', TOOL_RESULT_END:'工具结果结束', TOOL_CALL_DETAIL:'工具调用详情', SUBAGENT_EVENT:'子智能体事件',
+  TEXT_BLOCK_START:'文本开始', TEXT_BLOCK_DELTA:'文本增量', TEXT_BLOCK_END:'文本结束',
+  THINKING_BLOCK_START:'思考开始', THINKING_BLOCK_DELTA:'思考增量', THINKING_BLOCK_END:'思考结束'
+};
+const eventLabel = type => tr(eventLabels[type] || type);
+const statusLabel = status => tr({START:'开始', END:'结束', OK:'成功', FAILED:'失败', ERROR:'错误', RESULT:'结果', success:'成功', error:'错误', allowed:'已允许', cancelled:'已取消'}[status] || status || '');
+
+const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
+const hasValue = value => value != null && value !== '' && value !== '-';
+const short = value => hasValue(value) ? String(value).slice(0, 8) : '—';
+const isError = event => /error|fail/i.test(event.status || '');
+const eventTime = event => Date.parse(event.ts);
+const displayTime = value => value ? new Date(value).toLocaleTimeString(language === 'en' ? 'en-GB' : 'zh-CN', {hour12:false}) : '—';
+const roles = [
+  {id:'entry', icon:'↳', color:'#f1b88c', name:'飞书入口', hint:'消息接收'},
+  {id:'agent', icon:'◈', color:'#89d9ed', name:'主 Agent', hint:'ReAct 推理循环'},
+  {id:'model', icon:'◎', color:'#89d9ed', name:'模型推理', hint:'LLM 请求'},
+  {id:'tool', icon:'⌘', color:'#e6c788', name:'工具调用', hint:'工作区与任务工具'},
+  {id:'web', icon:'⊕', color:'#8ed9c5', name:'联网检索', hint:'搜索与网页读取'},
+  {id:'sub', icon:'◇', color:'#c1a8f0', name:'子 Agent', hint:'任务委派'},
+  {id:'send', icon:'↗', color:'#a3dfb6', name:'回复发送', hint:'回到飞书会话'}
 ];
-function stageOf(e){
- const t=e.eventType||'',n=e.name||'';
- if(t==='MESSAGE_RECEIVED')return['entry','飞书消息','接收'];
- if(t==='AGENT_REPLY')return['entry','回复生成','完成'];
- if(t==='MESSAGE_SENT')return['entry','消息发送','完成'];
- if(t==='AGENT_START'||t==='AGENT_RESULT')return['agent',e.name||'主 Agent',short(e.replyId)];
- if(t==='MODEL_CALL_START'||t==='MODEL_CALL_DETAIL')return['model','模型推理',short(e.replyId)];
- if(t==='SUBAGENT_EXPOSED'||t==='SUBAGENT_EVENT')return['sub',e.subagentName||'子 Agent',short(e.subagentSessionId||e.sessionId)];
- if(t==='TOOL_CALL_START'||t==='TOOL_CALL_END'||t==='TOOL_RESULT_START'||t==='TOOL_RESULT_END'||t==='TOOL_CALL_DETAIL')return['tool',n||'工具',short(e.toolCallId)];
- return null;
+let traces = [], currentTrace = null, currentEvents = [], nodes = [];
+let selectedEvent = null, selectedDirection = null, followLatest = true, replayTimer = null, replayEvents = [];
+let loadVersion = 0, loadingTrace = null, recentVersion = 0;
+
+function roleOf(event) {
+  const type = event.eventType || '';
+  if (type === 'MESSAGE_RECEIVED' || type === 'SCHEDULED_TASK') return 'entry';
+  if (type === 'AGENT_REPLY' || type === 'MESSAGE_SENT') return 'send';
+  if (type.startsWith('SUBAGENT')) return 'sub';
+  // TOOL_CALL_*（详情除外）是模型生成工具请求，TOOL_RESULT_* 才是执行阶段。
+  if (type.startsWith('MODEL') || (type.startsWith('TOOL_CALL_') && type !== 'TOOL_CALL_DETAIL')) return 'model';
+  if (type.startsWith('TOOL')) return (event.name || '').startsWith('web_') ? 'web' : 'tool';
+  if (type.startsWith('AGENT')) return 'agent';
+  return null;
 }
-function stageKey(e){const s=stageOf(e);if(!s)return null;const id=(e.toolCallId&&e.toolCallId!=='-')?e.toolCallId:((e.replyId&&e.replyId!=='-')?e.replyId:'main');return s[1]+':'+id}
-function classify(e){const t=e.eventType||'';if(t==='TOOL_PROGRESS'||t.endsWith('_DELTA')||t.includes('BLOCK')||t==='HINT_BLOCK'||t==='PROGRESS')return 'pulse';if(t==='MESSAGE_SENT'||t==='AGENT_REPLY'||t==='AGENT_RESULT'||t==='AGENT_END'||t==='MODEL_CALL_END'||t==='TOOL_RESULT_END'||t==='MODEL_CALL_START'||t==='TOOL_CALL_START'||t==='SUBAGENT_EXPOSED'||t==='SUBAGENT_EVENT'||t==='MESSAGE_RECEIVED')return 'advance';if(t==='MODEL_CALL_DETAIL'||t==='TOOL_CALL_DETAIL')return 'ignore';return 'ignore'}
-function roleOf(e){
- const t=e.eventType||'',n=e.name||'';
- if(t==='MESSAGE_RECEIVED')return 'entry';
- if(t==='AGENT_REPLY'||t==='MESSAGE_SENT')return 'send';
- if(t==='MODEL_CALL_START'||t==='MODEL_CALL_END'||t==='MODEL_CALL_DETAIL')return 'model';
- if(t==='SUBAGENT_EXPOSED'||t==='SUBAGENT_EVENT')return 'sub';
- if(t==='TOOL_CALL_DETAIL')return n.indexOf('web_')===0?'web':'tool';if(t.indexOf('TOOL')===0)return n.indexOf('web_')===0?'web':'tool';
- if(t.indexOf('AGENT')===0)return 'agent';
- return null;
+function traceState(events) {
+  // 工具失败可能被 Agent 恢复。整轮完成状态以回复和发送事件为准。
+  const terminal = events.findLast(e => e.eventType === 'MESSAGE_SENT' || e.eventType === 'AGENT_REPLY' || (e.eventType === 'SCHEDULED_TASK' && e.status !== 'START'));
+  if (terminal) return isError(terminal) ? 'error' : terminal.eventType === 'AGENT_REPLY' && terminal.status === 'OK' ? 'sending' : 'done';
+  return events.length ? 'running' : 'idle';
 }
-function makeMachine(events){
- const nodes=[],byKey=new Map();
- for(let idx=0;idx<events.length;idx++){const e=events[idx],s=stageOf(e),k=stageKey(e);if(!s||!k)continue;let node=byKey.get(k);if(!node){node={key:k,stage:s[0],name:s[1],meta:s[2],sub:s[0]==='sub',events:[],last:idx,status:'active'};byKey.set(k,node);nodes.push(node)}node.events.push(e);node.last=idx;const st=String(e.status||'').toUpperCase();if(st==='ERROR'||st==='FAIL'||st==='FAILED')node.status='err';else if(node.status!=='err'&&['MESSAGE_SENT','AGENT_END','AGENT_REPLY','TOOL_RESULT_END'].indexOf(e.eventType)>=0)node.status='done'}
- function pathFor(a,b){const ay=a.y+NODE_H/2,by=b.y+NODE_H/2;if(b.y>a.y)return 'M '+(a.x+NODE_W)+' '+ay+' C '+(a.x+NODE_W+58)+' '+ay+', '+(a.x+NODE_W+58)+' '+by+', '+(b.x+NODE_W)+' '+by;if(b.x>a.x)return 'M '+(a.x+NODE_W)+' '+ay+' C '+(a.x+NODE_W+30)+' '+ay+', '+(b.x-30)+' '+by+', '+b.x+' '+by;return 'M '+a.x+' '+ay+' C '+(a.x-30)+' '+ay+', '+(b.x+NODE_W+30)+' '+by+', '+(b.x+NODE_W)+' '+by}
- nodes.forEach((n,i)=>{const row=Math.floor(i/4),col=i%4,fromLeft=row%2===0;n.pos={x:40+((fromLeft?col:3-col))*178,y:70+row*ROW_GAP}});
- const edges=[];for(let i=1;i<nodes.length;i++)edges.push({id:'e'+i,from:nodes[i-1].key,to:nodes[i].key,sub:nodes[i].sub||nodes[i-1].sub,live:i===nodes.length-1,d:pathFor(nodes[i-1].pos,nodes[i].pos)});
- return {nodes,edges,byKey,head:nodes.length?nodes[nodes.length-1].key:null};
+function stateText(state) {
+  return tr({idle:'等待中', running:'运行中', sending:'发送中', done:'已完成', error:'失败', replay:'回放中', active:'运行中'}[state]);
 }
-function renderAgents(){$('agents').innerHTML=ROLES.map(x=>'<div class="acard" data-role="'+x.r+'"><div class="arow"><span class="aico">'+x.ico+'</span><span class="aname">'+x.name+'</span><span class="badge">'+x.badge+'</span></div><div class="ad">'+x.d+'</div><div class="am" data-am="'+x.r+'">idle</div></div>').join('');$('agentCount').textContent=ROLES.length+' roles';$('agents').querySelectorAll('.acard').forEach(c=>{c.style.cursor='pointer';c.onclick=()=>showRole(c.dataset.role)})}
-function renderFlow(edgeToAnimate){
- if(animation){cancelAnimationFrame(animation);animation=null}
- $('edges').innerHTML='';$('nodes').innerHTML='';
- const has=machine&&machine.nodes.length;
- $('flowEmpty').style.display=has?'none':'grid';$('runnerG').style.display=has?'':'none';
- if(!has)return;
- const edgeMap=new Map();
- for(const e of machine.edges){
-  const path=svg('path',{d:e.d,class:'edge'+(e.sub?' sub':'')+(e.live?' live':'')});$('edges').appendChild(path);edgeMap.set(e.id,path);
- }
- for(const n of machine.nodes){
-  const cls='node '+(n.sub?'sub ':'')+(n.status==='done'?'done':n.status==='err'?'err':n.key===machine.head?'active':'');
-  const g=svg('g',{class:cls});g.appendChild(svg('rect',{x:n.pos.x,y:n.pos.y,width:NODE_W,height:NODE_H,rx:10,class:'nrect'}));
-  const t1=svg('text',{x:n.pos.x+10,y:n.pos.y+20,class:'nt1'});t1.textContent=n.name;g.appendChild(t1);
-  const t2=svg('text',{x:n.pos.x+10,y:n.pos.y+36,class:'nt2'});t2.textContent=n.meta||n.stage;g.appendChild(t2);
-  g.style.cursor='pointer';g.onclick=()=>selectEvent(n.events[n.events.length-1]);$('nodes').appendChild(g);
- }
- const active=machine.byKey.get(machine.head);
- if(active){$('nodes').appendChild(svg('rect',{x:active.pos.x-6,y:active.pos.y-6,width:NODE_W+12,height:NODE_H+12,rx:14,class:'halo'}));const lb=svg('text',{x:active.pos.x,y:active.pos.y-14,class:'stagelabel'});lb.textContent='● RUNNING';$('nodes').appendChild(lb)}
- const ringOut=$('ringOut'),runner=$('runner');
- ringOut.setAttribute('class','ring-o'+(active&&active.sub?' sub':''));runner.setAttribute('class','ring'+(active&&active.sub?' sub':'')+' pulse');
- const move=(x,y)=>{ringOut.setAttribute('cx',x);ringOut.setAttribute('cy',y);runner.setAttribute('cx',x);runner.setAttribute('cy',y)};
- if(edgeToAnimate&&edgeMap.has(edgeToAnimate.id)){
-  const path=edgeMap.get(edgeToAnimate.id),len=path.getTotalLength(),t0=performance.now();
-  runner.setAttribute('class','ring'+(active&&active.sub?' sub':''));
-  const step=now=>{const p=Math.min(1,(now-t0)/520),pt=path.getPointAtLength(len*(1-Math.pow(1-p,3)));move(pt.x,pt.y);if(p<1)animation=requestAnimationFrame(step);else runner.setAttribute('class','ring'+(active&&active.sub?' sub':'')+' pulse')};
-  animation=requestAnimationFrame(step);
- }else move(active.pos.x+NODE_W/2,active.pos.y+NODE_H/2);
- $('flowPhase').textContent=active?active.name:'等待事件';
+function duration(ms) {
+  const seconds = Math.max(0, Math.floor(ms / 1000));
+  return [Math.floor(seconds / 3600), Math.floor(seconds % 3600 / 60), seconds % 60].map(n => String(n).padStart(2, '0')).join(':');
 }
-function renderLog(){const start=Math.max(0,currentEvents.length-300);$('logLines').innerHTML=currentEvents.slice(start).map((e,i)=>{const t=e.eventType||'',err=/error|fail/i.test(e.status||''),sub=t==='SUBAGENT_EVENT'||t==='SUBAGENT_EXPOSED',adv=classify(e)==='advance',tag=err?'err':sub?'sub':adv?'adv':'';return '<div class="line" data-i="'+(start+i)+'"><span class="t">'+esc((e.ts||'').slice(11,19))+'</span><span class="tag '+tag+'">'+esc(t.slice(0,18))+'</span><span class="nm">'+esc(e.name||'-')+'</span><span class="st">'+esc(short(e.toolCallId||e.replyId))+' '+esc(e.status||'')+'</span></div>'}).join('');$('logLines').querySelectorAll('.line').forEach(n=>n.onclick=()=>selectEvent(currentEvents[+n.dataset.i]));$('log').scrollTop=$('log').scrollHeight}
-function detailFor(e){
- if(!e)return null;
- if(e.eventType==='MODEL_CALL_DETAIL'||e.eventType==='TOOL_CALL_DETAIL')return e;
- const key=e.toolCallId&&e.toolCallId!=='-'?'tool:'+e.toolCallId:(e.replyId&&e.replyId!=='-'?'reply:'+e.replyId:null);
- if(!key)return null;
- for(let i=currentEvents.length-1;i>=0;i--){const d=currentEvents[i];if(!d.detail)continue;
-  if(key.indexOf('tool:')===0&&d.eventType==='TOOL_CALL_DETAIL'&&d.toolCallId===e.toolCallId&&d.status==='END')return d;
-  if(key.indexOf('reply:')===0&&d.eventType==='MODEL_CALL_DETAIL'&&d.replyId===e.replyId)return d}
- return null;
+function missionOf(events) {
+  const entry = events.find(e => e.eventType === 'MESSAGE_RECEIVED' || e.eventType === 'SCHEDULED_TASK');
+  return entry?.summary || tr('任务 {id}', {id:short(events[0]?.traceId)});
 }
-function pretty(v){if(v==null||v===''||v==='-')return '未记录';try{const o=JSON.parse(v);return JSON.stringify(o,null,2)}catch(_){return String(v)}}
-function hasText(v){return v!=null&&String(v)!==''&&v!=='-'}
-function detailHtml(e){
- const d=detailFor(e)||e||{},model=/MODEL/.test(d.eventType||e.eventType||'')||/MODEL/.test(e.eventType||'')||(e.name||'').indexOf('model')>=0;
- const idRow=model?{label:'模型 ID',value:d.modelId||d.name||e.name}:{label:'工具',value:d.name||e.name};
- const rows=[{label:'事件',value:e.eventType},{label:'状态',value:e.status},idRow,{label:'replyId',value:e.replyId||d.replyId},{label:'toolCallId',value:e.toolCallId||d.toolCallId},{label:'traceId',value:e.traceId},{label:'sessionId',value:e.sessionId},{label:'耗时',value:hasText(d.durationMs)?d.durationMs+' ms':'未记录'}];
- const input=pretty(d.input),output=pretty(d.output||e.summary);
- return '<div class="kv">'+rows.map(r=>'<div><b>'+esc(r.label)+':</b>'+esc(hasText(r.value)?r.value:'未记录')+'</div>').join('')+'</div>'+
-  '<div class="box"><h3>入参 INPUT</h3><pre>'+esc(input)+'</pre></div>'+
-  '<div class="box"><h3>出参 OUTPUT</h3><pre>'+esc(output)+'</pre></div>'+
-  '<div class="box full"><h3>事件上下文</h3><pre>'+esc(JSON.stringify({ts:e.ts,source:e.source,parentSessionId:e.parentSessionId,subagentEvent:e.subagentEvent,subagentSessionId:e.subagentSessionId,summary:e.summary},null,2))+'</pre></div>';
+function renderHistory() {
+  const query = $('search').value.trim().toLowerCase();
+  const visible = traces.filter(t => (t.id + ' ' + t.session + ' ' + t.title).toLowerCase().includes(query));
+  $('traceCount').textContent = String(traces.length).padStart(2, '0');
+  $('traces').innerHTML = visible.length ? visible.map(t =>
+    '<button class="trace ' + (t.id === currentTrace ? 'on' : '') + '" data-trace="' + esc(t.id) + '" aria-pressed="' + (t.id === currentTrace) + '">' +
+    '<span class="trace-top"><i class="status-dot ' + t.state + '"></i><b>' + esc(short(t.id)) + '</b><time>' + esc(displayTime(t.last)) + '</time></span>' +
+    '<span class="trace-title">' + esc(t.title) + '</span><span class="trace-meta">' + t.count + ' ' + tr('条事件') + ' · ' + esc(t.session) + '</span></button>'
+  ).join('') : '<div class="empty">' + tr(query ? '没有匹配的任务' : '暂无事件记录') + '</div>';
+  $('traces').querySelectorAll('[data-trace]').forEach(button => button.onclick = () => {
+    followLatest = false;
+    syncControls();
+    loadTrace(button.dataset.trace);
+  });
 }
-function selectEvent(e){selectedEvent=e;if(!e)return;$('detail').innerHTML=detailHtml(e);openPopup(e)}
-function openPopup(e){if(!e)return;$('popTitle').textContent=e.eventType||'EVENT';$('popSub').textContent=(e.name||'-')+' · '+(e.status||'-')+' · '+(e.ts||'');$('popBody').innerHTML=detailHtml(e);$('mask').classList.add('on')}
-function closePopup(){$('mask').classList.remove('on')}
-function copyPopup(){const text=$('popBody').innerText;if(navigator.clipboard)navigator.clipboard.writeText(text).catch(()=>{});$('popSub').textContent='已复制详情到剪贴板'}
-function showRole(role){const list=currentEvents.filter(e=>roleOf(e)===role);if(!list.length){openPopup({eventType:'ROLE',name:role,status:'IDLE',ts:'',summary:'该角色在当前 trace 还没有事件'});return}openPopup(list[list.length-1])}
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closePopup()})
-function updateMetrics(){$('sEvents').textContent=currentEvents.length;$('sTools').textContent=machine?machine.nodes.filter(n=>n.stage==='tool'||n.stage==='sub').length:0;$('sDone').textContent=machine?machine.nodes.filter(n=>n.status==='done').length:0;const err=currentEvents.filter(e=>/error|fail/i.test(e.status||'')).length;$('sErr').textContent=err;$('tracePill').textContent='trace: '+(currentTrace||'-').slice(0,12);$('runState').textContent=machine&&machine.head?'running':'waiting';$('liveBadge').textContent=followLatest?'● live':'● paused'}
-function tickClock(){$('runElapsed').textContent=dur(Date.now()-pageStart);if(startAt)$('tagline').textContent='当前 trace 已运行 '+dur(Date.now()-startAt)+' · 节点随 LLM 运行时生长'}
-function clearRoles(){document.querySelectorAll('.acard').forEach(c=>{c.classList.remove('on');const am=c.querySelector('[data-am]');if(am)am.textContent='idle'})}
-function applyEvent(e,animate){
- if(!currentTrace)currentTrace=e.traceId;if(e.traceId!==currentTrace)return;
- currentEvents.push(e);const before=machine&&machine.head;machine=makeMachine(currentEvents);
- const edge=machine.head&&machine.head!==before?machine.edges[machine.edges.length-1]:null;
- renderFlow(animate?edge:null);renderLog();updateMetrics();
- const role=roleOf(e);if(role){const card=document.querySelector('[data-role="'+role+'"]');if(card){card.classList.add('on');const am=card.querySelector('[data-am]');if(am)am.textContent=(e.name||e.eventType||'active')+' · '+(e.status||'')}}
- if(selectedEvent)selectEvent(selectedEvent);
+async function readEvents(query) {
+  const response = await fetch('/api/events?' + query);
+  if (!response.ok) throw new Error('HTTP ' + response.status);
+  return response.json();
 }
-function loadTrace(traceId,animate){currentTrace=traceId;currentEvents=[];machine=null;selectedEvent=null;startAt=Date.now();clearRoles();fetch('/api/events?traceId='+encodeURIComponent(traceId)+'&limit=5000').then(r=>r.json()).then(es=>{es.forEach((e,i)=>applyEvent(e,animate&&i===es.length-1));renderFlow();updateMetrics()}).catch(()=>{});document.querySelectorAll('.trace-row').forEach(n=>n.classList.toggle('on',n.dataset.trace===traceId))}
-function loadRecent(){fetch('/api/events?limit=800').then(r=>r.json()).then(es=>{const traces=new Map();for(const e of es){const id=e.traceId;if(!id||id==='-')continue;let t=traces.get(id);if(!t){t={id,session:e.sessionId||'-',count:0,last:e.ts,name:e.name||'-'};traces.set(id,t)}t.count++;t.last=e.ts}const arr=[...traces.values()].sort((a,b)=>String(b.last).localeCompare(String(a.last)));$('traces').innerHTML=arr.length?arr.map(t=>'<div class="tr '+(t.id===currentTrace?'on':'')+'" data-trace="'+esc(t.id)+'"><b>'+esc(t.id.slice(0,10))+'</b><span>'+esc(t.session)+' · '+t.count+' ev · '+esc(t.name)+'</span><span class="ts">'+esc((t.last||'').slice(11,19))+'</span></div>').join(''):'<div class="empty">暂无事件</div>';$('traces').querySelectorAll('.tr').forEach(n=>n.onclick=()=>{followLatest=false;syncFollow();loadTrace(n.dataset.trace,true)});if(followLatest&&arr.length&&(!currentTrace||arr[0].id!==currentTrace))loadTrace(arr[0].id,false)}).catch(()=>{$('traces').innerHTML='<div class="empty">加载失败</div>'})}
-function syncFollow(){$('followBtn').classList.toggle('on',followLatest);$('pauseBtn').classList.toggle('on',followLatest);$('pauseBtn').textContent=followLatest?'Ⅱ':'▶';$('liveBadge').textContent=followLatest?'● live':'● paused'}
-function replay(){if(!currentTrace)return;if(replayTimer){clearInterval(replayTimer);replayTimer=null}const all=currentEvents.slice();currentEvents=[];machine=null;clearRoles();renderFlow();renderLog();startAt=Date.now();let i=0;replayTimer=setInterval(()=>{if(i>=all.length){clearInterval(replayTimer);replayTimer=null;return}applyEvent(all[i++],true)},520)}
-function toggleFollow(){followLatest=!followLatest;syncFollow();if(followLatest)loadRecent()}
-function connect(){const src=new EventSource('/api/stream');src.onmessage=m=>{try{const e=JSON.parse(m.data);if(!followLatest||!currentTrace){loadRecent();return}applyEvent(e,classify(e)==='advance')}catch(_){}};src.onerror=()=>{}}
-renderAgents();renderFlow();loadRecent();connect();tickClock();setInterval(tickClock,1000);setInterval(()=>{updateMetrics();if(followLatest)loadRecent()},6000);
+async function loadRecent() {
+  const version = ++recentVersion;
+  try {
+    const events = await readEvents('limit=800');
+    if (version !== recentVersion) return;
+    const grouped = new Map();
+    for (const event of events) {
+      if (!hasValue(event.traceId)) continue;
+      if (!grouped.has(event.traceId)) grouped.set(event.traceId, []);
+      grouped.get(event.traceId).push(event);
+    }
+    traces = [...grouped].map(([id, items]) => ({
+      id, session: items[0].sessionId || '—', title: missionOf(items),
+      count: items.length, last: items[items.length - 1].ts || '', state: traceState(items)
+    })).sort((a, b) => Date.parse(b.last) - Date.parse(a.last));
+    renderHistory();
+    if (followLatest && !replayTimer && traces.length && traces[0].id !== currentTrace) loadTrace(traces[0].id);
+    setNotice('已读取最近 800 条以内事件 · {count} 条链路', {count:traces.length});
+  } catch (error) {
+    setNotice('读取历史失败 · {error}', {error:error.message});
+    if (!traces.length) $('traces').innerHTML = '<div class="empty error-message">' + tr('历史加载失败，请刷新重试') + '</div>';
+  }
+}
+function stopReplay() {
+  if (replayTimer) clearInterval(replayTimer);
+  replayTimer = null;
+  replayEvents = [];
+}
+async function loadTrace(id) {
+  stopReplay();
+  const version = ++loadVersion;
+  loadingTrace = id;
+  currentTrace = id;
+  currentEvents = [];
+  selectedEvent = null; selectedDirection = null;
+  $('dialog').close();
+  render();
+  renderHistory();
+  setNotice('正在读取链路 {id}', {id:short(id)});
+  try {
+    const events = await readEvents('traceId=' + encodeURIComponent(id) + '&limit=5000');
+    if (version !== loadVersion) return;
+    // SSE 可能在历史请求期间到达，按 eventId 合并，避免漏记或重复。
+    const merged = new Map();
+    for (const event of [...events, ...currentEvents]) merged.set(event.eventId, event);
+    currentEvents = [...merged.values()].sort((a, b) => eventTime(a) - eventTime(b));
+    setNotice('链路 {id} · {count} 条事件', {id:short(id), count:currentEvents.length});
+  } catch (error) {
+    if (version !== loadVersion) return;
+    setNotice('读取链路失败 · {error}', {error:error.message});
+  } finally {
+    if (version === loadVersion) { loadingTrace = null; render(); }
+  }
+}
+function buildNodes(events) {
+  const result = [], byKey = new Map();
+  for (const event of events) {
+    const type = event.eventType || '', role = roleOf(event);
+    let key, name;
+    if (type === 'MESSAGE_RECEIVED' || type === 'MESSAGE_SENT' || type === 'AGENT_REPLY') {
+      key = type;
+      name = {MESSAGE_RECEIVED:'飞书消息', MESSAGE_SENT:'消息发送', AGENT_REPLY:'回复生成'}[type];
+    } else if (type === 'SCHEDULED_TASK') {
+      key = 'scheduled'; name = '定时任务';
+    } else if (role === 'sub') {
+      key = 'sub:' + (event.subagentSessionId || event.subagentName || event.name);
+      name = event.subagentName || event.name || '子 Agent';
+    } else if (role === 'tool' || role === 'web') {
+      if (!hasValue(event.toolCallId)) continue;
+      key = 'tool:' + event.toolCallId; name = event.name || '工具调用';
+    } else if (role === 'model' && hasValue(event.replyId)) {
+      key = 'model:' + event.replyId; name = '模型推理';
+    } else if (type === 'AGENT_START' || type === 'AGENT_RESULT' || type === 'AGENT_END') {
+      key = 'agent'; name = event.name || '主 Agent';
+    } else continue;
+    let node = byKey.get(key);
+    if (!node) {
+      node = {key, name, role, events: [], state:'active'};
+      byKey.set(key, node); result.push(node);
+    }
+    node.events.push(event);
+    if (role === 'model' && type.startsWith('TOOL_CALL_')) node.name = '模型请求工具';
+    if (isError(event)) node.state = 'error';
+    else if (node.state !== 'error') {
+      let completed;
+      if (role === 'model') completed = type === 'MODEL_CALL_END' || type === 'MODEL_CALL_DETAIL';
+      else if (role === 'tool' || role === 'web') completed = type === 'TOOL_RESULT_END' || (type === 'TOOL_CALL_DETAIL' && event.status !== 'START');
+      else completed = type.endsWith('_END') || type.endsWith('_RESULT') || type === 'MESSAGE_RECEIVED' || type === 'MESSAGE_SENT' || type === 'AGENT_REPLY' || (type === 'SCHEDULED_TASK' && event.status === 'OK');
+      if (completed) node.state = 'done';
+    }
+  }
+  const state = traceState(events);
+  if (state === 'done' || state === 'error') result.forEach(n => { if (n.state === 'active') n.state = state; });
+  return result;
+}
+function svgElement(tag, attributes, text) {
+  const element = document.createElementNS(NS, tag);
+  for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, value);
+  if (text != null) element.textContent = text;
+  return element;
+}
+function renderFlow() {
+  const wrap = $('flowWrap');
+  const atBottom = wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight < 30;
+  $('edges').replaceChildren();
+  $('nodes').replaceChildren();
+  $('flowEmpty').hidden = nodes.length > 0;
+  $('flowEmpty').style.display = nodes.length ? 'none' : 'grid';
+  const width = 800, nodeSize = 156, rowGap = 230;
+  const height = Math.max(280, Math.ceil(nodes.length / 3) * rowGap + 36);
+  const phase = Date.now() % 1800;
+  $('flow').setAttribute('viewBox', '0 0 ' + width + ' ' + height);
+  $('flow').setAttribute('preserveAspectRatio', 'xMidYMin meet');
+  $('flow').style.height = height + 'px';
+  nodes.forEach((node, index) => {
+    const role = roles.find(role => role.id === node.role);
+    const row = Math.floor(index / 3), column = row % 2 ? 2 - index % 3 : index % 3;
+    node.x = 56 + column * 270; node.y = 26 + row * rowGap;
+    const centerX = node.x + nodeSize / 2, centerY = node.y + nodeSize / 2;
+    if (index > 0) {
+      const previous = nodes[index - 1];
+      const down = node.y !== previous.y;
+      const direction = down ? (column === 2 ? 1 : -1) : (node.x > previous.x ? 1 : -1);
+      const x1 = previous.x + nodeSize / 2 + direction * 80;
+      const y1 = previous.y + nodeSize / 2;
+      const x2 = centerX + (down ? direction : -direction) * 84;
+      const y2 = centerY;
+      const gutter = centerX + direction * 118;
+      const path = down
+        ? 'M' + x1 + ',' + y1 + ' C' + gutter + ',' + y1 + ' ' + gutter + ',' + y2 + ' ' + x2 + ',' + y2
+        : 'M' + x1 + ',' + y1 + ' H' + x2;
+      const edgeStyle = '--edge-color:' + (node.state === 'error' ? 'var(--red)' : role.color);
+      $('edges').append(svgElement('path', {d:path, class:'edge' + (node.state === 'active' ? ' live' : ''), style:edgeStyle}));
+      if (node.state === 'active') $('edges').append(svgElement('path', {d:path, class:'edge-trail', pathLength:100, style:edgeStyle + ';animation-delay:-' + phase + 'ms'}));
+      const toTool = previous.role === 'model' && (node.role === 'tool' || node.role === 'web');
+      const toModel = (previous.role === 'tool' || previous.role === 'web' || previous.role === 'sub') && node.role === 'model';
+      if (toTool || toModel) $('edges').append(svgElement('text', {x:down ? gutter - direction * 6 : (x1 + x2) / 2, y:down ? (y1 + y2) / 2 + 24 : y1 - 10, class:'edge-label', 'text-anchor':down ? (direction === 1 ? 'end' : 'start') : 'middle'}, tr(toTool ? '执行工具' : '返回结果')));
+      for (const port of [
+        {node:previous, direction:'output', x:x1 + direction * 10, y:y1, angle:direction === 1 ? 0 : 180},
+        {node, direction:'input', x:x2 + (down ? direction : -direction) * 8, y:y2, angle:(down ? -direction : direction) === 1 ? 0 : 180}
+      ]) {
+        const event = port.node.events[port.node.events.length - 1];
+        const name = tr(port.direction === 'input' ? '入参' : '出参');
+        const selected = selectedDirection === port.direction && port.node.events.some(e => e.eventId === selectedEvent?.eventId);
+        const arrow = svgElement('g', {class:'edge-port ' + port.direction + (selected ? ' selected' : ''), transform:'translate(' + port.x + ',' + port.y + ')', tabindex:'0', role:'button', 'aria-label':tr(port.node.name) + ' · ' + name});
+        arrow.append(svgElement('circle', {r:14, class:'port-hit'}));
+        arrow.append(svgElement('circle', {r:9}));
+        arrow.append(svgElement('path', {d:'M-3,-4 L2,0 L-3,4', transform:'rotate(' + port.angle + ')'}));
+        arrow.append(svgElement('text', {x:0, y:23, 'text-anchor':'middle'}, name));
+        arrow.append(svgElement('title', {}, tr(port.node.name) + ' · ' + name));
+        arrow.onclick = () => selectEvent(event, port.direction);
+        arrow.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectEvent(event, port.direction); } };
+        $('edges').append(arrow);
+      }
+    }
+    const selected = node.events.some(e => e.eventId === selectedEvent?.eventId);
+    const group = svgElement('g', {class:'node ' + node.state + (selected ? ' selected' : ''), style:'--node-color:' + role.color, tabindex:'0', role:'button', 'aria-label':tr(node.name) + ' · ' + stateText(node.state)});
+    // 使用同一时钟相位，流式重绘不会让呼吸和连线光点反复从头开始。
+    group.append(svgElement('circle', {cx:centerX, cy:centerY, r:78, class:'node-track'}));
+    group.append(svgElement('circle', {cx:centerX, cy:centerY, r:73, class:'node-ticks'}));
+    group.append(svgElement('circle', {cx:centerX, cy:centerY, r:65, class:'node-orbit', pathLength:100, style:'animation-delay:-' + Date.now() % 6000 + 'ms'}));
+    group.append(svgElement('circle', {cx:centerX, cy:centerY, r:60, class:'node-halo', style:'animation-delay:-' + phase + 'ms'}));
+    group.append(svgElement('circle', {cx:centerX, cy:centerY, r:51, class:'node-ring', style:'animation-delay:-' + phase + 'ms'}));
+    group.append(svgElement('text', {x:centerX, y:centerY - 3, class:'node-icon', 'text-anchor':'middle', 'aria-hidden':'true'}, role.icon));
+    group.append(svgElement('text', {x:centerX, y:centerY + 22, class:'node-state', 'text-anchor':'middle'}, stateText(node.state)));
+    const name = tr(node.name);
+    const labelLimit = language === 'en' ? 24 : 16;
+    const label = name.length > labelLimit ? name.slice(0, labelLimit - 1) + '…' : name;
+    const last = node.events[node.events.length - 1];
+    const elapsed = hasValue(last.durationMs) ? ' · ' + last.durationMs + ' ms' : '';
+    group.append(svgElement('text', {x:centerX, y:centerY + 100, class:'node-title', 'text-anchor':'middle'}, label));
+    group.append(svgElement('text', {x:centerX, y:centerY + 118, class:'node-meta', 'text-anchor':'middle'}, tr(role.name) + elapsed));
+    group.append(svgElement('title', {}, name + ' · ' + eventLabel(last.eventType)));
+    group.onclick = () => selectEvent(last);
+    group.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectEvent(last); } };
+    $('nodes').append(group);
+  });
+  if (atBottom) wrap.scrollTop = wrap.scrollHeight;
+  $('flowPhase').textContent = nodes.length ? nodes.length + ' ' + tr('节点') + ' / ' + (replayTimer ? tr('回放中') : stateText(traceState(currentEvents))) : tr('等待事件');
+}
+function renderRoles() {
+  const touched = new Set(currentEvents.map(roleOf).filter(Boolean));
+  $('roleCount').textContent = touched.size + ' / ' + roles.length;
+  $('roles').innerHTML = roles.map(role => {
+    const last = currentEvents.findLast(e => roleOf(e) === role.id);
+    const related = nodes.filter(n => n.role === role.id);
+    const state = last ? isError(last) ? 'error' : related.some(n => n.state === 'active') ? 'active' : 'done' : 'idle';
+    return '<button class="role ' + state + '" style="--node-color:' + role.color + '" data-role="' + role.id + '"><span class="role-row"><span class="role-icon">' + role.icon + '</span><span class="role-name">' + tr(role.name) + '</span><span class="role-state">' + tr({idle:'—', active:'运行', done:'已记录', error:'错误'}[state]) + '</span></span><div class="role-meta">' + esc(last ? last.name || eventLabel(last.eventType) : tr(role.hint)) + '</div></button>';
+  }).join('');
+  $('roles').querySelectorAll('[data-role]').forEach(button => button.onclick = () => {
+    const event = currentEvents.findLast(e => roleOf(e) === button.dataset.role);
+    if (event) selectEvent(event);
+    else setNotice('当前链路尚无「{role}」事件', {role:tr(roles.find(r => r.id === button.dataset.role).name)});
+  });
+}
+function renderLog() {
+  const log = $('log');
+  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 30;
+  const offset = Math.max(0, currentEvents.length - 300);
+  log.innerHTML = currentEvents.slice(offset).map((event, index) => {
+    const type = event.eventType || '';
+    const kind = isError(event) ? 'error' : roleOf(event) === 'sub' ? 'sub' : /START|END|SENT|RECEIVED|REPLY|RESULT/.test(type) ? 'advance' : '';
+    return '<button class="log-line ' + (event.eventId === selectedEvent?.eventId ? 'selected' : '') + '" data-index="' + (offset + index) + '"><time>' + esc(displayTime(event.ts)) + '</time><span class="log-type ' + kind + '" title="' + esc(type) + '">' + esc(eventLabel(type)) + '</span><span class="log-name">' + esc(event.name || '—') + '</span><span class="log-status">' + esc(statusLabel(event.status)) + '</span></button>';
+  }).join('') || '<div class="empty">' + tr('尚无事件') + '</div>';
+  log.querySelectorAll('[data-index]').forEach(button => button.onclick = () => selectEvent(currentEvents[Number(button.dataset.index)]));
+  if (atBottom) log.scrollTop = log.scrollHeight;
+  $('logCount').textContent = currentEvents.length > 300 ? tr('最近 300 / {count}', {count:currentEvents.length}) : currentEvents.length + ' ' + tr('条事件');
+}
+function detailFor(event) {
+  if (event.detail) return event;
+  if (roleOf(event) === 'model' && hasValue(event.replyId)) return currentEvents.findLast(e => e.eventType === 'MODEL_CALL_DETAIL' && e.replyId === event.replyId) || event;
+  if (hasValue(event.toolCallId)) {
+    const matches = currentEvents.filter(e => e.eventType === 'TOOL_CALL_DETAIL' && e.toolCallId === event.toolCallId);
+    return matches.findLast(e => e.status !== 'START') || matches[matches.length - 1] || event;
+  }
+  if (hasValue(event.replyId)) return currentEvents.findLast(e => e.eventType === 'MODEL_CALL_DETAIL' && e.replyId === event.replyId) || event;
+  return event;
+}
+function pretty(value) {
+  if (!hasValue(value)) return tr('未记录');
+  if (typeof value !== 'string') return JSON.stringify(value, null, 2);
+  try { return JSON.stringify(JSON.parse(value), null, 2); } catch { return value; }
+}
+function detailHtml(event) {
+  const detail = detailFor(event);
+  const rows = [
+    ['事件', eventLabel(event.eventType)], ['名称', detail.modelId || detail.name || event.name],
+    ['状态', statusLabel(detail.status || event.status)], ['耗时', hasValue(detail.durationMs) ? detail.durationMs + ' ms' : tr('未记录')],
+    ['链路', event.traceId], ['会话', event.sessionId], ['回复 ID', detail.replyId], ['工具调用 ID', detail.toolCallId]
+  ];
+  const inputHtml = '<div class="detail-label">' + tr(selectedDirection ? '入参' : '输入') + '</div><pre>' + esc(pretty(detail.input)) + '</pre>';
+  const output = detail.detail ? detail.output : (detail.output ?? event.summary);
+  const outputHtml = '<div class="detail-label">' + tr(selectedDirection ? '出参' : '输出 / 摘要') + '</div><pre>' + esc(pretty(output)) + '</pre>';
+  const parameters = selectedDirection === 'input' ? inputHtml : selectedDirection === 'output' ? outputHtml : inputHtml + outputHtml;
+  return '<div class="detail-meta">' + rows.map(([label, value]) => '<span><b>' + tr(label) + '</b>' + esc(hasValue(value) ? value : '—') + '</span>').join('') + '</div>' + parameters +
+    '<div class="detail-label">' + tr('上下文') + '</div><pre>' + esc(pretty({eventType:event.eventType, status:event.status, ts:event.ts, source:event.source, parentSessionId:event.parentSessionId, subagentEvent:event.subagentEvent, subagentSessionId:event.subagentSessionId})) + '</pre>';
+}
+function renderDetail() {
+  $('expandBtn').disabled = !selectedEvent;
+  $('inspector').innerHTML = selectedEvent ? detailHtml(selectedEvent) : '<div class="empty">' + tr('选择一个节点、阶段或事件查看调用详情') + '</div>';
+  if ($('dialog').open && selectedEvent) $('dialogBody').innerHTML = detailHtml(selectedEvent);
+}
+function selectEvent(event, direction = null) {
+  selectedEvent = event;
+  selectedDirection = direction;
+  renderDetail(); renderFlow(); renderLog();
+}
+const clockDigits = ['abcdef', 'bc', 'abdeg', 'abcdg', 'bcfg', 'acdfg', 'acdefg', 'abc', 'abcdefg', 'abcdfg'];
+const clockSegments = {
+  a:'4,0 20,0 23,3 20,6 4,6 1,3', b:'24,4 27,7 27,21 24,24 21,21 21,7',
+  c:'24,26 27,29 27,43 24,46 21,43 21,29', d:'4,44 20,44 23,47 20,50 4,50 1,47',
+  e:'0,26 3,29 3,43 0,46 -3,43 -3,29', f:'0,4 3,7 3,21 0,24 -3,21 -3,7',
+  g:'4,22 20,22 23,25 20,28 4,28 1,25'
+};
+function tickClock() {
+  const state = traceState(currentEvents);
+  const start = currentEvents.length ? eventTime(currentEvents[0]) : NaN;
+  const last = currentEvents.length ? eventTime(currentEvents[currentEvents.length - 1]) : NaN;
+  const end = replayTimer || state === 'done' || state === 'error' ? last : Date.now();
+  const elapsed = Number.isFinite(start) ? duration(end - start) : '00:00:00';
+  $('elapsed').textContent = elapsed;
+  const display = $('clockDisplay');
+  display.replaceChildren();
+  let x = 7;
+  for (const character of elapsed) {
+    if (character === ':') {
+      for (const y of [17, 35]) display.append(svgElement('circle', {cx:x + 1, cy:y, r:2, fill:'currentColor'}));
+      x += 14;
+    } else {
+      const digit = svgElement('g', {transform:'translate(' + x + ',1)'});
+      for (const [segment, points] of Object.entries(clockSegments)) digit.append(svgElement('polygon', {points, fill:'currentColor', opacity:clockDigits[Number(character)].includes(segment) ? 1 : .08}));
+      display.append(digit);
+      x += 36;
+    }
+  }
+  display.setAttribute('viewBox', '0 0 ' + (x + 3) + ' 52');
+}
+function syncControls() {
+  $('followBtn').classList.toggle('on', followLatest);
+  $('followBtn').setAttribute('aria-pressed', String(followLatest));
+  $('followBtn').textContent = (followLatest ? '● ' : '○ ') + tr('跟随最新');
+  $('replayBtn').textContent = replayTimer ? 'Ⅱ ' + tr('停止回放') : '▷ ' + tr('回放当前');
+  $('replayBtn').disabled = !currentEvents.length && !replayTimer;
+}
+function render() {
+  nodes = buildNodes(currentEvents);
+  renderFlow(); renderRoles(); renderLog(); renderDetail(); tickClock(); syncControls();
+  const state = replayTimer ? 'replay' : traceState(currentEvents);
+  $('runState').dataset.state = state;
+  $('runState').textContent = stateText(state);
+  $('missionTitle').textContent = currentEvents.length ? missionOf(currentEvents) : loadingTrace ? tr('正在读取任务…') : tr('等待飞书消息');
+  $('missionTitle').title = $('missionTitle').textContent;
+  $('session').textContent = tr('会话') + ' ' + (currentEvents[0]?.sessionId || '—');
+  $('traceId').textContent = tr('链路') + ' ' + (currentTrace || '—');
+  $('sEvents').textContent = currentEvents.length;
+  $('sTools').textContent = nodes.filter(n => n.role === 'tool' || n.role === 'web').length;
+  $('sErrors').textContent = currentEvents.filter(isError).length;
+}
+function replay() {
+  if (replayTimer) {
+    const all = replayEvents;
+    stopReplay(); currentEvents = all; render();
+    setNotice('回放已停止 · 已恢复完整事件');
+    return;
+  }
+  if (!currentEvents.length || loadingTrace) return;
+  followLatest = false;
+  replayEvents = currentEvents.slice();
+  currentEvents = []; selectedEvent = null; selectedDirection = null;
+  let index = 0;
+  replayTimer = setInterval(() => {
+    currentEvents.push(replayEvents[index++]);
+    if (index === replayEvents.length) { stopReplay(); setNotice('回放完成'); }
+    else setNotice('回放 {index} / {count}', {index, count:replayEvents.length});
+    render();
+  }, 160);
+  render();
+}
+function connect() {
+  const source = new EventSource('/api/stream');
+  source.onopen = () => {
+    $('connection').dataset.state = 'connected';
+    $('connectionText').textContent = tr('实时连接');
+    setNotice('事件流已连接');
+    // 重连后补读当前 trace，覆盖断线期间的事件。
+    if (followLatest && currentTrace) loadTrace(currentTrace);
+    loadRecent();
+  };
+  source.onmessage = message => {
+    let event;
+    try { event = JSON.parse(message.data); } catch (error) { setNotice('事件解析失败 · {error}', {error:error.message}); return; }
+    if (!followLatest || replayTimer || !hasValue(event.traceId)) return;
+    if (event.traceId !== currentTrace) { loadRecent(); return; }
+    if (currentEvents.some(e => e.eventId === event.eventId)) return;
+    currentEvents.push(event); render();
+  };
+  source.onerror = () => {
+    $('connection').dataset.state = 'error';
+    $('connectionText').textContent = tr('重连中');
+    setNotice('事件流断开 · 正在自动重连');
+  };
+}
+$('search').oninput = renderHistory;
+$('refreshBtn').onclick = loadRecent;
+$('followBtn').onclick = () => {
+  followLatest = !followLatest;
+  if (followLatest) {
+    stopReplay();
+    if (currentTrace) loadTrace(currentTrace);
+    loadRecent();
+  }
+  syncControls();
+};
+$('replayBtn').onclick = replay;
+$('expandBtn').onclick = () => {
+  if (!selectedEvent) return;
+  $('dialogTitle').textContent = eventLabel(selectedEvent.eventType) + ' · ' + (selectedEvent.name || '—');
+  $('dialogBody').innerHTML = detailHtml(selectedEvent);
+  $('copyBtn').textContent = tr('复制');
+  $('dialog').showModal();
+};
+$('closeBtn').onclick = () => $('dialog').close();
+$('dialog').onclick = event => { if (event.target === $('dialog')) { const rect = $('dialog').getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) $('dialog').close(); } };
+$('copyBtn').onclick = async () => {
+  try { await navigator.clipboard.writeText($('dialogBody').innerText); $('copyBtn').textContent = tr('已复制'); }
+  catch (error) { $('copyBtn').textContent = tr('复制失败'); setNotice('复制失败 · {error}', {error:error.message}); }
+};
+$('languageBtn').onclick = () => {
+  language = language === 'zh' ? 'en' : 'zh';
+  localStorage.setItem('feishubot.language', language);
+  applyLanguage(); renderHistory(); render();
+  if (selectedEvent) $('dialogTitle').textContent = eventLabel(selectedEvent.eventType) + ' · ' + (selectedEvent.name || '—');
+};
+applyLanguage(); render(); loadRecent(); connect();
+setInterval(tickClock, 1000);
+setInterval(() => { if (!replayTimer) loadRecent(); }, 6000);
 </script>
 </body>
 </html>
